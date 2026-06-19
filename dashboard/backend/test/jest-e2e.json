@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@kubernetes/client-node$": "<rootDir>/../src/__mocks__/@kubernetes/client-node.js",
+    "^uuid$": "<rootDir>/../src/__mocks__/uuid.js"
+  }
+}

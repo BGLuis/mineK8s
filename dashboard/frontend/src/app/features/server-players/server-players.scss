@@ -1,0 +1,151 @@
+.players-container {
+  padding: 20px;
+  animation: fadeIn 0.3s ease-out;
+
+  .players-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+
+    .back-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: var(--text-light);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    .header-info {
+      text-align: center;
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      .server-id {
+        color: var(--primary);
+      }
+      .online-stats {
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+
+        .status-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+      }
+    }
+
+    .action-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+  }
+
+  .main-card {
+    padding: 20px;
+    min-height: 400px;
+  }
+
+  .loading-state, .empty-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    color: var(--text-muted);
+  }
+
+  .players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+  }
+
+  .player-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+
+    .player-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+
+      .player-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 6px;
+        image-rendering: pixelated;
+      }
+
+      .player-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+      }
+    }
+
+    .player-actions {
+      display: flex;
+      gap: 8px;
+
+      .btn {
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+        transition: opacity 0.2s;
+
+        &:hover {
+          opacity: 0.8;
+        }
+
+        &.kick-btn {
+          background: rgba(245, 158, 11, 0.2);
+          color: #fbbf24;
+        }
+        &.ban-btn {
+          background: rgba(239, 68, 68, 0.2);
+          color: #ef4444;
+        }
+        &.op-btn {
+          background: rgba(99, 102, 241, 0.2);
+          color: #818cf8;
+        }
+      }
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

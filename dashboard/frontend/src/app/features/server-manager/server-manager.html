@@ -1,0 +1,81 @@
+<div class="manager-container">
+  <div class="header">
+    <div class="title-area">
+      <h1>Meus Servidores</h1>
+      <p>Gerencie seus mundos rodando no cluster Kubernetes.</p>
+    </div>
+    <button class="premium-btn" (click)="fetchServers()">🔄 Atualizar</button>
+  </div>
+
+  @if (isLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Sondando o Cluster K3s...</p>
+    </div>
+  }
+
+  @if (!isLoading() && servers().length === 0) {
+    <div class="empty-state">
+      <h2 style="color: var(--text-muted); text-align: center; margin-top: 40px;">Você ainda não tem nenhum servidor rodando 😔</h2>
+      <p style="color: var(--text-dim); text-align: center; margin-top: 10px;">Vá até o Marketplace no menu ao lado e instale o seu primeiro modpack!</p>
+    </div>
+  }
+
+  @if (!isLoading() && servers().length > 0) {
+    <div class="grid">
+      @for (server of servers(); track server.id) {
+        <div class="server-card glass-panel">
+          <div class="card-header">
+            <div class="icon-placeholder">🎮</div>
+            <div class="server-info">
+              <h3>{{ server.name }}</h3>
+              <span class="status-badge" [ngClass]="{'online': server.status === 'Online', 'starting': server.status === 'Iniciando'}">
+                {{ server.status }}
+              </span>
+            </div>
+          </div>
+          
+          <div class="server-stats">
+              <div class="stat">
+                <span class="label">Replicas Prontas (Pods)</span>
+                <span class="value">{{ server.readyReplicas }} / {{ server.desiredReplicas }}</span>
+              </div>
+              
+              @if (server.metrics) {
+                <div class="stat-group" style="display: flex; gap: 20px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                  <div class="stat">
+                    <span class="label">CPU</span>
+                    <span class="value">{{ server.metrics.cpuCores }} Cores</span>
+                  </div>
+                  <div class="stat">
+                    <span class="label">RAM</span>
+                    <span class="value">{{ server.metrics.memoryMb }} MB</span>
+                  </div>
+                </div>
+              }
+              
+              @if (server.connectionPort && server.status === 'Online') {
+              <div class="stat" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <span class="label">IP do Servidor</span>
+                <span class="value" style="color: var(--primary);">Seu_IP_Local:{{ server.connectionPort }}</span>
+              </div>
+            }
+          </div>
+
+            <div class="card-footer" style="flex-wrap: wrap;">
+              @if (server.status === 'Desligado') {
+                <button class="action-btn start-btn" style="background: rgba(16, 185, 129, 0.15); color: #10b981;" (click)="startServer(server.id)">Ligar</button>
+              } @else {
+                <button class="action-btn stop-btn" (click)="stopServer(server.id)">Desligar</button>
+              }
+              <button class="action-btn files-btn" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;" [routerLink]="['/server', server.id, 'files']">Arquivos</button>
+              <button class="action-btn console-btn" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;" [routerLink]="['/server', server.id, 'console']">Terminal</button>
+              <button class="action-btn players-btn" style="background: rgba(236, 72, 153, 0.15); color: #ec4899;" [routerLink]="['/server', server.id, 'players']">Jogadores</button>
+              <button class="action-btn backups-btn" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;" [routerLink]="['/server', server.id, 'backups']">Backups</button>
+              <button class="action-btn delete-btn" (click)="deleteServer(server.id)">Excluir</button>
+            </div>
+        </div>
+      }
+    </div>
+  }
+</div>

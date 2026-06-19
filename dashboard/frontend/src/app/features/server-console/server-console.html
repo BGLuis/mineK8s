@@ -1,0 +1,63 @@
+<div class="console-container">
+  <header class="console-header">
+    <button class="back-btn" (click)="goBack()">← Voltar</button>
+    <div class="header-info">
+      <h1>Terminal: <span class="server-id">{{ serverId }}</span></h1>
+      <div class="player-count">
+        <span class="status-dot"></span>
+        {{ players().length }} Jogadores Online
+      </div>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <div class="terminal-wrapper">
+      <div class="terminal-box" id="terminal-box">
+        <pre>{{ logs() }}</pre>
+      </div>
+
+      <div class="input-wrapper">
+        @if (showSuggestions()) {
+          <ul class="suggestions-list">
+            @for (sug of suggestions(); track sug; let i = $index) {
+              <li [class.active]="i === activeSuggestionIndex()" (click)="selectSuggestion(sug)">
+                {{ sug }}
+              </li>
+            }
+          </ul>
+        }
+
+        <div class="input-row">
+          <span class="prompt-char">></span>
+          <input 
+            type="text" 
+            id="cmd-input"
+            [ngModel]="commandInput()" 
+            (input)="onInput($event)"
+            (keydown)="onKeyDown($event)"
+            (keyup.enter)="sendCommand()"
+            placeholder="Digite / para ver comandos..." 
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="send-btn" (click)="sendCommand()">Enviar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="players-sidebar">
+      <h3>Online Agora</h3>
+      <div class="players-list">
+        @if (players().length === 0) {
+          <div class="empty-state">Ninguém online</div>
+        }
+        @for (p of players(); track p.name) {
+          <div class="player-card">
+            <img [src]="p.avatarUrl" alt="Avatar" class="avatar">
+            <span class="player-name">{{ p.name }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

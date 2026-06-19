@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-vanilla
+  labels:
+    app: mc-vanilla
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mc-vanilla
+  template:
+    metadata:
+      labels:
+        app: mc-vanilla
+    spec:
+      containers:
+      - name: minecraft
+        image: itzg/minecraft-server
+        env:
+        - name: EULA
+          value: "TRUE"
+        - name: TYPE
+          value: "PAPER"
+        - name: VERSION
+          value: "LATEST"
+        - name: ONLINE_MODE
+          value: "false" # Off para permitir testes e controle via Tailscale/Gateway
+        ports:
+        - containerPort: 25565
+          name: minecraft
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-vanilla-svc
+spec:
+  selector:
+    app: mc-vanilla
+  ports:
+  - port: 25565
+    targetPort: 25565
+    name: minecraft

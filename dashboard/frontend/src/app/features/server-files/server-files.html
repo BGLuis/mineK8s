@@ -1,0 +1,71 @@
+<div class="files-container">
+  <header class="files-header">
+    <button class="back-btn" (click)="goBackToManager()">← Voltar</button>
+    <div class="header-info">
+      <h1>Arquivos do Servidor: <span class="server-id">{{ serverId }}</span></h1>
+    </div>
+  </header>
+
+  <div class="main-card">
+    <!-- View do Gerenciador de Arquivos -->
+    @if (!viewingFile()) {
+      <div class="path-bar">
+        <button class="action-btn" [disabled]="!currentPath()" (click)="goUp()">⬆ Nível Acima</button>
+        <span class="current-path">/data/{{ currentPath() }}</span>
+      </div>
+
+      <div class="files-table-wrapper">
+        @if (isLoading()) {
+          <div class="loading-state">Lendo sistema de arquivos do Kubernetes...</div>
+        } @else {
+          <table class="files-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tamanho</th>
+                <th>Modificação</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (file of files(); track file.name) {
+                <tr (click)="openItem(file)" class="file-row">
+                  <td class="file-name">
+                    @if (file.isDir) {
+                      <span class="icon">📁</span>
+                    } @else {
+                      <span class="icon">📄</span>
+                    }
+                    {{ file.name }}
+                  </td>
+                  <td class="file-size">{{ file.isDir ? '--' : file.size }}</td>
+                  <td class="file-date">{{ file.date }}</td>
+                  <td class="file-actions">
+                    <button class="delete-btn" (click)="deleteFile(file, $event)" title="Deletar">🗑️</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (files().length === 0) {
+            <div class="empty-state">Pasta vazia.</div>
+          }
+        }
+      </div>
+    } 
+
+    <!-- View do Editor de Arquivos -->
+    @else {
+      <div class="editor-header">
+        <h2>Editando: {{ viewingFile()?.name }}</h2>
+        <div class="editor-actions">
+          <button class="action-btn save-btn" (click)="saveFile()">💾 Salvar</button>
+          <button class="action-btn" (click)="closeFile()">❌ Fechar</button>
+        </div>
+      </div>
+      <div class="editor-wrapper">
+        <textarea class="code-editor" [(ngModel)]="viewingFile()!.content"></textarea>
+      </div>
+    }
+  </div>
+</div>

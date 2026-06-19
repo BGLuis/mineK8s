@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minekube-health-bot
+  namespace: default
+spec:
+  schedule: "*/5 * * * *" # Executa a cada 5 minutos
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: minekube-health-bot
+        spec:
+          containers:
+          - name: bot
+            image: minekube-bot:latest
+            imagePullPolicy: Never # Vamos assumir que a imagem seja construída e exista no nó (ou use um registry)
+            env:
+            - name: MC_HOST
+              value: "mc-vanilla-svc.default.svc.cluster.local" # Testa conectando diretamente ao pod do minecraft ignorando o proxy (ou pode testar via proxy)
+            - name: MC_PORT
+              value: "25565"
+            - name: BOT_NAME
+              value: "HealthBot"
+          restartPolicy: OnFailure

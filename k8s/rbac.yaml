@@ -1,0 +1,72 @@
+# ─── ServiceAccount ───────────────────────────────────────────────────────────
+# Identidade do NestJS dentro do cluster.
+# Ao rodar dentro de um Pod, o @kubernetes/client-node usa automaticamente
+# o token deste ServiceAccount (via loadFromDefault → in-cluster).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minekube-api
+  namespace: default
+
+---
+# ─── ClusterRole ──────────────────────────────────────────────────────────────
+# Permissões exatas que a API precisa — nem mais, nem menos.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: minekube-api-role
+rules:
+  # Gerenciar Deployments dos servidores Minecraft
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Gerenciar Services (ClusterIP para cada servidor)
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Gerenciar PersistentVolumeClaims (volumes dos mundos)
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Ler status dos Pods (Online/Offline no dashboard)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # exec nos Pods (RCON, file manager, backups)
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+
+  # Logs dos Pods
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  # Criar Jobs de backup
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Ler métricas (opcional — Monitoring module)
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+# ─── ClusterRoleBinding ───────────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: minekube-api-binding
+subjects:
+  - kind: ServiceAccount
+    name: minekube-api
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: minekube-api-role
+  apiGroup: rbac.authorization.k8s.io

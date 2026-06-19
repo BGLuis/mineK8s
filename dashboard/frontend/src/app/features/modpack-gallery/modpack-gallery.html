@@ -1,0 +1,121 @@
+<div class="gallery-container">
+  <div class="header">
+    <div class="title-area">
+      <h1>Marketplace</h1>
+      <p>Descubra e instale milhares de modpacks instantaneamente.</p>
+    </div>
+    <div class="search-box">
+      <select class="search-input" style="width: auto; margin-right: 10px; cursor: pointer;" [ngModel]="selectedSource()" (ngModelChange)="selectedSource.set($event); search()">
+        <option value="All">Todas as Plataformas</option>
+        <option value="CurseForge">CurseForge</option>
+        <option value="Modrinth">Modrinth</option>
+      </select>
+      <input type="text" class="search-input" placeholder="Buscar modpack... (ex: Pixelmon)" 
+             [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" (keyup.enter)="search()">
+      <button class="premium-btn" (click)="search()">Buscar</button>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Vasculhando o multiverso...</p>
+    </div>
+  }
+
+  @if (!isLoading() && modpacks().length === 0 && searchQuery().trim() !== '') {
+    <div class="empty-state">
+      <h2 style="color: var(--text-muted); text-align: center; margin-top: 40px;">Nenhum modpack encontrado para "{{searchQuery()}}" 😔</h2>
+    </div>
+  }
+
+  @if (!isLoading()) {
+    <div class="grid">
+      
+      <!-- Card Estático do Minecraft Vanilla -->
+      <div class="card glass-panel" style="border: 2px solid var(--primary); box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);">
+        <div class="card-header">
+          <img src="https://minecraft.wiki/images/Grass_Block.png" alt="Vanilla Icon" class="pack-icon" style="image-rendering: pixelated;">
+          <div class="pack-info">
+            <h3>Minecraft Vanilla <span style="font-size: 0.7rem; background: #10b981; padding: 2px 6px; border-radius: 4px;">NATIVO</span></h3>
+            <span class="author">por Mojang Studios</span>
+          </div>
+        </div>
+        <p class="description">O clássico, leve e imaculado Minecraft. Jogue sem mods na versão mais recente disponível (LATEST).</p>
+        <div class="card-footer">
+          <div class="stats"></div>
+          <button class="premium-btn" (click)="installVanilla()" style="background: #10b981;">Instalar Vanilla</button>
+        </div>
+      </div>
+
+      @for (pack of modpacks(); track pack.id) {
+        <div class="card glass-panel">
+          <div class="card-header">
+            <img [src]="pack.iconUrl || 'https://via.placeholder.com/64'" alt="Icon" class="pack-icon">
+            <div class="pack-info">
+              <h3>{{ pack.title }} <span style="font-size: 0.7rem; background: var(--primary); padding: 2px 6px; border-radius: 4px;">{{pack.source}}</span></h3>
+              <span class="author">por {{ pack.author }}</span>
+            </div>
+          </div>
+          
+          <p class="description">{{ pack.description | slice:0:110 }}...</p>
+          
+          <div class="tags">
+            @for (cat of pack.categories | slice:0:3; track cat) {
+              <span class="tag">{{ cat }}</span>
+            }
+          </div>
+
+          <div class="card-footer">
+            <div class="stats">
+              <span>⬇ {{ pack.downloads | number }}</span>
+            </div>
+            <button class="premium-btn" (click)="openVersionsModal(pack)">Ver Versões</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Modal de Versões -->
+  @if (selectingVersionFor()) {
+    <div class="modal-overlay" (click)="closeModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Selecione a Versão</h2>
+          <button class="close-btn" (click)="closeModal()">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <p>Instalando: <strong>{{ selectingVersionFor()?.title }}</strong></p>
+          
+          <!-- Botão Instalador Rápido -->
+          <button class="premium-btn" style="width: 100%; margin-bottom: 20px;" (click)="installVersion(selectingVersionFor()!, null)">
+            🚀 Instalar a versão mais recente
+          </button>
+
+          <hr style="border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
+          
+          @if (isFetchingVersions()) {
+            <p style="text-align: center; color: #94a3b8;">Carregando histórico de versões...</p>
+          } @else {
+            <div class="versions-list">
+              @for (v of versions(); track v.id) {
+                <div class="version-item">
+                  <div class="version-info">
+                    <span class="version-name">{{ v.name }}</span>
+                    <span class="version-date">{{ v.date | date }}</span>
+                  </div>
+                  <button class="action-btn install-btn" (click)="installVersion(selectingVersionFor()!, v.id)">Instalar</button>
+                </div>
+              }
+              @if (versions().length === 0) {
+                <p style="text-align: center; color: #94a3b8;">Nenhuma versão específica encontrada.</p>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

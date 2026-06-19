@@ -1,0 +1,31 @@
+* text=auto
+
+# Arquivos de texto que devem ter quebras de linha normalizadas
+*.js text
+*.ts text
+*.jsx text
+*.tsx text
+*.json text
+*.html text
+*.css text
+*.md text
+*.yaml text
+*.yml text
+*.xml text
+*.txt text
+
+# Shell scripts e Makefiles sempre com LF (Unix) para evitar erros de execução
+*.sh text eol=lf
+Makefile text eol=lf
+
+# Arquivos binários
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

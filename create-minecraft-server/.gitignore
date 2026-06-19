@@ -1,0 +1,47 @@
+# Arquivos de Sistema e Logs
+logs/
+crash-reports/
+debug/
+*.log
+*.log.gz
+
+# Arquivos de Cache e Temporários
+cache/
+.cache/
+tmp/
+temp/
+user_jvm_args.txt
+eula.txt
+
+# Arquivos de Configuração do Minecraft (Gerados)
+server.properties
+whitelist.json
+ops.json
+banned-ips.json
+banned-players.json
+usercache.json
+usernamecache.json
+world/
+world_nether/
+world_the_end/
+
+# Jars do Servidor e Bibliotecas (Baixados automaticamente)
+server-*.jar
+libraries/
+versions/
+run.bat
+run.sh
+
+# Arquivos de Backup
+backups/
+*.bak
+*.old
+
+# Arquivos de Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Scripts Locais (Opcional - descomente se quiser ignorar os scripts criados)
+# download-server.sh
+# init-server.sh
+# server.config

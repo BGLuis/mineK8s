@@ -1,0 +1,80 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+// ---------------------------------------------------------------------------
+// 1. Usuários (Jogadores + Power Users)
+// ---------------------------------------------------------------------------
+model User {
+  id              String   @id @default(uuid())
+  tailscaleUserId String?  @unique // O ID do usuário retornado pela API do Tailscale
+  email           String?  @unique // Útil para Node Share de Power Users
+  minecraftNick   String?  // Nome no jogo (para a Whitelist)
+  role            String   @default("PLAYER") // "ADMIN", "PLAYER"
+  
+  // Relacionamentos
+  groups          UserGroup[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// 2. Grupos de Acesso (Ex: "Família", "Amigos")
+// ---------------------------------------------------------------------------
+model Group {
+  id          String   @id @default(uuid())
+  name        String   @unique // ex: "Familia"
+  description String?
+  
+  // Relacionamentos
+  users       UserGroup[]
+  servers     ServerGroup[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// 3. Servidores de Minecraft
+// ---------------------------------------------------------------------------
+model Server {
+  id               String   @id @default(uuid())
+  name             String   // ex: "Vanilla"
+  subdomain        String   @unique // ex: "vanilla.mine.luiis.com.br"
+  k8sServiceName   String   // ex: "mc-vanilla-svc"
+  k8sServicePort   Int      @default(25565)
+  status           String   @default("OFFLINE") // "ONLINE", "OFFLINE", "SLEEPING"
+  
+  // Relacionamentos
+  groups           ServerGroup[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Relações N:N
+// ---------------------------------------------------------------------------
+
+model UserGroup {
+  userId  String
+  groupId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+}
+
+model ServerGroup {
+  serverId String
+  groupId  String
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([serverId, groupId])
+}

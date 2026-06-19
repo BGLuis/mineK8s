@@ -1,0 +1,46 @@
+# ─── Secrets K8s — NUNCA commite com valores reais ───────────────────────────
+k8s/nestjs-api.yaml
+
+# ─── Terraform ────────────────────────────────────────────────────────────────
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/.terraform.lock.hcl
+
+# ─── Env files ────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+dashboard/backend/.env
+dashboard/frontend/.env
+
+# ─── Node.js / Dependências ───────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Next.js / React ──────────────────────────────────────────────────────────
+.next/
+out/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── IDEs e Editores ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── SO (Sistema Operacional) ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+
+docs

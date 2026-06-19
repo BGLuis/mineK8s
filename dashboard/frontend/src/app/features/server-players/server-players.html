@@ -1,0 +1,40 @@
+<div class="players-container">
+  <header class="players-header">
+    <button class="back-btn" (click)="goBack()">← Voltar</button>
+    <div class="header-info">
+      <h1>Jogadores: <span class="server-id">{{ serverId }}</span></h1>
+      <div class="online-stats">
+        <span class="status-dot"></span> {{ onlineCount() }} / {{ maxCount() }} Online
+      </div>
+    </div>
+    <button class="action-btn" (click)="fetchPlayers()">🔄 Atualizar</button>
+  </header>
+
+  <div class="main-card glass-panel">
+    @if (isLoading()) {
+      <div class="loading-state">Obtendo lista de jogadores via RCON...</div>
+    } @else {
+      @if (players().length === 0) {
+        <div class="empty-state">
+          Nenhum jogador online no momento.
+        </div>
+      } @else {
+        <div class="players-grid">
+          @for (player of players(); track player.name) {
+            <div class="player-card">
+              <div class="player-info">
+                <img [src]="getAvatarUrl(player.name)" alt="Avatar de {{ player.name }}" class="player-avatar">
+                <span class="player-name">{{ player.name }}</span>
+              </div>
+              <div class="player-actions">
+                <button class="btn kick-btn" (click)="executeCommand(player.name, 'kick')">Kick</button>
+                <button class="btn ban-btn" (click)="executeCommand(player.name, 'ban')">Ban</button>
+                <button class="btn op-btn" (click)="executeCommand(player.name, 'op')">Op</button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>

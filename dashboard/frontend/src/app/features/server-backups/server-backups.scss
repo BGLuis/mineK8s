@@ -1,0 +1,133 @@
+.backups-container {
+  padding: 20px;
+  animation: fadeIn 0.3s ease-out;
+
+  .backups-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+
+    .back-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: var(--text-light);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    .header-info {
+      text-align: center;
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      .server-id {
+        color: var(--primary);
+      }
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+
+      .action-btn {
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        &.premium-btn {
+          background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
+        }
+      }
+    }
+  }
+
+  .main-card {
+    padding: 20px;
+    min-height: 400px;
+  }
+
+  .loading-state, .empty-state {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    color: var(--text-muted);
+    text-align: center;
+
+    h3 {
+      color: var(--text-light);
+      margin-bottom: 10px;
+    }
+  }
+
+  .backups-table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+    }
+
+    td {
+      color: var(--text-light);
+
+      &.backup-name {
+        font-family: monospace;
+        color: #93c5fd;
+      }
+    }
+
+    .restore-btn {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+
+      &:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.3);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

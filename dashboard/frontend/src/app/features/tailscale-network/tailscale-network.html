@@ -1,0 +1,96 @@
+<div class="network-container">
+  <div class="header">
+    <div class="title-area">
+      <h1>Acesso & Rede Segura (Tailscale)</h1>
+      <p>Gerencie quem tem acesso aos seus servidores de Minecraft. A conexão é P2P e protegida com WireGuard.</p>
+    </div>
+    <button class="premium-btn" (click)="fetchDevices()">🔄 Atualizar</button>
+  </div>
+
+  <div class="grid">
+    <!-- Gerar Convite -->
+    <div class="glass-panel invite-card">
+      <div class="card-header">
+        <h3>🎟️ Gerar Novo Convite</h3>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Nome do Jogador</label>
+          <input type="text" [(ngModel)]="inviteModel.playerName" placeholder="Ex: Notch">
+        </div>
+
+        <div class="form-group">
+          <label>Nível de Acesso</label>
+          <select [(ngModel)]="inviteModel.scope">
+            <option value="global">Global (Todos os servidores)</option>
+            <option value="individual">Apenas Servidores Selecionados</option>
+          </select>
+        </div>
+
+        @if (inviteModel.scope === 'individual') {
+          <div class="form-group">
+            <label>Selecione os servidores:</label>
+            <select multiple [(ngModel)]="inviteModel.serverIds" class="multi-select">
+              @for (server of servers(); track server.id) {
+                <option [value]="server.id">{{ server.name }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <div class="form-group">
+          <label>Expira em (Dias)</label>
+          <input type="number" [(ngModel)]="inviteModel.expiresInDays" min="1" max="365">
+        </div>
+
+        <button class="action-btn create-btn" [disabled]="isLoading()" (click)="createInvite()">
+          {{ isLoading() ? 'Gerando...' : 'Gerar Link de Convite' }}
+        </button>
+
+        @if (generatedInviteUrl()) {
+          <div class="success-box">
+            <p>Convite gerado com sucesso! Envie este link para o jogador:</p>
+            <div class="url-box">
+              <input type="text" readonly [value]="generatedInviteUrl()">
+            </div>
+            <p class="help-text">O jogador precisará criar uma conta gratuita no Tailscale se ainda não tiver uma.</p>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Jogadores Conectados -->
+    <div class="glass-panel devices-card">
+      <div class="card-header">
+        <h3>🌐 Jogadores com Acesso</h3>
+      </div>
+      
+      @if (isLoading() && devices().length === 0) {
+        <div class="loading-state">Buscando dispositivos...</div>
+      }
+
+      @if (!isLoading() && devices().length === 0) {
+        <div class="empty-state">
+          <p>Nenhum jogador externo conectado à sua rede Tailscale.</p>
+        </div>
+      }
+
+      @if (devices().length > 0) {
+        <div class="devices-list">
+          @for (device of devices(); track device.id) {
+            <div class="device-row">
+              <div class="device-info">
+                <span class="device-name">{{ device.name }}</span>
+                <span class="device-ip">{{ device.addresses?.[0] }}</span>
+                <span class="device-status" [ngClass]="device.clientConnectivity?.online ? 'online' : 'offline'">
+                  {{ device.clientConnectivity?.online ? 'Online' : 'Offline' }}
+                </span>
+              </div>
+              <button class="action-btn delete-btn" (click)="revokeDevice(device.id, device.name)">Kickar</button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+</div>

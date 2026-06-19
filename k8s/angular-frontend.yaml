@@ -1,0 +1,97 @@
+# ─── Deployment do Angular (nginx) ────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minekube-frontend
+  namespace: default
+  labels:
+    app: minekube-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minekube-frontend
+  template:
+    metadata:
+      labels:
+        app: minekube-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: minekube-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 30
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+
+---
+# ─── Service do Angular ───────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: minekube-frontend-svc
+  namespace: default
+spec:
+  selector:
+    app: minekube-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# ─── Ingress — ponto de entrada único ─────────────────────────────────────────
+# Expõe tudo via um único IP/host:
+#   /        → Angular (minekube-frontend-svc:80)
+#   /api/*   → NestJS  (minekube-api-svc:3000)   ← o nginx do container já faz isso,
+#                                                  mas o Ingress serve como fallback
+#                                                  e permite acesso direto à API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minekube-ingress
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          # API NestJS — prefixo /api
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: minekube-api-svc
+                port:
+                  number: 3000
+
+          # Frontend Angular — tudo o resto
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minekube-frontend-svc
+                port:
+                  number: 80

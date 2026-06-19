@@ -1,0 +1,50 @@
+<div class="backups-container">
+  <header class="backups-header">
+    <button class="back-btn" (click)="goBack()">← Voltar</button>
+    <div class="header-info">
+      <h1>Backups de: <span class="server-id">{{ serverId }}</span></h1>
+    </div>
+    <div class="actions">
+      <button class="action-btn" (click)="fetchBackups()" [disabled]="isActionInProgress()">🔄 Atualizar</button>
+      <button class="action-btn premium-btn" (click)="createBackup()" [disabled]="isActionInProgress()">💾 Criar Backup</button>
+    </div>
+  </header>
+
+  <div class="main-card glass-panel">
+    @if (isLoading()) {
+      <div class="loading-state">Lendo backups no Kubernetes...</div>
+    } @else {
+      @if (backups().length === 0) {
+        <div class="empty-state">
+          <h3>Nenhum backup encontrado.</h3>
+          <p>Você pode criar um backup seguro a qualquer momento.</p>
+        </div>
+      } @else {
+        <table class="backups-table">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Arquivo</th>
+              <th>Tamanho</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (backup of backups(); track backup.filename) {
+              <tr>
+                <td class="backup-date">{{ backup.createdAt | date:'medium' }}</td>
+                <td class="backup-name">{{ backup.filename }}</td>
+                <td class="backup-size">{{ backup.sizeMb ? backup.sizeMb + ' MB' : '--' }}</td>
+                <td class="backup-actions">
+                  <button class="restore-btn" (click)="restoreBackup(backup.filename)" [disabled]="isActionInProgress()">
+                    ⚠️ Restaurar
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  </div>
+</div>
