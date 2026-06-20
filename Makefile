@@ -2,6 +2,7 @@
 # MineKubernetes — Makefile
 # ─────────────────────────────────────────────────────────────────────────────
 # Uso:
+#   make up         → provisiona tudo de uma vez (infra, build, import, deploy)
 #   make install    → instala dependências npm (backend + frontend)
 #   make start      → sobe em modo dev (NestJS + Angular com hot-reload)
 #   make build      → builda as imagens Docker
@@ -24,7 +25,7 @@ export KUBECONFIG ?= $(HOME)/.kube/config
         deploy deploy-rbac deploy-api \
         infra infra-destroy \
         status logs \
-        help
+        help up
 
 # ── Desenvolvimento local ──────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ import-bot: build-bot
 	@echo "✅ Imagem minekube-bot:$(TAG) importada no K3s"
 
 # ── Deploy no Kubernetes ───────────────────────────────────────────────────────
+
+up: infra import deploy ## Provisiona tudo de uma vez (Infra, Build, Import e Deploy K8s)
 
 deploy: deploy-rbac deploy-api deploy-frontend ## Aplica todos os manifests K8s
 
