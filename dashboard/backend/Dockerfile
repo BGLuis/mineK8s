@@ -4,7 +4,9 @@ FROM node:26-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --ignore-scripts
+RUN apk add --no-cache python3 make g++
+RUN npm config set ignore-scripts false
+RUN npm ci
 
 COPY . .
 RUN npx prisma generate
@@ -17,14 +19,18 @@ WORKDIR /app
 
 # Copia apenas os artefatos necessários para rodar
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm config set ignore-scripts false
+RUN apk add --no-cache python3 make g++ && npm ci --omit=dev && apk del python3 make g++
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dev.db ./dev.db
+COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Usuário não-root por segurança
 RUN addgroup -S nestjs && adduser -S nestjs -G nestjs
+RUN chown -R nestjs:nestjs /app
 USER nestjs
 
 EXPOSE 3000 3001
