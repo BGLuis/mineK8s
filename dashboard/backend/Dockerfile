@@ -30,4 +30,4 @@ USER nestjs
 EXPOSE 3000 3001
 
 # Inicia o join-server (porta 3001) em background e o NestJS principal (porta 3000) em foreground
-CMD ["sh", "-c", "node dist/join-server.js & node dist/main"]
+CMD ["sh", "-c", "node dist/src/join-server.js & node dist/src/main"]
