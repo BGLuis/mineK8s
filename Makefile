@@ -21,7 +21,8 @@ TAG           = latest
 export KUBECONFIG ?= $(HOME)/.kube/config
 
 .PHONY: install start start-backend start-frontend \
-        build build-api build-frontend \
+        build build-api build-frontend build-minecraft \
+        import import-api import-frontend import-minecraft \
         deploy deploy-rbac deploy-api \
         infra infra-destroy \
         status logs \
@@ -49,7 +50,7 @@ start-frontend:
 
 # ── Build Docker ───────────────────────────────────────────────────────────────
 
-build: build-api build-frontend ## Builda todas as imagens Docker
+build: build-api build-frontend build-minecraft ## Builda todas as imagens Docker
 
 build-api: ## Builda a imagem Docker do NestJS
 	@echo "🐳 Buildando imagem $(IMAGE_API):$(TAG)..."
@@ -61,8 +62,13 @@ build-frontend: ## Builda a imagem Docker do Angular (nginx)
 	docker build -t $(IMAGE_ANGULAR):$(TAG) ./dashboard/frontend
 	@echo "✅ Imagem $(IMAGE_ANGULAR):$(TAG) pronta"
 
+build-minecraft: ## Builda a imagem base do Minecraft Server
+	@echo "🐳 Buildando imagem local/minecraft-server:latest..."
+	docker build -t local/minecraft-server:latest ./create-minecraft-server
+	@echo "✅ Imagem local/minecraft-server:latest pronta"
+
 # Importa as imagens para o K3s (necessário quando não usa registry externo)
-import: import-api import-frontend
+import: import-api import-frontend import-minecraft
 
 import-api: build-api
 	@echo "📤 Importando API para o K3s..."
@@ -73,6 +79,11 @@ import-frontend: build-frontend
 	@echo "📤 Importando frontend para o K3s..."
 	docker save $(IMAGE_ANGULAR):$(TAG) | sudo k3s ctr images import -
 	@echo "✅ Imagem $(IMAGE_ANGULAR):$(TAG) importada no K3s"
+
+import-minecraft: build-minecraft
+	@echo "📤 Importando minecraft-server para o K3s..."
+	docker save local/minecraft-server:latest | sudo k3s ctr images import -
+	@echo "✅ Imagem local/minecraft-server:latest importada no K3s"
 
 build-bot: ## Builda a imagem Docker do Bot
 	@echo "🐳 Buildando imagem minekube-bot:$(TAG)..."
@@ -125,7 +136,7 @@ setup-ts: ## Instala Tailscale, ativa Funnel e configura TAILSCALE_FUNNEL_HOST a
 
 infra: ## Aplica a infra base via Terraform (mc-router, namespace, etc)
 	@echo "🏗️  Aplicando infra com Terraform..."
-	cd infra && terraform init && terraform apply
+	cd infra && terraform init && terraform apply -auto-approve
 
 infra-plan: ## Mostra o plano do Terraform sem aplicar
 	cd infra && terraform plan
