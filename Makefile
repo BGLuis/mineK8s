@@ -125,7 +125,7 @@ setup-ts: ## Instala Tailscale, ativa Funnel e configura TAILSCALE_FUNNEL_HOST a
 
 infra: ## Aplica a infra base via Terraform (mc-router, namespace, etc)
 	@echo "🏗️  Aplicando infra com Terraform..."
-	cd infra && terraform apply
+	cd infra && terraform init && terraform apply
 
 infra-plan: ## Mostra o plano do Terraform sem aplicar
 	cd infra && terraform plan
