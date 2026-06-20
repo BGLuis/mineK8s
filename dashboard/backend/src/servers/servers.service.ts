@@ -25,6 +25,7 @@ export class ServersService {
   private readonly logger = new Logger(ServersService.name);
   private k8sApi: k8s.CoreV1Api;
   private k8sAppsApi: k8s.AppsV1Api;
+  private k8sBatch: k8s.BatchV1Api;
   private curseforgeApiKey = '$2a$10$wuAJuNZuted3NORVmpgUC.m8sI.pv1tOPKZyBgLFGjxFp/br0lZCC';
 
   constructor() {
@@ -32,6 +33,7 @@ export class ServersService {
     kc.loadFromDefault();
     this.k8sApi = kc.makeApiClient(k8s.CoreV1Api);
     this.k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
+    this.k8sBatch = kc.makeApiClient(k8s.BatchV1Api);
   }
 
   async createServer(dto: CreateServerDto) {
@@ -372,10 +374,86 @@ export class ServersService {
       await execAsync(
         `kubectl exec ${podName} --kubeconfig ~/.kube/config -- rm -rf ${fullPath}`,
       );
-      return { message: `${safePath} removido com sucesso.` };
+      return { status: "Success", message: `Arquivo removido com sucesso` };
     } catch (error) {
       this.logger.error(error);
       throw new HttpException('Falha ao deletar o arquivo/pasta no pod.', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Upload & Extração de Mundos
+  // ---------------------------------------------------------------------------
+  async uploadWorld(id: string, file: Express.Multer.File) {
+    if (!file) throw new HttpException('Nenhum arquivo enviado', 400);
+
+    const isZip = file.originalname.endsWith('.zip');
+    const isTarGz = file.originalname.endsWith('.tar.gz');
+
+    if (!isZip && !isTarGz) {
+      throw new HttpException('Apenas arquivos .zip e .tar.gz são suportados', 400);
+    }
+
+    // O servidor deve estar offline para evitar corrupção
+    try {
+      const deployment = await this.k8sAppsApi.readNamespacedDeployment({ name: id, namespace: 'default' });
+      if (deployment && deployment.spec?.replicas !== 0) {
+        throw new HttpException('O servidor DEVE estar desligado (Stop) antes de subir o mundo!', 400);
+      }
+    } catch (e: any) {
+      if (e instanceof HttpException) throw e;
+      // se der 404 ignoramos (pode ser que o deploy ainda não exista mas o PVC sim)
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').toLowerCase();
+    const jobName = `upload-${id}-${timestamp}`.substring(0, 63);
+
+    const extractCmd = isZip
+      ? `unzip -q ${file.path} -d /tmp/ext`
+      : `tar -xzvf ${file.path} -C /tmp/ext`;
+
+    const job: k8s.V1Job = {
+      apiVersion: 'batch/v1',
+      kind: 'Job',
+      metadata: { name: jobName, namespace: 'default' },
+      spec: {
+        ttlSecondsAfterFinished: 86400,
+        template: {
+          spec: {
+            restartPolicy: 'Never',
+            containers: [
+              {
+                name: 'extractor',
+                image: 'alpine',
+                command: ['/bin/sh', '-c'],
+                args: [
+                  `apk add unzip && mkdir -p /tmp/ext && mkdir -p /data/world && ` +
+                  `${extractCmd} && rm -rf /data/world/* && ` +
+                  `if [ -d /tmp/ext/world ]; then mv /tmp/ext/world/* /data/world/ 2>/dev/null || true; else mv /tmp/ext/* /data/world/ 2>/dev/null || true; fi && ` +
+                  `rm -f ${file.path} && echo "Upload extraido com sucesso!"`
+                ],
+                volumeMounts: [
+                  { name: 'data', mountPath: '/data' },
+                  { name: 'uploads', mountPath: '/var/minekube/uploads' },
+                ],
+              },
+            ],
+            volumes: [
+              { name: 'data', persistentVolumeClaim: { claimName: `${id}-pvc` } },
+              { name: 'uploads', hostPath: { path: '/var/minekube/uploads', type: 'DirectoryOrCreate' } },
+            ],
+          },
+        },
+      },
+    };
+
+    try {
+      await this.k8sBatch.createNamespacedJob({ namespace: 'default', body: job });
+      this.logger.log(`Job de upload criado: ${jobName} para o server: ${id}`);
+      return { success: true, message: 'Mundo enviado! A extração está ocorrendo de forma autônoma no cluster.' };
+    } catch (e: any) {
+      this.logger.error(`Erro ao criar Job de upload: ${e.message}`);
+      throw new HttpException('Falha ao iniciar rotina de extração.', 500);
     }
   }
 }

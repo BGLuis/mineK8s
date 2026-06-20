@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, Param, Delete, Query, Put, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete, Query, Put, Patch, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ServersService, CreateServerDto } from './servers.service';
 import { UpdateService, StartUpdateDto } from './update.service';
 
@@ -114,5 +115,19 @@ export class ServersController {
     @Param('taskId') taskId: string,
   ) {
     return this.updateService.getTask(taskId);
+  }
+
+  /**
+   * POST /api/servers/:id/world/upload
+   * Recebe um arquivo .zip ou .tar.gz contendo o mundo (ou partes do /data)
+   * e extrai de forma autônoma via Kubernetes Job.
+   */
+  @Post(':id/world/upload')
+  @UseInterceptors(FileInterceptor('file', { dest: '/var/minekube/uploads' }))
+  async uploadWorld(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.serversService.uploadWorld(id, file);
   }
 }
