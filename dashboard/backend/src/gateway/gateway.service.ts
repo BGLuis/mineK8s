@@ -186,13 +186,6 @@ export class GatewayService implements OnModuleInit, OnModuleDestroy {
         return { authorized: false };
       }
 
-      // Se o servidor for público (ex: sem grupos definidos), podemos liberar. 
-      // Mas a nossa premissa é acesso via grupos. Vamos assumir que precisa de grupo.
-      if (server.groups.length === 0) {
-        this.logger.debug(`Servidor ${requestedDomain} não pertence a nenhum grupo. Bloqueado por segurança.`);
-        return { authorized: false };
-      }
-
       // 2. Descobrir quem é o dono desse IP no Tailscale
       const tailscaleUserId = await this.tailscaleService.getDeviceOwner(clientIp); 
 
@@ -201,7 +194,7 @@ export class GatewayService implements OnModuleInit, OnModuleDestroy {
         return { authorized: false };
       }
 
-      // 3. Buscar os grupos do Usuário no banco
+      // 3. Buscar o usuário no banco
       const user = await this.prisma.user.findFirst({
         where: { tailscaleUserId }, 
         include: { groups: true },
@@ -209,6 +202,18 @@ export class GatewayService implements OnModuleInit, OnModuleDestroy {
 
       if (!user) {
         this.logger.debug(`Usuário do Tailscale ${tailscaleUserId} (IP ${clientIp}) não está vinculado no painel.`);
+        return { authorized: false };
+      }
+
+      // Se o usuário for ADMIN, damos bypass e liberamos acesso a qualquer servidor
+      if (user.role === 'ADMIN') {
+        this.logger.log(`Acesso master liberado para ADMIN ${user.minecraftNick} no servidor ${server.name}`);
+        return { authorized: true, server };
+      }
+
+      // Apenas não-admins chegarão aqui. Se o servidor não tiver grupos, negamos.
+      if (server.groups.length === 0) {
+        this.logger.debug(`Servidor ${requestedDomain} não pertence a nenhum grupo. Bloqueado para usuários normais.`);
         return { authorized: false };
       }
 
