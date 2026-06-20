@@ -17,6 +17,7 @@ export class CreateServerDto {
    * Exemplo: 30 = hiberna após 30 minutos sem jogadores.
    */
   hibernateAfterMinutes?: number | null;
+  memoryAllocated?: string; // Ex: '4G', '8G'
 }
 
 @Injectable()
@@ -78,7 +79,8 @@ export class ServersService {
               ports: [{ containerPort: 25565 }],
               env: Object.entries({
                 EULA: 'TRUE',
-                MEMORY: '4G',
+                MEMORY: dto.memoryAllocated || '4G',
+                JVM_XX_OPTS: '-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1',
                 ...(dto.source === 'CurseForge' ? {
                   TYPE: 'AUTO_CURSEFORGE',
                   CF_SLUG: dto.modpackSlug,
@@ -93,6 +95,22 @@ export class ServersService {
                   ...(dto.version && { MODRINTH_VERSION: dto.version })
                 })
               }).map(([name, value]) => ({ name, value })),
+              resources: {
+                limits: { memory: `${parseInt(dto.memoryAllocated || '4') + 1}Gi` }, // +1G de margem off-heap
+                requests: { memory: `${parseInt(dto.memoryAllocated || '4')}Gi` }
+              },
+              livenessProbe: {
+                exec: { command: ["mc-monitor", "status", "--host", "localhost", "--port", "25565"] },
+                initialDelaySeconds: 120,
+                periodSeconds: 30,
+                failureThreshold: 10
+              },
+              readinessProbe: {
+                exec: { command: ["mc-monitor", "status", "--host", "localhost", "--port", "25565"] },
+                initialDelaySeconds: 30,
+                periodSeconds: 10,
+                failureThreshold: 60 // Até 10 minutos carregando mods sem o k8s matar
+              },
               volumeMounts: [{ name: 'data', mountPath: '/data' }]
             }],
             volumes: [{ name: 'data', persistentVolumeClaim: { claimName: `${serverName}-pvc` } }]

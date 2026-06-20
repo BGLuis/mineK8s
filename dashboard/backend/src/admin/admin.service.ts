@@ -41,12 +41,19 @@ export class AdminService {
   // ---------------------------------------------------------
   // SERVERS
   // ---------------------------------------------------------
-  async createServer(data: { name: string; subdomain: string; k8sServiceName: string; k8sServicePort: number }) {
+  async createServer(data: { name: string; subdomain: string; k8sServiceName: string; k8sServicePort: number; memoryAllocated?: string }) {
     return this.prisma.server.create({ data });
   }
 
   async getServers() {
     return this.prisma.server.findMany({ include: { groups: true } });
+  }
+
+  async updateServer(id: string, data: { name?: string; subdomain?: string }) {
+    return this.prisma.server.update({
+      where: { id },
+      data,
+    });
   }
 
   // ---------------------------------------------------------

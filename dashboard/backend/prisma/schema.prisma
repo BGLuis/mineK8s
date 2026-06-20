@@ -48,6 +48,7 @@ model Server {
   k8sServiceName   String   // ex: "mc-vanilla-svc"
   k8sServicePort   Int      @default(25565)
   status           String   @default("OFFLINE") // "ONLINE", "OFFLINE", "SLEEPING"
+  memoryAllocated  String   @default("4G") // Limite de memória (ex: "4G", "8G")
   
   // Relacionamentos
   groups           ServerGroup[]

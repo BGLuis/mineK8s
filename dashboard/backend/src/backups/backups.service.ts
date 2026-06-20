@@ -38,7 +38,7 @@ export class BackupsService {
   private k8sCore: k8s.CoreV1Api;
   private k8sApps: k8s.AppsV1Api;
   private readonly namespace = 'default';
-  private readonly BACKUP_PVC = 'global-backups-pvc';
+  private readonly BACKUPS_HOST_PATH = process.env.BACKUPS_HOST_PATH || '/var/minekube/backups';
 
   constructor() {
     const kc = new k8s.KubeConfig();
@@ -48,43 +48,7 @@ export class BackupsService {
     this.k8sApps = kc.makeApiClient(k8s.AppsV1Api);
   }
 
-  // ---------------------------------------------------------------------------
-  // Garante que o PVC global de backups existe — cria se necessário
-  // ---------------------------------------------------------------------------
-  async ensureBackupPvc(): Promise<void> {
-    try {
-      await this.k8sCore.readNamespacedPersistentVolumeClaim({
-        name: this.BACKUP_PVC,
-        namespace: this.namespace,
-      });
-    } catch (e: any) {
-      if (e?.statusCode === 404 || e?.response?.statusCode === 404) {
-        this.logger.log(`PVC "${this.BACKUP_PVC}" não existe — criando...`);
-        await this.k8sCore.createNamespacedPersistentVolumeClaim({
-          namespace: this.namespace,
-          body: {
-            apiVersion: 'v1',
-            kind: 'PersistentVolumeClaim',
-            metadata: { name: this.BACKUP_PVC },
-            spec: {
-              accessModes: ['ReadWriteOnce'],
-              storageClassName: 'local-path',
-              resources: { requests: { storage: '50Gi' } },
-            },
-          },
-        });
-        this.logger.log(`PVC "${this.BACKUP_PVC}" criado com 50Gi.`);
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Dispara um K8s Job que comprime /data do servidor em .tar.gz
-  // ---------------------------------------------------------------------------
   async createBackup(serverId: string): Promise<BackupJobResult> {
-    await this.ensureBackupPvc();
 
     const timestamp = new Date()
       .toISOString()
@@ -137,7 +101,7 @@ export class BackupsService {
               },
               {
                 name: 'backup-volume',
-                persistentVolumeClaim: { claimName: this.BACKUP_PVC },
+                hostPath: { path: this.BACKUPS_HOST_PATH, type: 'DirectoryOrCreate' },
               },
             ],
           },
@@ -267,7 +231,7 @@ export class BackupsService {
               },
               {
                 name: 'backup-volume',
-                persistentVolumeClaim: { claimName: this.BACKUP_PVC },
+                hostPath: { path: this.BACKUPS_HOST_PATH, type: 'DirectoryOrCreate' },
               },
             ],
           },
@@ -345,7 +309,7 @@ export class BackupsService {
         volumes: [
           {
             name: 'bk',
-            persistentVolumeClaim: { claimName: this.BACKUP_PVC },
+            hostPath: { path: this.BACKUPS_HOST_PATH, type: 'DirectoryOrCreate' },
           },
         ],
       },
