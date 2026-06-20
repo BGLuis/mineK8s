@@ -39,8 +39,9 @@ Este arquivo serve como a **memória principal e o guia de diretrizes arquitetur
 As funcionalidades abaixo **tiveram o código gerado em pastas de staging (`src/tmp_agents/`) e já foram validadas por Testes Unitários**, precisando apenas serem consolidadas de vez no ecossistema:
 
 1. **Sistema Avançado de Backups:** Como `local-path` não aceita K8s CSI Snapshots de bloco nativamente, estamos usando K8s Jobs para comprimir (`tar.gz`) a pasta `/data/world` para um PVC de arquivamento secundário.
-2. **Redes "Zero-Trust" (Tailscale Sidecar):** Injeção dinâmica de sidecars `tailscale/tailscale:latest` atrelados aos pods, permitindo servidores privados isolados fora do roteamento SNI do proxy.
-3. **File Manager Direto (Write/Delete):** Capacidade da Dashboard de gravar, editar e apagar configurações dos mods dentro dos pods rodando em tempo real usando pipes `stdin` e `kubectl exec`.
+2. **File Manager Direto (Write/Delete):** Capacidade da Dashboard de gravar, editar e apagar configurações dos mods dentro dos pods rodando em tempo real usando pipes `stdin` e `kubectl exec`.
+
+*(Nota: A ideia inicial de usar "Tailscale Sidecar" para Zero-Trust por Pod foi descartada em favor do atual Gateway L7 centralizado, que atua como proxy TCP interceptador e faz Identity Mapping via Tailscale API para validar permissões via Prisma antes do roteamento).*
 
 ---
 

@@ -44,3 +44,7 @@ Thumbs.db
 
 
 docs
+
+# ─── Bancos de Dados (SQLite) ─────────────────────────────────────────────────
+*.db
+*.db-journal
