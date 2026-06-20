@@ -75,7 +75,7 @@ resource "kubernetes_deployment" "minecraft" {
         volume {
           name = "minecraft-scripts"
           host_path {
-            path = "/home/luis/Documents/proxmox/mineKubernetes/create-minecraft-server"
+            path = abspath("${path.module}/../create-minecraft-server")
             type = "Directory"
           }
         }
