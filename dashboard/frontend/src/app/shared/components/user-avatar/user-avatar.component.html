@@ -1,0 +1,9 @@
+<div class="mc-avatar-container" [class.is-offline]="!isOnline()">
+  <img 
+    [src]="imageUrl()" 
+    [alt]="identifier() + ' avatar'" 
+    class="mc-avatar-img"
+    (error)="handleError($event)"
+  >
+  <!-- Optional online indicator overlay if needed, currently using grayscale for offline -->
+</div>

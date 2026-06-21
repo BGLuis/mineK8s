@@ -1,6 +1,6 @@
 <div class="console-container">
   <header class="console-header">
-    <button class="back-btn" (click)="goBack()">← Voltar</button>
+    <app-button variant="Light" (click)="goBack()" style="max-width: 200px; flex-shrink: 0;">← Voltar</app-button>
     <div class="header-info">
       <h1>Terminal: <span class="server-id">{{ serverId }}</span></h1>
       <div class="player-count">
@@ -40,7 +40,7 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <button class="send-btn" (click)="sendCommand()">Enviar</button>
+          <app-button variant="Blue" (click)="sendCommand()">Enviar</app-button>
         </div>
       </div>
     </div>

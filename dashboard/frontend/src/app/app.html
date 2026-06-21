@@ -1,5 +1,11 @@
-<div class="app-layout">
-  <app-sidebar></app-sidebar>
+<div class="app-layout" [ngClass]="{'sidebar-open': isSidebarOpen}">
+  <button class="mobile-toggle-btn" (click)="toggleSidebar()">
+    <app-icon name="list"></app-icon>
+  </button>
+  @if (isSidebarOpen) {
+    <div class="sidebar-overlay" (click)="toggleSidebar()"></div>
+  }
+  <app-sidebar class="app-sidebar-container"></app-sidebar>
   <main class="main-content">
     <router-outlet></router-outlet>
   </main>

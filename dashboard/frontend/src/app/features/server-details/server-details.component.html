@@ -1,0 +1,83 @@
+<div class="details-container">
+  <div class="header">
+    <app-button variant="Light" (click)="goBack()" style="max-width: 200px; flex-shrink: 0;">← Voltar</app-button>
+    <div class="title-area">
+      <h1>Dashboard: {{ server()?.name || 'Carregando...' }}</h1>
+    </div>
+    <div class="status-badge" [ngClass]="server()?.status === 'Online' ? 'online' : 'offline'">
+      {{ server()?.status || '...' }}
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <div class="loading-state">
+      <p>Carregando informações do servidor...</p>
+    </div>
+  } @else if (server()) {
+    <div class="dashboard-grid">
+      <!-- Info Panel -->
+      <div class="panel glass-panel info-panel">
+        <h2 style="font-family: 'Minecraftia', sans-serif; margin-bottom: 20px;">Informações</h2>
+        
+        <app-config-row label="Status">
+          <span [style.color]="server()?.status === 'Online' ? '#10b981' : '#f87171'">{{ server()?.status }}</span>
+        </app-config-row>
+        
+        <app-config-row label="Endereço (IP/Domínio)">
+          <span style="color: var(--primary); display: flex; align-items: center; gap: 8px;">
+            {{ server()?.connectionDomain ? server()?.connectionDomain : server()?.connectionPort ? '192.168.0.218:' + server()?.connectionPort : 'Aguardando IP/Domínio...' }}
+            <button class="icon-btn" (click)="changeDomain()" title="Alterar Domínio" style="background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 0;">
+              <app-icon name="list" style="width: 16px; height: 16px;"></app-icon>
+            </button>
+          </span>
+        </app-config-row>
+
+        <app-config-row label="Replicas Prontas">
+          <span>{{ server()?.readyReplicas }} / {{ server()?.desiredReplicas }}</span>
+        </app-config-row>
+        
+        @if (server()?.metrics) {
+          <app-config-row label="Uso de CPU">
+            <span>{{ server()?.metrics?.cpuCores }} Cores</span>
+          </app-config-row>
+          <app-config-row label="Uso de RAM">
+            <span>{{ server()?.metrics?.memoryMb }} MB</span>
+          </app-config-row>
+        }
+      </div>
+
+      <!-- Actions Panel -->
+      <div class="panel glass-panel actions-panel">
+        <h2 style="font-family: 'Minecraftia', sans-serif; margin-bottom: 20px;">Ações Rápidas</h2>
+        
+        <div class="action-buttons">
+          <app-button variant="Blue" [routerLink]="['/server', serverId, 'console']" class="full-width-btn">
+            <app-icon name="time" style="margin-right: 8px;"></app-icon> Terminal RCON
+          </app-button>
+          
+          <app-button variant="Yellow" [routerLink]="['/server', serverId, 'files']" class="full-width-btn">
+            <app-icon name="grid" style="margin-right: 8px;"></app-icon> Gerenciador de Arquivos
+          </app-button>
+          
+          <app-button variant="Realms" [routerLink]="['/server', serverId, 'players']" class="full-width-btn">
+            <app-icon name="world" style="margin-right: 8px;"></app-icon> Jogadores e Acessos
+          </app-button>
+          
+          <app-button variant="Dark" [routerLink]="['/server', serverId, 'backups']" class="full-width-btn">
+            <app-icon name="time" style="margin-right: 8px;"></app-icon> Backups
+          </app-button>
+
+          <input type="file" id="worldUploadInput" accept=".zip,.tar.gz" style="display: none" (change)="onFileSelected($event)">
+          <app-button variant="Light" class="full-width-btn" (click)="triggerUpload()" [disabled]="isUploading()">
+            <app-icon name="list" style="margin-right: 8px;"></app-icon> 
+            {{ isUploading() ? 'Enviando Mundo...' : 'Fazer Upload do Mundo' }}
+          </app-button>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <p>Servidor não encontrado.</p>
+    </div>
+  }
+</div>

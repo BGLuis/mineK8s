@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ModpacksService, ModpackResult } from '../../core/services/modpacks';
 import { ServersService } from '../../core/services/servers';
+import { ModpackCardComponent, ModpackInfo } from '../../shared/components/modpack-card/modpack-card.component';
+import { InputComponent } from '../../shared/components/input/input.component';
+import { ButtonComponent } from '../../shared/components/button/button.component';
 
 @Component({
   selector: 'app-modpack-gallery',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ModpackCardComponent, InputComponent, ButtonComponent],
   templateUrl: './modpack-gallery.html',
   styleUrl: './modpack-gallery.scss'
 })
@@ -103,5 +106,17 @@ export class ModpackGallery implements OnInit {
       next: (res) => alert(res.message),
       error: (err) => alert('Erro ao criar servidor Vanilla: ' + err.message)
     });
+  }
+
+  mapToModpackInfo(pack: ModpackResult): ModpackInfo {
+    return {
+      name: pack.title,
+      author: pack.author,
+      description: pack.description || '',
+      coverUrl: pack.iconUrl,
+      updatedAt: new Date(),
+      version: pack.versions && pack.versions.length ? pack.versions[0] : 'Unknown',
+      loader: pack.categories && pack.categories.includes('Fabric') ? 'Fabric' : 'Forge'
+    };
   }
 }

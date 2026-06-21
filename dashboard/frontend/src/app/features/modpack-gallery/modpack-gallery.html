@@ -4,15 +4,17 @@
       <h1>Marketplace</h1>
       <p>Descubra e instale milhares de modpacks instantaneamente.</p>
     </div>
-    <div class="search-box">
-      <select class="search-input" style="width: auto; margin-right: 10px; cursor: pointer;" [ngModel]="selectedSource()" (ngModelChange)="selectedSource.set($event); search()">
+    <div class="search-box" style="display: flex; gap: 15px; align-items: center;">
+      <select class="search-input" style="padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: white;" [ngModel]="selectedSource()" (ngModelChange)="selectedSource.set($event); search()">
         <option value="All">Todas as Plataformas</option>
         <option value="CurseForge">CurseForge</option>
         <option value="Modrinth">Modrinth</option>
       </select>
-      <input type="text" class="search-input" placeholder="Buscar modpack... (ex: Pixelmon)" 
-             [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" (keyup.enter)="search()">
-      <button class="premium-btn" (click)="search()">Buscar</button>
+      
+      <app-input variant="Search" placeholder="Buscar modpack... (ex: Pixelmon)" 
+             [value]="searchQuery()" (valueChange)="searchQuery.set($event)" (keyup.enter)="search()"></app-input>
+             
+      <app-button variant="Blue" (click)="search()">Buscar</app-button>
     </div>
   </div>
 
@@ -30,49 +32,29 @@
   }
 
   @if (!isLoading()) {
-    <div class="grid">
+    <div class="list" style="display: flex; flex-direction: column; align-items: stretch; gap: 20px; width: 100%;">
       
       <!-- Card Estático do Minecraft Vanilla -->
-      <div class="card glass-panel" style="border: 2px solid var(--primary); box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);">
-        <div class="card-header">
-          <img src="https://minecraft.wiki/images/Grass_Block.png" alt="Vanilla Icon" class="pack-icon" style="image-rendering: pixelated;">
-          <div class="pack-info">
-            <h3>Minecraft Vanilla <span style="font-size: 0.7rem; background: #10b981; padding: 2px 6px; border-radius: 4px;">NATIVO</span></h3>
-            <span class="author">por Mojang Studios</span>
-          </div>
-        </div>
-        <p class="description">O clássico, leve e imaculado Minecraft. Jogue sem mods na versão mais recente disponível (LATEST).</p>
-        <div class="card-footer">
-          <div class="stats"></div>
-          <button class="premium-btn" (click)="installVanilla()" style="background: #10b981;">Instalar Vanilla</button>
-        </div>
-      </div>
+      <app-modpack-card 
+        [modpack]="{
+          name: 'Minecraft Vanilla',
+          author: 'Mojang Studios',
+          description: 'A experiência original do Minecraft, sem mods ou alterações. Apenas você, os blocos e os creepers.',
+          coverUrl: 'https://minecraft.wiki/images/Grass_Block.png',
+          updatedAt: '2026-06-21',
+          version: 'LATEST',
+          loader: 'Vanilla'
+        }"
+        (click)="installVanilla()"
+        style="cursor: pointer; border: 2px solid #10b981; border-radius: 12px;"
+      ></app-modpack-card>
 
       @for (pack of modpacks(); track pack.id) {
-        <div class="card glass-panel">
-          <div class="card-header">
-            <img [src]="pack.iconUrl || 'https://via.placeholder.com/64'" alt="Icon" class="pack-icon">
-            <div class="pack-info">
-              <h3>{{ pack.title }} <span style="font-size: 0.7rem; background: var(--primary); padding: 2px 6px; border-radius: 4px;">{{pack.source}}</span></h3>
-              <span class="author">por {{ pack.author }}</span>
-            </div>
-          </div>
-          
-          <p class="description">{{ pack.description | slice:0:110 }}...</p>
-          
-          <div class="tags">
-            @for (cat of pack.categories | slice:0:3; track cat) {
-              <span class="tag">{{ cat }}</span>
-            }
-          </div>
-
-          <div class="card-footer">
-            <div class="stats">
-              <span>⬇ {{ pack.downloads | number }}</span>
-            </div>
-            <button class="premium-btn" (click)="openVersionsModal(pack)">Ver Versões</button>
-          </div>
-        </div>
+        <app-modpack-card
+          [modpack]="mapToModpackInfo(pack)"
+          (click)="openVersionsModal(pack)"
+          style="cursor: pointer;"
+        ></app-modpack-card>
       }
     </div>
   }
@@ -80,7 +62,7 @@
   <!-- Modal de Versões -->
   @if (selectingVersionFor()) {
     <div class="modal-overlay" (click)="closeModal()">
-      <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-content glass-panel" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <h2>Selecione a Versão</h2>
           <button class="close-btn" (click)="closeModal()">×</button>
@@ -90,9 +72,9 @@
           <p>Instalando: <strong>{{ selectingVersionFor()?.title }}</strong></p>
           
           <!-- Botão Instalador Rápido -->
-          <button class="premium-btn" style="width: 100%; margin-bottom: 20px;" (click)="installVersion(selectingVersionFor()!, null)">
+          <app-button variant="Blue" style="display: block; margin-bottom: 20px;" (click)="installVersion(selectingVersionFor()!, null)">
             🚀 Instalar a versão mais recente
-          </button>
+          </app-button>
 
           <hr style="border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
           
@@ -101,12 +83,12 @@
           } @else {
             <div class="versions-list">
               @for (v of versions(); track v.id) {
-                <div class="version-item">
+                <div class="version-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
                   <div class="version-info">
-                    <span class="version-name">{{ v.name }}</span>
-                    <span class="version-date">{{ v.date | date }}</span>
+                    <span class="version-name" style="font-weight: 600; margin-right: 15px;">{{ v.name }}</span>
+                    <span class="version-date" style="color: #94a3b8; font-size: 0.85rem;">{{ v.date | date }}</span>
                   </div>
-                  <button class="action-btn install-btn" (click)="installVersion(selectingVersionFor()!, v.id)">Instalar</button>
+                  <app-button variant="Light" (click)="installVersion(selectingVersionFor()!, v.id)">Instalar</app-button>
                 </div>
               }
               @if (versions().length === 0) {

@@ -6,11 +6,13 @@ import { ServerFiles } from './features/server-files/server-files';
 import { ServerPlayers } from './features/server-players/server-players';
 import { ServerBackups } from './features/server-backups/server-backups';
 import { TailscaleNetwork } from './features/tailscale-network/tailscale-network';
+import { ServerDetailsComponent } from './features/server-details/server-details.component';
 
 export const routes: Routes = [
   { path: '', component: ServerManager },
   { path: 'marketplace', component: ModpackGallery },
   { path: 'network', component: TailscaleNetwork },
+  { path: 'server/:id/dashboard', component: ServerDetailsComponent },
   { path: 'server/:id/console', component: ServerConsole },
   { path: 'server/:id/files', component: ServerFiles },
   { path: 'server/:id/players', component: ServerPlayers },

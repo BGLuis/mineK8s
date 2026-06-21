@@ -1,0 +1,58 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.mc-collapsible {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mc-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 7px 18px;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+.mc-collapsible-title {
+  font-family: "Minecraftia", sans-serif;
+  font-size: 22px;
+  color: #ffffff;
+  margin: 0;
+  white-space: nowrap;
+  word-break: break-word;
+}
+
+.mc-collapsible-icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.3s ease;
+}
+
+.mc-collapsible-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+  overflow: hidden;
+  
+  &.is-open {
+    grid-template-rows: 1fr;
+  }
+}
+
+.mc-collapsible-content {
+  min-height: 0;
+  padding: 0; /* content should provide its own padding if needed */
+}

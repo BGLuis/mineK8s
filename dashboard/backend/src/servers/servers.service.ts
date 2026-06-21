@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { PrismaService } from '../prisma/prisma.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -28,7 +29,7 @@ export class ServersService {
   private k8sBatch: k8s.BatchV1Api;
   private curseforgeApiKey = '$2a$10$wuAJuNZuted3NORVmpgUC.m8sI.pv1tOPKZyBgLFGjxFp/br0lZCC';
 
-  constructor() {
+  constructor(private prisma: PrismaService) {
     const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
     this.k8sApi = kc.makeApiClient(k8s.CoreV1Api);
@@ -124,7 +125,12 @@ export class ServersService {
     const serviceManifest: k8s.V1Service = {
       apiVersion: 'v1',
       kind: 'Service',
-      metadata: { name: `${serverName}-svc` },
+      metadata: { 
+        name: `${serverName}-svc`,
+        annotations: {
+          'mc-router.itzg.me/externalServerName': `${safeName}.testmine.luiis.com.br`
+        }
+      },
       spec: {
         selector: { app: serverName },
         ports: [{ port: 25565, targetPort: 25565 }],
@@ -177,6 +183,7 @@ export class ServersService {
         // Encontrar a porta NodePort do Service vinculado a este servidor
         const svc = servicesRes.items.find(s => s.metadata?.name === `${d.metadata?.name}-svc`);
         const nodePort = svc?.spec?.ports?.[0]?.nodePort || null;
+        const externalDomain = svc?.metadata?.annotations?.['mc-router.itzg.me/externalServerName'] || null;
 
         return {
           id: d.metadata?.name,
@@ -184,7 +191,8 @@ export class ServersService {
           status: status,
           readyReplicas: ready,
           desiredReplicas: desired,
-          connectionPort: nodePort
+          connectionPort: nodePort,
+          connectionDomain: externalDomain
         };
       });
     } catch (error) {
@@ -221,6 +229,21 @@ export class ServersService {
     }
   }
 
+  async updateDomain(name: string, domain: string) {
+    const namespace = 'default';
+    try {
+      const svc = await this.k8sApi.readNamespacedService({name: `${name}-svc`, namespace});
+      if (!svc.metadata) svc.metadata = {};
+      if (!svc.metadata.annotations) svc.metadata.annotations = {};
+      svc.metadata.annotations['mc-router.itzg.me/externalServerName'] = domain;
+      await this.k8sApi.replaceNamespacedService({name: `${name}-svc`, namespace, body: svc});
+      return { message: `Domínio atualizado para ${domain}` };
+    } catch (error) {
+      this.logger.error(error);
+      throw new HttpException('Falha ao atualizar o domínio do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   private async getPodName(deploymentId: string) {
     const res = await this.k8sApi.listNamespacedPod({
       namespace: 'default',
@@ -244,15 +267,15 @@ export class ServersService {
       });
       return { logs: res };
     } catch (error) {
-      this.logger.error(error);
-      throw new HttpException('Falha ao ler logs do console', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.warn(`Falha ao ler logs: ${error.message}`);
+      return { logs: 'Servidor iniciando ou aguardando logs...' };
     }
   }
 
   async sendCommand(id: string, command: string) {
     try {
       const podName = await this.getPodName(id);
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- rcon-cli "${command}"`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- rcon-cli "${command}"`);
       return { response: stdout.trim() };
     } catch (error) {
       this.logger.error(`RCON Error no pod: ${error.message}`);
@@ -262,27 +285,71 @@ export class ServersService {
 
   async getPlayers(id: string) {
     try {
-      const { response } = await this.sendCommand(id, 'list');
-      // Exemplo da resposta do Minecraft: "There are 2 of a max of 20 players online: luis, notch"
-      const match = response.match(/There are (\d+) of a max of (\d+) players online:(.*)/);
-      if (match) {
-        const namesStr = match[3].trim();
-        const players = namesStr ? namesStr.split(',').map(n => n.trim()) : [];
-        return {
-          online: parseInt(match[1], 10),
-          max: parseInt(match[2], 10),
-          players: players.map(name => ({
-            name,
-            uuid: 'Aguardando login', 
-            ping: 'N/A',
-            // Usamos a API do Minotar para pegar a "Cabeça" (Helm) do avatar via Username automaticamente!
-            avatarUrl: `https://minotar.net/helm/${name}/64.png`
-          }))
-        };
+      // 1. Obter nome real do server no banco de dados para a busca ACL
+      // O frontend passa o ID k8s (ex: "mc-vanilla-xyz"), no BD ele pode estar como "vanilla-xyz" ou podemos buscar via k8sServiceName
+      const serverDb = await this.prisma.server.findFirst({
+        where: {
+          k8sServiceName: `${id}-svc` // Pelo padrão do projeto, o svc é mc-xyz-svc
+        },
+        include: {
+          groups: true // Grupos de usuários autorizados
+        }
+      });
+
+      // 2. Tentar buscar jogadores online no RCON
+      let onlinePlayersRaw: string[] = [];
+      let onlineCount = 0;
+      let maxCount = 0;
+      
+      try {
+        const { response } = await this.sendCommand(id, 'list');
+        const match = response.match(/There are (\d+) of a max of (\d+) players online:(.*)/);
+        if (match) {
+          onlineCount = parseInt(match[1], 10);
+          maxCount = parseInt(match[2], 10);
+          const namesStr = match[3].trim();
+          if (namesStr) {
+            onlinePlayersRaw = namesStr.split(',').map(n => n.trim().toLowerCase());
+          }
+        }
+      } catch (err) {
+        // Ignora erro de RCON (servidor offline, iniciando ou falhou)
       }
-      return { online: 0, max: 0, players: [], raw: response };
+
+      // 3. Obter todos os usuários da base
+      const allUsers = await this.prisma.user.findMany({
+        include: {
+          groups: true // Grupos aos quais o usuário pertence
+        }
+      });
+
+      const authorizedGroupIds = serverDb ? serverDb.groups.map(g => g.groupId) : [];
+
+      const players = allUsers.map(user => {
+        const hasAccess = user.groups.some(ug => authorizedGroupIds.includes(ug.groupId)) || user.role === 'ADMIN';
+        const minecraftNick = user.minecraftNick || user.email?.split('@')[0] || 'Unknown';
+        const isOnline = onlinePlayersRaw.includes(minecraftNick.toLowerCase());
+
+        return {
+          name: minecraftNick,
+          uuid: 'Autenticado via Tailscale',
+          ping: isOnline ? 'OK' : 'N/A',
+          avatarUrl: `https://minotar.net/helm/${minecraftNick}/64.png`,
+          hasAccess: hasAccess,
+          isOnline: isOnline,
+          role: user.role
+        };
+      });
+
+      return {
+        online: onlineCount,
+        max: maxCount,
+        players: players
+      };
+
     } catch (error) {
-      return { online: 0, max: 0, players: [], error: 'Servidor indisponível ou RCON desativado' };
+      this.logger.error(error);
+      return { online: 0, max: 0, players: [], error: 'Falha ao buscar usuários e permissões.' };
     }
   }
 
@@ -292,7 +359,7 @@ export class ServersService {
       const safePath = path.replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\.\./g, '');
       const targetDir = safePath ? `/data/${safePath}` : `/data`;
       
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- ls -lah --group-directories-first ${targetDir}`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- ls -lah --group-directories-first ${targetDir}`);
       
       const lines = stdout.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('total'));
       const files = lines.map(line => {
@@ -317,7 +384,7 @@ export class ServersService {
     try {
       const podName = await this.getPodName(id);
       const safePath = filePath.replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\.\./g, '');
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- cat /data/${safePath}`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- cat /data/${safePath}`);
       return { content: stdout };
     } catch (error) {
       this.logger.error(error);
@@ -338,7 +405,7 @@ export class ServersService {
     return new Promise<{ message: string }>((resolve, reject) => {
       // Usa stdin pipe para evitar problemas com caracteres especiais no conteúdo
       const child = exec(
-        `kubectl exec -i ${podName} --kubeconfig ~/.kube/config -- sh -c "cat > ${fullPath}"`,
+        `kubectl exec -i ${podName} -- sh -c "cat > ${fullPath}"`,
         (error, _stdout, stderr) => {
           if (error) {
             this.logger.error(`writeFile error: ${stderr}`);
@@ -372,7 +439,7 @@ export class ServersService {
     try {
       // rm -rf é seguro aqui pois o caminho está restrito ao /data/ do pod
       await execAsync(
-        `kubectl exec ${podName} --kubeconfig ~/.kube/config -- rm -rf ${fullPath}`,
+        `kubectl exec ${podName} -- rm -rf ${fullPath}`,
       );
       return { status: "Success", message: `Arquivo removido com sucesso` };
     } catch (error) {
@@ -430,7 +497,7 @@ export class ServersService {
                   `apk add unzip && mkdir -p /tmp/ext && mkdir -p /data/world && ` +
                   `${extractCmd} && rm -rf /data/world/* && ` +
                   `if [ -d /tmp/ext/world ]; then mv /tmp/ext/world/* /data/world/ 2>/dev/null || true; else mv /tmp/ext/* /data/world/ 2>/dev/null || true; fi && ` +
-                  `rm -f ${file.path} && echo "Upload extraido com sucesso!"`
+                  `chown -R 1000:1000 /data/world && rm -f ${file.path} && echo "Upload extraido com sucesso!"`
                 ],
                 volumeMounts: [
                   { name: 'data', mountPath: '/data' },

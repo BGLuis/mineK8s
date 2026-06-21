@@ -1,0 +1,62 @@
+:host {
+  display: inline-block;
+}
+
+.mc-toggle-container {
+  display: block;
+  position: relative;
+  width: 72px;
+  height: 40px;
+  filter: drop-shadow(0px 8px 0px #343434);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+
+  &:active {
+    transform: translateY(2px);
+    filter: drop-shadow(0px 6px 0px #343434);
+  }
+}
+
+.mc-toggle-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #3e3937;
+  pointer-events: none;
+}
+
+.mc-toggle-border {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 4px 4px 0px 0px #66615f, inset -4px -4px 0px 0px #514d4b;
+}
+
+.mc-toggle-track {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 2;
+}
+
+.mc-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 32px;
+  height: 32px;
+  background-color: #d8d8d8;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 4px 4px 0px 0px rgba(255,255,255,0.4), inset -4px -4px 0px 0px rgba(0,0,0,0.3);
+
+  &.is-moon {
+    background-color: #141210;
+    box-shadow: inset 4px 4px 0px 0px rgba(255,255,255,0.1), inset -4px -4px 0px 0px rgba(0,0,0,0.5);
+  }
+}
+
+.mc-toggle-container.is-on .mc-toggle-thumb {
+  left: 36px;
+}
