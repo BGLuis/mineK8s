@@ -1,35 +1,39 @@
 <div class="players-container">
   <header class="players-header">
-    <button class="back-btn" (click)="goBack()">← Voltar</button>
+    <app-button variant="Light" (click)="goBack()">← Voltar</app-button>
     <div class="header-info">
-      <h1>Jogadores: <span class="server-id">{{ serverId }}</span></h1>
+      <h1>Jogadores Online</h1>
       <div class="online-stats">
         <span class="status-dot"></span> {{ onlineCount() }} / {{ maxCount() }} Online
       </div>
     </div>
-    <button class="action-btn" (click)="fetchPlayers()">🔄 Atualizar</button>
+    <app-button variant="Blue" (click)="fetchPlayers()">🔄 Atualizar</app-button>
   </header>
 
-  <div class="main-card glass-panel">
+  <div class="main-card glass-panel" style="padding: 30px;">
     @if (isLoading()) {
-      <div class="loading-state">Obtendo lista de jogadores via RCON...</div>
+      <div class="loading-state" style="text-align: center; color: var(--text-muted); padding: 40px;">
+        Obtendo lista de jogadores via RCON...
+      </div>
     } @else {
       @if (players().length === 0) {
-        <div class="empty-state">
+        <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px;">
           Nenhum jogador online no momento.
         </div>
       } @else {
-        <div class="players-grid">
+        <div class="players-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
           @for (player of players(); track player.name) {
-            <div class="player-card">
-              <div class="player-info">
-                <img [src]="getAvatarUrl(player.name)" alt="Avatar de {{ player.name }}" class="player-avatar">
-                <span class="player-name">{{ player.name }}</span>
-              </div>
-              <div class="player-actions">
-                <button class="btn kick-btn" (click)="executeCommand(player.name, 'kick')">Kick</button>
-                <button class="btn ban-btn" (click)="executeCommand(player.name, 'ban')">Ban</button>
-                <button class="btn op-btn" (click)="executeCommand(player.name, 'op')">Op</button>
+            <div class="player-card glass-panel" style="padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05);">
+              
+              <app-user-avatar 
+                [identifier]="player.name" 
+                subtext="Sobrevivência"
+              ></app-user-avatar>
+
+              <div class="player-actions" style="display: flex; gap: 10px; width: 100%; justify-content: center; margin-top: 10px;">
+                <app-button variant="Light" (click)="executeCommand(player.name, 'kick')" style="flex: 1;">Kick</app-button>
+                <app-button variant="Danger" (click)="executeCommand(player.name, 'ban')" style="flex: 1;">Ban</app-button>
+                <app-button variant="Realms" (click)="executeCommand(player.name, 'op')" style="flex: 1;">Op</app-button>
               </div>
             </div>
           }

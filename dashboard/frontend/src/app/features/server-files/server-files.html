@@ -1,6 +1,6 @@
 <div class="files-container">
   <header class="files-header">
-    <button class="back-btn" (click)="goBackToManager()">← Voltar</button>
+    <app-button variant="Light" (click)="goBackToManager()">← Voltar</app-button>
     <div class="header-info">
       <h1>Arquivos do Servidor: <span class="server-id">{{ serverId }}</span></h1>
     </div>
@@ -9,9 +9,9 @@
   <div class="main-card">
     <!-- View do Gerenciador de Arquivos -->
     @if (!viewingFile()) {
-      <div class="path-bar">
-        <button class="action-btn" [disabled]="!currentPath()" (click)="goUp()">⬆ Nível Acima</button>
-        <span class="current-path">/data/{{ currentPath() }}</span>
+      <div class="path-bar" style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+        <app-button variant="Light" [disabled]="!currentPath()" (click)="goUp()">⬆ Nível Acima</app-button>
+        <span class="current-path" style="font-family: monospace; color: var(--text-dim);">/data/{{ currentPath() }}</span>
       </div>
 
       <div class="files-table-wrapper">
@@ -58,9 +58,9 @@
     @else {
       <div class="editor-header">
         <h2>Editando: {{ viewingFile()?.name }}</h2>
-        <div class="editor-actions">
-          <button class="action-btn save-btn" (click)="saveFile()">💾 Salvar</button>
-          <button class="action-btn" (click)="closeFile()">❌ Fechar</button>
+        <div class="editor-actions" style="display: flex; gap: 10px;">
+          <app-button variant="Blue" (click)="saveFile()">💾 Salvar</app-button>
+          <app-button variant="Light" (click)="closeFile()">❌ Fechar</app-button>
         </div>
       </div>
       <div class="editor-wrapper">

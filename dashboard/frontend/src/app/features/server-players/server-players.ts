@@ -3,10 +3,13 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ServersService } from '../../core/services/servers';
 
+import { UserAvatarComponent } from '../../shared/components/user-avatar/user-avatar.component';
+import { ButtonComponent } from '../../shared/components/button/button.component';
+
 @Component({
   selector: 'app-server-players',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, UserAvatarComponent, ButtonComponent],
   templateUrl: './server-players.html',
   styleUrls: ['./server-players.scss']
 })
@@ -64,6 +67,6 @@ export class ServerPlayers implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/']);
+    this.router.navigate(['/server', this.serverId, 'dashboard']);
   }
 }

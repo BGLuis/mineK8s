@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { ServersService } from '../../core/services/servers';
 import { MonitoringService, ServerMetrics } from '../../core/services/monitoring.service';
+import { WorldCardComponent, WorldInfo } from '../../shared/components/world-card/world-card.component';
+import { ButtonComponent } from '../../shared/components/button/button.component';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-server-manager',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, WorldCardComponent, ButtonComponent],
   templateUrl: './server-manager.html',
   styleUrl: './server-manager.scss'
 })
@@ -17,7 +20,8 @@ export class ServerManager implements OnInit {
 
   constructor(
     private serversService: ServersService,
-    private monitoringService: MonitoringService
+    private monitoringService: MonitoringService,
+    private router: Router
   ) {}
 
   ngOnInit() {
@@ -81,5 +85,18 @@ export class ServerManager implements OnInit {
         error: (e) => alert('Erro ao excluir: ' + e.message)
       });
     }
+  }
+
+  goToDashboard(id: string) {
+    this.router.navigate(['/server', id, 'dashboard']);
+  }
+
+  mapToWorldInfo(server: any): WorldInfo {
+    return {
+      id: server.id,
+      name: server.name,
+      status: server.status === 'Online' ? 'running' : server.status === 'Iniciando' ? 'starting' : 'stopped',
+      // If server has an iconUrl from Modrinth/CurseForge it would be used here, otherwise default
+    };
   }
 }

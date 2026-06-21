@@ -4,10 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ServersService } from '../../core/services/servers';
 
+import { ButtonComponent } from '../../shared/components/button/button.component';
+import { IconComponent } from '../../shared/components/icon/icon.component';
+
 @Component({
   selector: 'app-server-files',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ButtonComponent, IconComponent],
   templateUrl: './server-files.html',
   styleUrls: ['./server-files.css']
 })
@@ -120,6 +123,6 @@ export class ServerFiles implements OnInit {
   }
 
   goBackToManager() {
-    this.router.navigate(['/']);
+    this.router.navigate(['/server', this.serverId, 'dashboard']);
   }
 }

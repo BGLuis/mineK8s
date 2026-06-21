@@ -3,10 +3,12 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BackupsService, BackupFile } from '../../core/services/backups.service';
 
+import { ButtonComponent } from '../../shared/components/button/button.component';
+
 @Component({
   selector: 'app-server-backups',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ButtonComponent],
   providers: [DatePipe],
   templateUrl: './server-backups.html',
   styleUrls: ['./server-backups.scss']
@@ -77,6 +79,6 @@ export class ServerBackups implements OnInit {
   }
 
   goBack() {
-    this.router.navigate(['/']);
+    this.router.navigate(['/server', this.serverId, 'dashboard']);
   }
 }

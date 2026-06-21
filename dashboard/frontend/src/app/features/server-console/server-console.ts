@@ -4,10 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ServersService } from '../../core/services/servers';
 
+import { ButtonComponent } from '../../shared/components/button/button.component';
+
 @Component({
   selector: 'app-server-console',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ButtonComponent],
   templateUrl: './server-console.html',
   styleUrls: ['./server-console.css']
 })
@@ -175,6 +177,6 @@ export class ServerConsole implements OnInit, OnDestroy {
   }
 
   goBack() {
-    this.router.navigate(['/']);
+    this.router.navigate(['/server', this.serverId, 'dashboard']);
   }
 }
