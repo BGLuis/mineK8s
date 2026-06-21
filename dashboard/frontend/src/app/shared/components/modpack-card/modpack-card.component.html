@@ -1,0 +1,30 @@
+<div class="mc-modpack-card">
+  <!-- Cover Image -->
+  <div class="mc-modpack-cover">
+    <img [src]="modpack().coverUrl || '/assets/images/default-modpack.png'" [alt]="modpack().name" (error)="handleCoverError($event)">
+  </div>
+
+  <!-- Content -->
+  <div class="mc-modpack-content">
+    <div class="mc-modpack-header">
+      <h2 class="mc-modpack-title">{{ modpack().name }}</h2>
+      <span class="mc-modpack-author">By {{ modpack().author }}</span>
+    </div>
+
+    <p class="mc-modpack-description">{{ modpack().description }}</p>
+  </div>
+
+  <!-- Meta Info -->
+  <div class="mc-modpack-meta">
+    <div class="mc-meta-item">
+      <app-icon name="time"></app-icon>
+      <span>{{ modpack().updatedAt | date:'MMM, d, yyyy' | lowercase }}</span>
+    </div>
+
+    <div class="mc-meta-item">
+      <app-icon name="world"></app-icon>
+      <span>{{ modpack().version }}</span>
+      <span class="mc-loader">{{ modpack().loader }}</span>
+    </div>
+  </div>
+</div>

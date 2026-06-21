@@ -1,0 +1,21 @@
+<div class="mc-collapsible">
+  <button 
+    class="mc-collapsible-header" 
+    (click)="toggle()" 
+    [attr.aria-expanded]="isOpen()"
+    type="button"
+  >
+    <p class="mc-collapsible-title">{{ title() }}</p>
+    <app-icon 
+      name="chevron" 
+      [direction]="isOpen() ? 'down' : 'left'"
+      class="mc-collapsible-icon"
+    ></app-icon>
+  </button>
+
+  <div class="mc-collapsible-body" [class.is-open]="isOpen()">
+    <div class="mc-collapsible-content">
+      <ng-content></ng-content>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,138 @@
+:host {
+  display: inline-block;
+}
+
+.mc-button {
+  position: relative;
+  width: 408px;
+  height: 60px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Minecraftia", sans-serif;
+  transition: transform 0.1s ease, filter 0.1s ease;
+  
+  &:active {
+    transform: translateY(4px);
+  }
+
+  &.Dark {
+    filter: drop-shadow(0px 8px 0px #252525);
+    &:active { filter: drop-shadow(0px 4px 0px #252525); }
+    .mc-button-bg { background-color: #3e3937; }
+    .mc-button-text { color: white; text-shadow: 0px -2px 0px rgba(0,0,0,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #66615f, inset -4px -4px 0px 0px #514d4b; }
+    .dec-1 { background: rgba(255,255,255,0.07); left: 56px; top: 15px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(255,255,255,0.07); left: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(255,255,255,0.07); right: 18px; top: 35px; width: 20px; height: 10px; }
+    .dec-4 { background: rgba(255,255,255,0.07); right: 47px; top: 15px; width: 10px; height: 10px; }
+    .dec-5 { background: rgba(255,255,255,0.07); right: 96px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(255,255,255,0.07); left: 17px; top: 35px; width: 20px; height: 10px; }
+  }
+
+  &.Light {
+    filter: drop-shadow(0px 8px 0px #6d6d6d);
+    &:active { filter: drop-shadow(0px 4px 0px #6d6d6d); }
+    .mc-button-bg { background-color: #cec1c1; }
+    .mc-button-text { color: black; text-shadow: 0px 2px 0px rgba(255,255,255,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #afa5a1, inset -4px -4px 0px 0px #c0b2ac; }
+    .dec-1 { background: rgba(0,0,0,0.07); left: 56px; top: 15px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(0,0,0,0.07); left: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(0,0,0,0.07); right: 18px; top: 35px; width: 20px; height: 10px; }
+    .dec-4 { background: rgba(0,0,0,0.07); right: 47px; top: 15px; width: 10px; height: 10px; }
+    .dec-5 { background: rgba(0,0,0,0.07); right: 96px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(0,0,0,0.07); left: 17px; top: 35px; width: 20px; height: 10px; }
+  }
+
+  &.Green {
+    filter: drop-shadow(0px 8px 0px #314f35);
+    &:active { filter: drop-shadow(0px 4px 0px #314f35); }
+    .mc-button-bg { background-color: #4d8354; }
+    .mc-button-text { color: white; text-shadow: 0px -2px 0px rgba(0,0,0,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #649f6c, inset -4px -4px 0px 0px #56925e; }
+    .dec-1 { background: rgba(255,255,255,0.07); left: 56px; top: 15px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(255,255,255,0.07); left: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(255,255,255,0.07); right: 18px; top: 35px; width: 20px; height: 10px; }
+    .dec-4 { background: rgba(255,255,255,0.07); right: 47px; top: 15px; width: 10px; height: 10px; }
+    .dec-5 { background: rgba(255,255,255,0.07); right: 96px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(255,255,255,0.07); left: 17px; top: 35px; width: 20px; height: 10px; }
+  }
+
+  &.Blue {
+    filter: drop-shadow(0px 8px 0px #405285);
+    &:active { filter: drop-shadow(0px 4px 0px #405285); }
+    .mc-button-bg { background-color: #6585df; }
+    .mc-button-text { color: white; text-shadow: 0px -2px 0px rgba(0,0,0,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #90adff, inset -4px -4px 0px 0px #769aff; }
+    .dec-1 { background: rgba(255,255,255,0.12); left: 56px; top: 15px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(255,255,255,0.12); left: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(255,255,255,0.12); right: 18px; top: 35px; width: 20px; height: 10px; }
+    .dec-4 { background: rgba(255,255,255,0.12); right: 47px; top: 15px; width: 10px; height: 10px; }
+    .dec-5 { background: rgba(255,255,255,0.12); right: 96px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(255,255,255,0.12); left: 17px; top: 35px; width: 20px; height: 10px; }
+  }
+
+  &.Yellow {
+    filter: drop-shadow(0px 8px 0px #7a6a3e);
+    &:active { filter: drop-shadow(0px 4px 0px #7a6a3e); }
+    .mc-button-bg { background-color: #f5cf5d; }
+    .mc-button-text { color: black; text-shadow: 0px 2px 0px rgba(255,255,255,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #d4b760, inset -4px -4px 0px 0px #c5aa5a; }
+    .dec-1 { background: rgba(0,0,0,0.07); left: 56px; top: 15px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(0,0,0,0.07); left: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(0,0,0,0.07); right: 18px; top: 35px; width: 20px; height: 10px; }
+    .dec-4 { background: rgba(0,0,0,0.07); right: 47px; top: 15px; width: 10px; height: 10px; }
+    .dec-5 { background: rgba(0,0,0,0.07); right: 96px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(0,0,0,0.07); left: 17px; top: 35px; width: 20px; height: 10px; }
+  }
+
+  &.Realms {
+    filter: drop-shadow(0px 8px 0px #7e337f);
+    &:active { filter: drop-shadow(0px 4px 0px #7e337f); }
+    .mc-button-bg { background-color: rgba(211,69,207,0.85); }
+    .mc-button-text { color: white; text-shadow: 0px -2px 0px rgba(0,0,0,0.25); }
+    .dec-border { box-shadow: inset 4px 4px 0px 0px #cf7ecf, inset -4px -4px 0px 0px #c461c5; }
+    .dec-1 { background: rgba(255,255,255,0.34); left: 48px; top: 35px; width: 20px; height: 10px; }
+    .dec-2 { background: rgba(255,255,255,0.17); left: 18px; top: 25px; width: 10px; height: 10px; }
+    .dec-3 { background: rgba(255,255,255,0.45); left: 38px; top: 15px; width: 10px; height: 10px; }
+    .dec-4 { background: rgba(255,255,255,0.17); right: 100px; top: 25px; width: 20px; height: 10px; }
+    .dec-5 { background: rgba(255,255,255,0.45); right: 27px; top: 35px; width: 10px; height: 10px; }
+    .dec-6 { background: rgba(255,255,255,0.34); right: 37px; top: 25px; width: 10px; height: 10px; }
+    .dec-7 { background: rgba(255,255,255,0.17); left: 81px; top: 15px; width: 20px; height: 10px; }
+  }
+}
+
+.mc-button-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+}
+
+.mc-button-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  white-space: nowrap;
+  word-break: break-word;
+  margin: 0;
+  z-index: 2;
+}
+
+.dec-border {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Decorations common */
+[class^="dec-"]:not(.dec-border) {
+  position: absolute;
+  pointer-events: none;
+}

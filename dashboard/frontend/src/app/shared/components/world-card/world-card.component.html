@@ -1,0 +1,22 @@
+<div class="mc-world-card">
+  <!-- Server Image/Cover -->
+  <div class="mc-world-image">
+    <img [src]="world().imageUrl || '/assets/images/default-world.png'" [alt]="world().name" (error)="handleImageError($event)">
+  </div>
+
+  <!-- Server Name -->
+  <h3 class="mc-world-title">{{ world().name }}</h3>
+
+  <!-- Actions -->
+  <div class="mc-world-actions">
+    <!-- Power Button (Start/Stop) -->
+    <button class="mc-action-btn mc-power-btn" (click)="togglePower.emit()" [title]="world().status === 'running' ? 'Stop Server' : 'Start Server'">
+      <app-icon name="power"></app-icon>
+    </button>
+    
+    <!-- Delete Button -->
+    <button class="mc-action-btn mc-trash-btn" (click)="delete.emit()" title="Delete Server">
+      <app-icon name="trash"></app-icon>
+    </button>
+  </div>
+</div>

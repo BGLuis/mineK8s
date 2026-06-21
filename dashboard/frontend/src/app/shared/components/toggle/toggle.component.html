@@ -1,0 +1,18 @@
+<button 
+  class="mc-toggle-container" 
+  [class.is-on]="value()" 
+  (click)="toggle()"
+  type="button"
+>
+  <div class="mc-toggle-bg"></div>
+  
+  <div class="mc-toggle-track">
+    <!-- Moon / Sun (Default) block -->
+    <div class="mc-toggle-thumb" [class.is-moon]="!value()">
+      <!-- Grid block inner texture -->
+      <div class="mc-thumb-texture"></div>
+    </div>
+  </div>
+
+  <div class="mc-toggle-border"></div>
+</button>

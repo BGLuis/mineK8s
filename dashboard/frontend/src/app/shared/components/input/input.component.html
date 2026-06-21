@@ -1,0 +1,38 @@
+<div class="mc-input-container" [ngClass]="variant()">
+  <div class="mc-input-bg"></div>
+  
+  <div class="mc-input-content">
+    <ng-content select="[prefix]"></ng-content>
+    
+    <input 
+      *ngIf="variant() !== 'Select'"
+      [type]="variant() === 'Password' ? (showPassword ? 'text' : 'password') : 'text'"
+      [placeholder]="placeholder()"
+      [value]="value()"
+      (input)="onInput($event)"
+      class="mc-input-field"
+    >
+
+    <div *ngIf="variant() === 'Select'" class="mc-select-field">
+      {{ value() || placeholder() }}
+    </div>
+
+    <!-- Suffix Icon -->
+    <div class="mc-input-suffix" *ngIf="variant() === 'Password' || variant() === 'Select'">
+      <app-icon 
+        *ngIf="variant() === 'Password'" 
+        [name]="showPassword ? 'eye' : 'eye-off'" 
+        (click)="togglePassword()"
+        class="cursor-pointer"
+      ></app-icon>
+      
+      <app-icon 
+        *ngIf="variant() === 'Select'" 
+        name="chevron" 
+        direction="down"
+      ></app-icon>
+    </div>
+  </div>
+
+  <div class="mc-input-border"></div>
+</div>
