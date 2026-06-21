@@ -1,6 +1,7 @@
 :host {
   display: inline-block;
-  width: 132px; /* default */
+  width: 100%;
+  max-width: 132px;
   aspect-ratio: 1/1;
 }
 
