@@ -125,7 +125,12 @@ export class ServersService {
     const serviceManifest: k8s.V1Service = {
       apiVersion: 'v1',
       kind: 'Service',
-      metadata: { name: `${serverName}-svc` },
+      metadata: { 
+        name: `${serverName}-svc`,
+        annotations: {
+          'mc-router.itzg.me/externalServerName': `${safeName}.testmine.luiis.com.br`
+        }
+      },
       spec: {
         selector: { app: serverName },
         ports: [{ port: 25565, targetPort: 25565 }],
@@ -178,6 +183,7 @@ export class ServersService {
         // Encontrar a porta NodePort do Service vinculado a este servidor
         const svc = servicesRes.items.find(s => s.metadata?.name === `${d.metadata?.name}-svc`);
         const nodePort = svc?.spec?.ports?.[0]?.nodePort || null;
+        const externalDomain = svc?.metadata?.annotations?.['mc-router.itzg.me/externalServerName'] || null;
 
         return {
           id: d.metadata?.name,
@@ -185,7 +191,8 @@ export class ServersService {
           status: status,
           readyReplicas: ready,
           desiredReplicas: desired,
-          connectionPort: nodePort
+          connectionPort: nodePort,
+          connectionDomain: externalDomain
         };
       });
     } catch (error) {

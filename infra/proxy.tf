@@ -1,6 +1,40 @@
 # ==========================================
 # 1. Proxy Reverso Minecraft (mc-router)
 # ==========================================
+resource "kubernetes_service_account" "mc_router" {
+  metadata {
+    name      = "mc-router-sa"
+    namespace = kubernetes_namespace.teste.metadata[0].name
+  }
+}
+
+resource "kubernetes_cluster_role" "mc_router" {
+  metadata {
+    name = "mc-router-role"
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["services", "endpoints"]
+    verbs      = ["get", "list", "watch"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding" "mc_router" {
+  metadata {
+    name = "mc-router-binding"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.mc_router.metadata[0].name
+  }
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.mc_router.metadata[0].name
+    namespace = kubernetes_namespace.teste.metadata[0].name
+  }
+}
+
 resource "kubernetes_deployment" "mc_router" {
   metadata {
     name      = "mc-router-deployment"
@@ -27,16 +61,16 @@ resource "kubernetes_deployment" "mc_router" {
       }
 
       spec {
+        service_account_name = kubernetes_service_account.mc_router.metadata[0].name
+        
         container {
           image = "itzg/mc-router:latest"
           name  = "mc-router"
 
-          # Aqui passamos os mapeamentos de domínios.
-          # Formato: dominio_do_jogador=nome_do_service_interno:porta
+          # Habilita o modo de cluster do Kubernetes para descoberta dinâmica
           args = [
-            "sobrevivencia.seudominio.com=minecraft-service:25565",
-            # Você pode adicionar mais servidores assim:
-            # "criativo.seudominio.com=minecraft-criativo-service:25565"
+            "-in-kube-cluster",
+            "-kube-namespace=default"
           ]
 
           port {
@@ -63,10 +97,9 @@ resource "kubernetes_service" "mc_router_service" {
     port {
       port        = 25565
       target_port = 25565
-      node_port   = 30065 # O Proxy agora atende publicamente na mesma porta antiga
     }
 
-    type = "NodePort"
+    type = "LoadBalancer"
   }
 }
 

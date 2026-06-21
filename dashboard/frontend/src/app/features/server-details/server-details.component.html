@@ -23,9 +23,9 @@
           <span [style.color]="server()?.status === 'Online' ? '#10b981' : '#f87171'">{{ server()?.status }}</span>
         </app-config-row>
         
-        <app-config-row label="IP de Conexão">
+        <app-config-row label="Endereço (IP/Domínio)">
           <span style="color: var(--primary);">
-            {{ server()?.connectionPort ? 'Seu_IP_Local:' + server()?.connectionPort : 'N/A' }}
+            {{ server()?.connectionDomain ? server()?.connectionDomain : server()?.connectionPort ? '192.168.0.218:' + server()?.connectionPort : 'Aguardando IP/Domínio...' }}
           </span>
         </app-config-row>
 
