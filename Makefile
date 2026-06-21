@@ -97,7 +97,7 @@ import-bot: build-bot
 
 # ── Deploy no Kubernetes ───────────────────────────────────────────────────────
 
-up: import infra deploy ## Provisiona tudo de uma vez (Build, Import, Infra e Deploy K8s)
+up: import infra deploy restart-api restart-frontend ## Provisiona tudo de uma vez (Build, Import, Infra, Deploy K8s e Restart Pods)
 
 deploy: deploy-rbac deploy-api deploy-frontend ## Aplica todos os manifests K8s
 	@echo ""
