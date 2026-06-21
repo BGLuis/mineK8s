@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.7945 4.88971H11.3501V9.33409H15.7945V4.88971Z" fill="#E8E8E8"/>
+<path d="M11.3507 0.444855H7V4.8893H11.3507V0.444855Z" fill="#E8E8E8"/>
+<path d="M11.3507 27.1103H7V31.5547H11.3507V27.1103Z" fill="#E8E8E8"/>
+<path d="M20.2383 9.33273H15.7939V13.7771H20.2383V9.33273Z" fill="#E8E8E8"/>
+<path d="M24.6841 13.7757H20.2397V18.2201H24.6841V13.7757Z" fill="#E8E8E8"/>
+<path d="M20.2383 18.2224H15.7939V22.6668H20.2383V18.2224Z" fill="#E8E8E8"/>
+<path d="M15.7945 22.6673H11.3501V27.1117H15.7945V22.6673Z" fill="#E8E8E8"/>
+</svg>

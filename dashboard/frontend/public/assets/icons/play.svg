@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.9884 0H6.58838V6.4H12.9884V0Z" fill="#E8E8E8"/>
+<path d="M12.9884 6.3989H6.58838V12.7989H12.9884V6.3989Z" fill="#E8E8E8"/>
+<path d="M19.3883 6.3989H12.9883V12.7989H19.3883V6.3989Z" fill="#E8E8E8"/>
+<path d="M12.9884 12.7996H6.58838V19.1996H12.9884V12.7996Z" fill="#E8E8E8"/>
+<path d="M19.3883 12.7996H12.9883V19.1996H19.3883V12.7996Z" fill="#E8E8E8"/>
+<path d="M25.7882 12.7996H19.3882V19.1996H25.7882V12.7996Z" fill="#E8E8E8"/>
+<path d="M12.9884 19.1985H6.58838V25.5985H12.9884V19.1985Z" fill="#E8E8E8"/>
+<path d="M19.3883 19.1985H12.9883V25.5985H19.3883V19.1985Z" fill="#E8E8E8"/>
+<path d="M12.9884 25.5993H6.58838V31.9993H12.9884V25.5993Z" fill="#E8E8E8"/>
+</svg>
