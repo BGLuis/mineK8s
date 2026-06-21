@@ -6,7 +6,8 @@ export interface WorldInfo {
   id: string;
   name: string;
   imageUrl?: string;
-  status: 'running' | 'stopped' | 'starting';
+  url?: string;
+  status: 'running' | 'stopped' | 'starting' | 'Online' | 'Offline' | 'Iniciando' | 'Desligado';
 }
 
 @Component({

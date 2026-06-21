@@ -1,6 +1,6 @@
 <div class="details-container">
   <div class="header">
-    <app-button variant="Light" (click)="goBack()">← Voltar</app-button>
+    <app-button variant="Light" (click)="goBack()" style="max-width: 200px; flex-shrink: 0;">← Voltar</app-button>
     <div class="title-area">
       <h1>Dashboard: {{ server()?.name || 'Carregando...' }}</h1>
     </div>
@@ -57,7 +57,7 @@
           </app-button>
           
           <app-button variant="Realms" [routerLink]="['/server', serverId, 'players']" class="full-width-btn">
-            <app-icon name="world" style="margin-right: 8px;"></app-icon> Jogadores Online
+            <app-icon name="world" style="margin-right: 8px;"></app-icon> Jogadores e Acessos
           </app-button>
           
           <app-button variant="Dark" [routerLink]="['/server', serverId, 'backups']" class="full-width-btn">

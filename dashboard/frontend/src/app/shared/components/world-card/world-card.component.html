@@ -6,6 +6,9 @@
 
   <!-- Server Name -->
   <h3 class="mc-world-title">{{ world().name }}</h3>
+  @if (world().url) {
+    <p class="mc-world-url" style="color: #94a3b8; font-size: 0.85rem; margin: -5px 0 10px 0;">{{ world().url }}</p>
+  }
 
   <!-- Actions -->
   <div class="mc-world-actions">

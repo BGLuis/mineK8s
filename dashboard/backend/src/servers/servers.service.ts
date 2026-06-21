@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { PrismaService } from '../prisma/prisma.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -28,7 +29,7 @@ export class ServersService {
   private k8sBatch: k8s.BatchV1Api;
   private curseforgeApiKey = '$2a$10$wuAJuNZuted3NORVmpgUC.m8sI.pv1tOPKZyBgLFGjxFp/br0lZCC';
 
-  constructor() {
+  constructor(private prisma: PrismaService) {
     const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
     this.k8sApi = kc.makeApiClient(k8s.CoreV1Api);
@@ -262,27 +263,71 @@ export class ServersService {
 
   async getPlayers(id: string) {
     try {
-      const { response } = await this.sendCommand(id, 'list');
-      // Exemplo da resposta do Minecraft: "There are 2 of a max of 20 players online: luis, notch"
-      const match = response.match(/There are (\d+) of a max of (\d+) players online:(.*)/);
-      if (match) {
-        const namesStr = match[3].trim();
-        const players = namesStr ? namesStr.split(',').map(n => n.trim()) : [];
-        return {
-          online: parseInt(match[1], 10),
-          max: parseInt(match[2], 10),
-          players: players.map(name => ({
-            name,
-            uuid: 'Aguardando login', 
-            ping: 'N/A',
-            // Usamos a API do Minotar para pegar a "Cabeça" (Helm) do avatar via Username automaticamente!
-            avatarUrl: `https://minotar.net/helm/${name}/64.png`
-          }))
-        };
+      // 1. Obter nome real do server no banco de dados para a busca ACL
+      // O frontend passa o ID k8s (ex: "mc-vanilla-xyz"), no BD ele pode estar como "vanilla-xyz" ou podemos buscar via k8sServiceName
+      const serverDb = await this.prisma.server.findFirst({
+        where: {
+          k8sServiceName: `${id}-svc` // Pelo padrão do projeto, o svc é mc-xyz-svc
+        },
+        include: {
+          groups: true // Grupos de usuários autorizados
+        }
+      });
+
+      // 2. Tentar buscar jogadores online no RCON
+      let onlinePlayersRaw: string[] = [];
+      let onlineCount = 0;
+      let maxCount = 0;
+      
+      try {
+        const { response } = await this.sendCommand(id, 'list');
+        const match = response.match(/There are (\d+) of a max of (\d+) players online:(.*)/);
+        if (match) {
+          onlineCount = parseInt(match[1], 10);
+          maxCount = parseInt(match[2], 10);
+          const namesStr = match[3].trim();
+          if (namesStr) {
+            onlinePlayersRaw = namesStr.split(',').map(n => n.trim().toLowerCase());
+          }
+        }
+      } catch (err) {
+        // Ignora erro de RCON (servidor offline, iniciando ou falhou)
       }
-      return { online: 0, max: 0, players: [], raw: response };
+
+      // 3. Obter todos os usuários da base
+      const allUsers = await this.prisma.user.findMany({
+        include: {
+          groups: true // Grupos aos quais o usuário pertence
+        }
+      });
+
+      const authorizedGroupIds = serverDb ? serverDb.groups.map(g => g.groupId) : [];
+
+      const players = allUsers.map(user => {
+        const hasAccess = user.groups.some(ug => authorizedGroupIds.includes(ug.groupId)) || user.role === 'ADMIN';
+        const minecraftNick = user.minecraftNick || user.email?.split('@')[0] || 'Unknown';
+        const isOnline = onlinePlayersRaw.includes(minecraftNick.toLowerCase());
+
+        return {
+          name: minecraftNick,
+          uuid: 'Autenticado via Tailscale',
+          ping: isOnline ? 'OK' : 'N/A',
+          avatarUrl: `https://minotar.net/helm/${minecraftNick}/64.png`,
+          hasAccess: hasAccess,
+          isOnline: isOnline,
+          role: user.role
+        };
+      });
+
+      return {
+        online: onlineCount,
+        max: maxCount,
+        players: players
+      };
+
     } catch (error) {
-      return { online: 0, max: 0, players: [], error: 'Servidor indisponível ou RCON desativado' };
+      this.logger.error(error);
+      return { online: 0, max: 0, players: [], error: 'Falha ao buscar usuários e permissões.' };
     }
   }
 

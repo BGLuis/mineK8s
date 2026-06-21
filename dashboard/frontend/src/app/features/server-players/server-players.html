@@ -2,9 +2,9 @@
   <header class="players-header">
     <app-button variant="Light" (click)="goBack()">← Voltar</app-button>
     <div class="header-info">
-      <h1>Jogadores Online</h1>
+      <h1>Acessos e Jogadores</h1>
       <div class="online-stats">
-        <span class="status-dot"></span> {{ onlineCount() }} / {{ maxCount() }} Online
+        <span class="status-dot"></span> {{ onlineCount() }} Online / {{ players().length }} Cadastrados
       </div>
     </div>
     <app-button variant="Blue" (click)="fetchPlayers()">🔄 Atualizar</app-button>
@@ -13,22 +13,34 @@
   <div class="main-card glass-panel" style="padding: 30px;">
     @if (isLoading()) {
       <div class="loading-state" style="text-align: center; color: var(--text-muted); padding: 40px;">
-        Obtendo lista de jogadores via RCON...
+        Obtendo lista de jogadores e validação de acessos...
       </div>
     } @else {
       @if (players().length === 0) {
         <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 40px;">
-          Nenhum jogador online no momento.
+          Nenhum jogador cadastrado no sistema.
         </div>
       } @else {
         <div class="players-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
           @for (player of players(); track player.name) {
-            <div class="player-card glass-panel" style="padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="player-card glass-panel" [style.filter]="player.hasAccess ? 'none' : 'grayscale(100%)'" [style.opacity]="player.hasAccess ? '1' : '0.6'" style="position: relative; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05);">
+              
+              @if (player.isOnline) {
+                <span style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">ONLINE</span>
+              }
+              @if (!player.hasAccess) {
+                <span style="position: absolute; top: 10px; left: 10px; background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">SEM ACESSO</span>
+              }
               
               <app-user-avatar 
                 [identifier]="player.name" 
+                [isOnline]="player.isOnline"
                 subtext="Sobrevivência"
               ></app-user-avatar>
+
+              <div style="text-align: center; margin-top: -10px;">
+                <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;">Role: {{ player.role }}</p>
+              </div>
 
               <div class="player-actions" style="display: flex; gap: 10px; width: 100%; justify-content: center; margin-top: 10px;">
                 <app-button variant="Light" (click)="executeCommand(player.name, 'kick')" style="flex: 1;">Kick</app-button>

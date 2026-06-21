@@ -96,6 +96,7 @@ export class ServerManager implements OnInit {
       id: server.id,
       name: server.name,
       status: server.status === 'Online' ? 'running' : server.status === 'Iniciando' ? 'starting' : 'stopped',
+      url: server.connectionPort ? `192.168.0.218:${server.connectionPort}` : 'Aguardando IP...',
       // If server has an iconUrl from Modrinth/CurseForge it would be used here, otherwise default
     };
   }

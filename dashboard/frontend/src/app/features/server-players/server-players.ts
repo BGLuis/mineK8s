@@ -6,6 +6,16 @@ import { ServersService } from '../../core/services/servers';
 import { UserAvatarComponent } from '../../shared/components/user-avatar/user-avatar.component';
 import { ButtonComponent } from '../../shared/components/button/button.component';
 
+export interface PlayerAcl {
+  name: string;
+  uuid: string;
+  ping: string;
+  avatarUrl: string;
+  hasAccess: boolean;
+  isOnline: boolean;
+  role: string;
+}
+
 @Component({
   selector: 'app-server-players',
   standalone: true,
@@ -19,7 +29,7 @@ export class ServerPlayers implements OnInit {
   private serversService = inject(ServersService);
 
   serverId = '';
-  players = signal<{name: string}[]>([]);
+  players = signal<PlayerAcl[]>([]);
   onlineCount = signal(0);
   maxCount = signal(0);
   isLoading = signal(true);
@@ -39,7 +49,7 @@ export class ServerPlayers implements OnInit {
       next: (res) => {
         this.onlineCount.set(res.online);
         this.maxCount.set(res.max);
-        this.players.set(res.players.map((p: string) => ({ name: p })));
+        this.players.set(res.players);
         this.isLoading.set(false);
       },
       error: () => {
