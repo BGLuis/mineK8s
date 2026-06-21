@@ -100,6 +100,12 @@ import-bot: build-bot
 up: import infra deploy ## Provisiona tudo de uma vez (Build, Import, Infra e Deploy K8s)
 
 deploy: deploy-rbac deploy-api deploy-frontend ## Aplica todos os manifests K8s
+	@echo ""
+	@echo "🎉 Deploy finalizado! Para ver o IP do frontend, execute:"
+	@echo "   kubectl get svc minekube-frontend-svc"
+	@echo ""
+	@echo "👉 O IP estará na coluna EXTERNAL-IP (gerado pelo MetalLB)."
+	@echo ""
 
 deploy-rbac: ## Aplica o ServiceAccount e RBAC
 	@echo "🔐 Aplicando RBAC..."
