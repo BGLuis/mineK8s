@@ -50,4 +50,34 @@ export class ServerDetailsComponent implements OnInit {
   goBack() {
     this.router.navigate(['/']);
   }
+
+  isUploading = signal(false);
+
+  triggerUpload() {
+    document.getElementById('worldUploadInput')?.click();
+  }
+
+  onFileSelected(event: any) {
+    const file = event.target.files[0];
+    if (file) {
+      if (!confirm(`Deseja realmente fazer o upload do mundo "${file.name}"?\nIsso substituirá o mundo atual!`)) {
+        event.target.value = ''; // Reset input
+        return;
+      }
+      this.isUploading.set(true);
+      this.serversService.uploadWorld(this.serverId, file).subscribe({
+        next: () => {
+          alert('Upload e substituição do mundo concluídos com sucesso!');
+          this.isUploading.set(false);
+          this.fetchServer();
+        },
+        error: (err) => {
+          console.error(err);
+          alert('Erro ao fazer upload do mundo.');
+          this.isUploading.set(false);
+        }
+      });
+      event.target.value = ''; // Reset input
+    }
+  }
 }

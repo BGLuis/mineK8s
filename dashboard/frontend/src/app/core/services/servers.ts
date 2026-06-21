@@ -45,4 +45,10 @@ export class ServersService {
   sendCommand(id: string, command: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/${id}/command`, { command });
   }
+
+  uploadWorld(id: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post(`${this.apiUrl}/${id}/world/upload`, formData);
+  }
 }

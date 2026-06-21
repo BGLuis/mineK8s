@@ -63,6 +63,12 @@
           <app-button variant="Dark" [routerLink]="['/server', serverId, 'backups']" class="full-width-btn">
             <app-icon name="time" style="margin-right: 8px;"></app-icon> Backups
           </app-button>
+
+          <input type="file" id="worldUploadInput" accept=".zip,.tar.gz" style="display: none" (change)="onFileSelected($event)">
+          <app-button variant="Light" class="full-width-btn" (click)="triggerUpload()" [disabled]="isUploading()">
+            <app-icon name="list" style="margin-right: 8px;"></app-icon> 
+            {{ isUploading() ? 'Enviando Mundo...' : 'Fazer Upload do Mundo' }}
+          </app-button>
         </div>
       </div>
     </div>
