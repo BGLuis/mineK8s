@@ -10,7 +10,7 @@ import { IconComponent } from '../../shared/components/icon/icon.component';
 @Component({
   selector: 'app-server-files',
   standalone: true,
-  imports: [CommonModule, FormsModule, ButtonComponent, IconComponent],
+  imports: [CommonModule, FormsModule, ButtonComponent],
   templateUrl: './server-files.html',
   styleUrls: ['./server-files.css']
 })

@@ -27,8 +27,8 @@
         <app-world-card 
           [world]="mapToWorldInfo(server)"
           (click)="goToDashboard(server.id)"
-          (togglePower)="$event.stopPropagation(); server.status === 'Desligado' ? startServer(server.id) : stopServer(server.id)"
-          (delete)="$event.stopPropagation(); deleteServer(server.id)"
+          (togglePower)="server.status === 'Desligado' ? startServer(server.id) : stopServer(server.id)"
+          (delete)="deleteServer(server.id)"
           style="cursor: pointer;"
         ></app-world-card>
       }

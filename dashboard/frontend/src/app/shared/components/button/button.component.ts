@@ -1,7 +1,7 @@
 import { Component, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-export type ButtonVariant = 'Dark' | 'Light' | 'Green' | 'Realms' | 'Blue' | 'Yellow';
+export type ButtonVariant = 'Dark' | 'Light' | 'Green' | 'Realms' | 'Blue' | 'Yellow' | 'Danger';
 
 @Component({
   selector: 'app-button',
@@ -12,4 +12,5 @@ export type ButtonVariant = 'Dark' | 'Light' | 'Green' | 'Realms' | 'Blue' | 'Ye
 })
 export class ButtonComponent {
   variant = input<ButtonVariant>('Dark');
+  disabled = input<boolean>(false);
 }

@@ -36,14 +36,14 @@
       
       <!-- Card Estático do Minecraft Vanilla -->
       <app-modpack-card 
-        [pack]="{
-          id: 'vanilla',
+        [modpack]="{
           name: 'Minecraft Vanilla',
           author: 'Mojang Studios',
-          source: 'NATIVO',
-          iconUrl: 'https://minecraft.wiki/images/Grass_Block.png',
-          downloads: 9999999,
-          categories: ['Oficial', 'Leve', 'Survival']
+          description: 'A experiência original do Minecraft, sem mods ou alterações. Apenas você, os blocos e os creepers.',
+          coverUrl: 'https://minecraft.wiki/images/Grass_Block.png',
+          updatedAt: '2026-06-21',
+          version: 'LATEST',
+          loader: 'Vanilla'
         }"
         (click)="installVanilla()"
         style="cursor: pointer; border: 2px solid #10b981; border-radius: 12px;"
@@ -51,7 +51,7 @@
 
       @for (pack of modpacks(); track pack.id) {
         <app-modpack-card
-          [pack]="mapToModpackInfo(pack)"
+          [modpack]="mapToModpackInfo(pack)"
           (click)="openVersionsModal(pack)"
           style="cursor: pointer;"
         ></app-modpack-card>

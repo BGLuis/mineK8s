@@ -110,13 +110,13 @@ export class ModpackGallery implements OnInit {
 
   mapToModpackInfo(pack: ModpackResult): ModpackInfo {
     return {
-      id: pack.id,
       name: pack.title,
       author: pack.author,
-      source: pack.source,
-      iconUrl: pack.iconUrl,
-      downloads: pack.downloads,
-      categories: pack.categories
+      description: pack.description || '',
+      coverUrl: pack.iconUrl,
+      updatedAt: new Date(),
+      version: pack.versions && pack.versions.length ? pack.versions[0] : 'Unknown',
+      loader: pack.categories && pack.categories.includes('Fabric') ? 'Fabric' : 'Forge'
     };
   }
 }

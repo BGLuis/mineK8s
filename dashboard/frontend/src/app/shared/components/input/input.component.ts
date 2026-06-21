@@ -2,7 +2,7 @@ import { Component, input, model } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { IconComponent } from '../icon/icon.component';
 
-export type InputVariant = 'Default' | 'Password' | 'Select';
+export type InputVariant = 'Default' | 'Password' | 'Select' | 'Search';
 
 @Component({
   selector: 'app-input',
