@@ -6,6 +6,8 @@
 .mc-button {
   position: relative;
   width: 100%;
+  min-width: 100px;
+  min-height: 50px;
   border: none;
   background: none;
   padding: 0;
@@ -531,6 +533,10 @@
   word-break: break-word;
   margin: 0;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .dec-border {
