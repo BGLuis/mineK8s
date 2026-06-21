@@ -130,4 +130,12 @@ export class ServersController {
   ) {
     return await this.serversService.uploadWorld(id, file);
   }
+
+  @Patch(':id/domain')
+  async updateDomain(
+    @Param('id') id: string,
+    @Body('domain') domain: string,
+  ) {
+    return await this.serversService.updateDomain(id, domain);
+  }
 }

@@ -229,6 +229,21 @@ export class ServersService {
     }
   }
 
+  async updateDomain(name: string, domain: string) {
+    const namespace = 'default';
+    try {
+      const svc = await this.k8sApi.readNamespacedService({name: `${name}-svc`, namespace});
+      if (!svc.metadata) svc.metadata = {};
+      if (!svc.metadata.annotations) svc.metadata.annotations = {};
+      svc.metadata.annotations['mc-router.itzg.me/externalServerName'] = domain;
+      await this.k8sApi.replaceNamespacedService({name: `${name}-svc`, namespace, body: svc});
+      return { message: `Domínio atualizado para ${domain}` };
+    } catch (error) {
+      this.logger.error(error);
+      throw new HttpException('Falha ao atualizar o domínio do servidor', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   private async getPodName(deploymentId: string) {
     const res = await this.k8sApi.listNamespacedPod({
       namespace: 'default',
@@ -252,15 +267,15 @@ export class ServersService {
       });
       return { logs: res };
     } catch (error) {
-      this.logger.error(error);
-      throw new HttpException('Falha ao ler logs do console', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.warn(`Falha ao ler logs: ${error.message}`);
+      return { logs: 'Servidor iniciando ou aguardando logs...' };
     }
   }
 
   async sendCommand(id: string, command: string) {
     try {
       const podName = await this.getPodName(id);
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- rcon-cli "${command}"`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- rcon-cli "${command}"`);
       return { response: stdout.trim() };
     } catch (error) {
       this.logger.error(`RCON Error no pod: ${error.message}`);
@@ -344,7 +359,7 @@ export class ServersService {
       const safePath = path.replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\.\./g, '');
       const targetDir = safePath ? `/data/${safePath}` : `/data`;
       
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- ls -lah --group-directories-first ${targetDir}`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- ls -lah --group-directories-first ${targetDir}`);
       
       const lines = stdout.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('total'));
       const files = lines.map(line => {
@@ -369,7 +384,7 @@ export class ServersService {
     try {
       const podName = await this.getPodName(id);
       const safePath = filePath.replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\.\./g, '');
-      const { stdout } = await execAsync(`kubectl exec ${podName} --kubeconfig ~/.kube/config -- cat /data/${safePath}`);
+      const { stdout } = await execAsync(`kubectl exec ${podName} -- cat /data/${safePath}`);
       return { content: stdout };
     } catch (error) {
       this.logger.error(error);
@@ -390,7 +405,7 @@ export class ServersService {
     return new Promise<{ message: string }>((resolve, reject) => {
       // Usa stdin pipe para evitar problemas com caracteres especiais no conteúdo
       const child = exec(
-        `kubectl exec -i ${podName} --kubeconfig ~/.kube/config -- sh -c "cat > ${fullPath}"`,
+        `kubectl exec -i ${podName} -- sh -c "cat > ${fullPath}"`,
         (error, _stdout, stderr) => {
           if (error) {
             this.logger.error(`writeFile error: ${stderr}`);
@@ -424,7 +439,7 @@ export class ServersService {
     try {
       // rm -rf é seguro aqui pois o caminho está restrito ao /data/ do pod
       await execAsync(
-        `kubectl exec ${podName} --kubeconfig ~/.kube/config -- rm -rf ${fullPath}`,
+        `kubectl exec ${podName} -- rm -rf ${fullPath}`,
       );
       return { status: "Success", message: `Arquivo removido com sucesso` };
     } catch (error) {
@@ -482,7 +497,7 @@ export class ServersService {
                   `apk add unzip && mkdir -p /tmp/ext && mkdir -p /data/world && ` +
                   `${extractCmd} && rm -rf /data/world/* && ` +
                   `if [ -d /tmp/ext/world ]; then mv /tmp/ext/world/* /data/world/ 2>/dev/null || true; else mv /tmp/ext/* /data/world/ 2>/dev/null || true; fi && ` +
-                  `rm -f ${file.path} && echo "Upload extraido com sucesso!"`
+                  `chown -R 1000:1000 /data/world && rm -f ${file.path} && echo "Upload extraido com sucesso!"`
                 ],
                 volumeMounts: [
                   { name: 'data', mountPath: '/data' },

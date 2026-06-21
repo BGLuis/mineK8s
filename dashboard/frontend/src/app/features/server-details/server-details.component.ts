@@ -80,4 +80,22 @@ export class ServerDetailsComponent implements OnInit {
       event.target.value = ''; // Reset input
     }
   }
+
+  changeDomain() {
+    const currentDomain = this.server()?.connectionDomain || '';
+    const newDomain = prompt('Digite o novo domínio para este servidor:', currentDomain);
+    
+    if (newDomain !== null && newDomain.trim() !== '' && newDomain !== currentDomain) {
+      this.serversService.updateDomain(this.serverId, newDomain.trim()).subscribe({
+        next: () => {
+          alert('Domínio atualizado com sucesso! Pode levar alguns segundos para o proxy aplicar a mudança.');
+          this.fetchServer();
+        },
+        error: (err) => {
+          console.error(err);
+          alert('Erro ao atualizar o domínio.');
+        }
+      });
+    }
+  }
 }

@@ -51,4 +51,8 @@ export class ServersService {
     formData.append('file', file);
     return this.http.post(`${this.apiUrl}/${id}/world/upload`, formData);
   }
+
+  updateDomain(id: string, domain: string): Observable<any> {
+    return this.http.patch(`${this.apiUrl}/${id}/domain`, { domain });
+  }
 }

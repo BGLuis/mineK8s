@@ -24,8 +24,11 @@
         </app-config-row>
         
         <app-config-row label="Endereço (IP/Domínio)">
-          <span style="color: var(--primary);">
+          <span style="color: var(--primary); display: flex; align-items: center; gap: 8px;">
             {{ server()?.connectionDomain ? server()?.connectionDomain : server()?.connectionPort ? '192.168.0.218:' + server()?.connectionPort : 'Aguardando IP/Domínio...' }}
+            <button class="icon-btn" (click)="changeDomain()" title="Alterar Domínio" style="background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 0;">
+              <app-icon name="list" style="width: 16px; height: 16px;"></app-icon>
+            </button>
           </span>
         </app-config-row>
 
