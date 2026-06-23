@@ -122,13 +122,14 @@ export class ServersService {
       }
     };
 
+    const baseDomain = process.env.BASE_DOMAIN || 'mine.luiis.com.br';
     const serviceManifest: k8s.V1Service = {
       apiVersion: 'v1',
       kind: 'Service',
       metadata: { 
         name: `${serverName}-svc`,
         annotations: {
-          'mc-router.itzg.me/externalServerName': `${safeName}.testmine.luiis.com.br`
+          'mc-router.itzg.me/externalServerName': `${safeName}.${baseDomain}`
         }
       },
       spec: {
