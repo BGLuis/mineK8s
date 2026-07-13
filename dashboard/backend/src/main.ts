@@ -22,7 +22,6 @@ async function bootstrap() {
 	configureCors(app);
 
 	app.enableShutdownHooks();
-	app.setGlobalPrefix('api');
 
 	if (configService.nodeEnv === 'development') {
 		configureSwagger(app);
