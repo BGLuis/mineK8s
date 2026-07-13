@@ -1,30 +1,38 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger as NestLogger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AppConfigService } from './app-config/app-config.service';
+import { configureCors } from './config/cors.config';
 import { configureSwagger } from './config/swagger.config';
+import { configureValidationPipe } from './config/validation-pipe.config';
 
 async function bootstrap() {
-	const app = await NestFactory.create(AppModule, { bufferLogs: true });
+	const logger = new NestLogger('Bootstrap');
 
-	// Configura validação global de DTOs
-	app.useGlobalPipes(
-		new ValidationPipe({
-			whitelist: true, // Remove propriedades que não estão no DTO
-			forbidNonWhitelisted: true, // Retorna erro se enviar propriedades extras
-			transform: true, // Transforma os payloads automaticamente nas instâncias dos DTOs
-			transformOptions: {
-				enableImplicitConversion: true, // Converte tipos primitivos automaticamente
-			},
-		}),
-	);
+	const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+		bufferLogs: true,
+	});
 
 	app.useLogger(app.get(Logger));
-	configureSwagger(app);
+	const configService = app.get(AppConfigService);
 
-	const appConfig = app.get(AppConfigService);
-	app.enableCors();
-	await app.listen(appConfig.port);
+	configureValidationPipe(app);
+	configureCors(app);
+
+	app.enableShutdownHooks();
+	app.setGlobalPrefix('api');
+
+	if (configService.nodeEnv === 'development') {
+		configureSwagger(app);
+	}
+
+	await app.listen(configService.port);
+	logger.log(`API rodando na porta: ${configService.port}`);
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+	console.error('Fatal error during bootstrap:', err);
+	process.exit(1);
+});
