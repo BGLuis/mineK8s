@@ -1,4 +1,5 @@
 import { HttpInterceptorFn } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 export const apiInterceptor: HttpInterceptorFn = (req, next) => {
 	// Ignora chamadas que não começam com /api
@@ -6,11 +7,8 @@ export const apiInterceptor: HttpInterceptorFn = (req, next) => {
 		return next(req);
 	}
 
-	// Pega a URL dinâmica do window.__env ou faz fallback pro default
-	const apiUrl = (window as any).__env?.apiUrl || 'http://localhost:3000';
-
 	const apiReq = req.clone({
-		url: `${apiUrl}${req.url}`,
+		url: `${environment.apiUrl}${req.url}`,
 	});
 
 	return next(apiReq);
