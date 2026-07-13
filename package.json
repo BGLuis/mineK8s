@@ -1,0 +1,28 @@
+{
+	"name": "minekubernetes",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"directories": {
+		"doc": "docs"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/BGLuis/mineK8s.git"
+	},
+	"keywords": [],
+	"type": "commonjs",
+	"bugs": {
+		"url": "https://github.com/BGLuis/mineK8s/issues"
+	},
+	"homepage": "https://github.com/BGLuis/mineK8s#readme",
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
+		"lefthook": "^2.1.10",
+		"secretlint": "^13.0.2"
+	}
+}
