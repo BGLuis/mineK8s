@@ -30,6 +30,12 @@ export KUBECONFIG ?= $(HOME)/.kube/config
 
 # ── Desenvolvimento local ──────────────────────────────────────────────────────
 
+-include .env
+export
+
+FRONTEND_PORT ?= 4200
+BACKEND_PORT ?= 3000
+
 install:
 	@echo "📦 Instalando dependências do backend..."
 	cd dashboard/backend && npm install
@@ -41,12 +47,13 @@ start: ## Sobe NestJS + Angular em modo dev (hot-reload)
 	@make -j2 start-backend start-frontend
 
 start-backend:
-	@echo "🟢 Backend NestJS (porta 3000)..."
-	cd dashboard/backend && npm run start:dev
+	@echo "🟢 Backend NestJS (porta $(BACKEND_PORT))..."
+	cd dashboard/backend && PORT=$(BACKEND_PORT) npm run start:dev
 
 start-frontend:
-	@echo "🟣 Frontend Angular (porta 4200)..."
-	cd dashboard/frontend && npm start
+	@echo "🟣 Frontend Angular (porta $(FRONTEND_PORT))..."
+	@echo "window.__env = { apiUrl: 'http://localhost:$(BACKEND_PORT)' };" > dashboard/frontend/public/env.js
+	cd dashboard/frontend && npm start -- --port $(FRONTEND_PORT)
 
 # ── Build Docker ───────────────────────────────────────────────────────────────
 
