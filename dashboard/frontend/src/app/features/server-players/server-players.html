@@ -10,7 +10,7 @@
     <app-button variant="Blue" (click)="fetchPlayers()">🔄 Atualizar</app-button>
   </header>
 
-  <div class="main-card glass-panel" style="padding: 30px;">
+  <div class="main-card mc-panel" style="padding: 30px;">
     @if (isLoading()) {
       <div class="loading-state" style="text-align: center; color: var(--text-muted); padding: 40px;">
         Obtendo lista de jogadores e validação de acessos...
@@ -23,7 +23,7 @@
       } @else {
         <div class="players-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
           @for (player of players(); track player.name) {
-            <div class="player-card glass-panel" [style.filter]="player.hasAccess ? 'none' : 'grayscale(100%)'" [style.opacity]="player.hasAccess ? '1' : '0.6'" style="position: relative; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="player-card mc-panel" [style.filter]="player.hasAccess ? 'none' : 'grayscale(100%)'" [style.opacity]="player.hasAccess ? '1' : '0.6'" style="position: relative; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05);">
               
               @if (player.isOnline) {
                 <span style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">ONLINE</span>

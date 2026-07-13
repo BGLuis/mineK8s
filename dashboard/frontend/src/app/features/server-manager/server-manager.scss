@@ -14,114 +14,61 @@
     h1 {
       font-size: 2.5rem;
       font-weight: 700;
-      background: linear-gradient(to right, #fff, var(--text-muted));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+      text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
     }
-    p { color: var(--text-muted); margin-top: 5px; }
+    p { 
+      color: var(--text-muted); 
+      margin-top: 5px; 
+      font-size: 1.1rem;
+    }
   }
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(375px, 1fr));
+  gap: 40px;
 }
 
-.server-card {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.3s ease;
-
-  &:hover {
-    transform: translateY(-5px);
-    border-color: rgba(16, 185, 129, 0.4);
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 100px 20px;
+  background: var(--surface);
+  border-top: var(--mc-border) solid var(--border-light);
+  border-left: var(--mc-border) solid var(--border-light);
+  border-bottom: var(--mc-border) solid var(--border-dark);
+  border-right: var(--mc-border) solid var(--border-dark);
+  margin-top: 20px;
+  
+  h2 {
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 15px;
   }
-
-  .card-header {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    margin-bottom: 24px;
-
-    .icon-placeholder {
-      width: 60px;
-      height: 60px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-    }
-
-    .server-info {
-      h3 { font-size: 1.2rem; margin-bottom: 6px; color: var(--text-main); }
-      
-      .status-badge {
-        font-size: 0.75rem;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-weight: 600;
-        
-        &.online { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        &.starting { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-      }
-    }
-  }
-
-  .server-stats {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 24px;
-
-    .stat {
-      display: flex;
-      justify-content: space-between;
-      
-      .label { color: var(--text-muted); font-size: 0.9rem; }
-      .value { color: var(--text-main); font-weight: 600; font-size: 0.9rem; }
-    }
-  }
-
-  .card-footer {
-    display: flex;
-    gap: 12px;
-
-    .action-btn {
-      flex: 1;
-      padding: 10px;
-      border-radius: 8px;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      
-      &.stop-btn { background: rgba(255, 255, 255, 0.05); color: var(--text-main); }
-      &.stop-btn:hover { background: rgba(255, 255, 255, 0.1); }
-      
-      &.delete-btn { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-      &.delete-btn:hover { background: rgba(239, 68, 68, 0.3); }
-    }
+  
+  p {
+    color: var(--text-muted);
   }
 }
 
 .loading-state {
-  text-align: center;
-  padding: 100px;
-  color: var(--primary);
-  
   .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(99, 102, 241, 0.2);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 16px;
+    width: 48px;
+    height: 48px;
+    background: var(--primary);
+    margin: 0 auto 20px;
+    animation: pulse 1s infinite alternate;
+    /* Blocky pulse animation */
+    border-top: 2px solid #88FF88;
+    border-left: 2px solid #88FF88;
+    border-bottom: 2px solid #228822;
+    border-right: 2px solid #228822;
   }
 }
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.1); opacity: 1; }
+}

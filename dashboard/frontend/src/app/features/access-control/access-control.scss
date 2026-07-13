@@ -1,0 +1,106 @@
+.network-container {
+  padding: 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 40px;
+
+    .title-area {
+      h1 {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: var(--text-main);
+        text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+      }
+      p {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+      }
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+    }
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .card-header {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 2px solid var(--border-dark);
+    
+    h3 {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+      font-size: 1.2rem;
+      text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+    }
+  }
+
+  .card-body {
+    padding: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+    }
+
+    .multi-select {
+      height: 120px;
+    }
+  }
+
+  .device-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 2px solid var(--border-dark);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .device-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .device-name {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--text-main);
+      }
+      
+      .device-ip {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+    }
+  }
+}

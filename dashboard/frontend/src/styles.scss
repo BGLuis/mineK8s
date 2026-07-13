@@ -1,17 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
 
 :root {
-  --bg-dark: #0f1115;
-  --bg-panel: rgba(255, 255, 255, 0.03);
-  --bg-glass: rgba(255, 255, 255, 0.05);
-  --border-glass: rgba(255, 255, 255, 0.08);
+  /* Minecraft Theme Variables */
+  --bg-dark: #121212; /* Deep dark background */
+  --surface: #1E1E1E; /* Panel background */
+  --surface-hover: #2A2A2A;
   
-  --primary: #6366f1;
-  --primary-hover: #818cf8;
-  --accent: #10b981;
+  --border-light: rgba(255, 255, 255, 0.15); /* Top/Left inset */
+  --border-dark: rgba(0, 0, 0, 0.6);         /* Bottom/Right inset */
   
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --primary: #55FF55; /* Minecraft Green */
+  --primary-hover: #3EBB3E;
+  --accent: #AAAAAA; /* Minecraft Gray */
+  
+  --text-main: #FFFFFF;
+  --text-muted: #AAAAAA;
+  --text-primary: #55FF55;
+  --text-error: #FF5555;
+  --text-warning: #FFAA00;
+  
+  --mc-border: 2px;
 }
 
 * {
@@ -26,56 +34,123 @@ body {
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
-  /* Premium dark background glow */
-  background-image: radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 25%),
-                    radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08), transparent 25%);
+  /* Removed the radial gradients. Kept simple solid color for Minecraft aesthetic */
 }
 
-.glass-panel {
-  background: var(--bg-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-glass);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+/* Base utility for Minecraft Panel */
+.mc-panel {
+  background: var(--surface);
+  border-radius: 0;
+  /* Simulating the 3D button/panel effect */
+  border-top: var(--mc-border) solid var(--border-light);
+  border-left: var(--mc-border) solid var(--border-light);
+  border-bottom: var(--mc-border) solid var(--border-dark);
+  border-right: var(--mc-border) solid var(--border-dark);
 }
 
-.premium-btn {
-  background: linear-gradient(135deg, var(--primary), #4f46e5);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+.mc-btn {
+  background: var(--surface);
+  color: var(--text-main);
+  font-family: 'JetBrains Mono', monospace;
   font-weight: 600;
+  border-radius: 0;
+  padding: 10px 20px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-
+  
+  border-top: var(--mc-border) solid var(--border-light);
+  border-left: var(--mc-border) solid var(--border-light);
+  border-bottom: var(--mc-border) solid var(--border-dark);
+  border-right: var(--mc-border) solid var(--border-dark);
+  transition: background-color 0.1s;
+  
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+    background: var(--surface-hover);
+  }
+
+  &:active {
+    /* Invert borders when pressed */
+    border-top: var(--mc-border) solid var(--border-dark);
+    border-left: var(--mc-border) solid var(--border-dark);
+    border-bottom: var(--mc-border) solid var(--border-light);
+    border-right: var(--mc-border) solid var(--border-light);
+    transform: translateY(2px);
   }
 }
 
-.search-input {
-  background: var(--bg-panel);
-  border: 1px solid var(--border-glass);
+.mc-btn-primary {
+  @extend .mc-btn;
+  color: var(--bg-dark);
+  background: var(--primary);
+  border-top-color: #88FF88;
+  border-left-color: #88FF88;
+  border-bottom-color: #228822;
+  border-right-color: #228822;
+
+  &:hover {
+    background: var(--primary-hover);
+  }
+}
+
+.mc-input {
+  background: var(--bg-dark);
   color: var(--text-main);
-  padding: 12px 20px;
-  border-radius: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 12px 16px;
+  border-radius: 0;
   width: 100%;
   font-size: 1rem;
-  transition: all 0.3s ease;
-
+  
+  /* Inset effect for inputs */
+  border-top: var(--mc-border) solid var(--border-dark);
+  border-left: var(--mc-border) solid var(--border-dark);
+  border-bottom: var(--mc-border) solid var(--border-light);
+  border-right: var(--mc-border) solid var(--border-light);
+  
   &:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    border: 2px solid var(--text-main);
   }
+}
+
+.mc-badge {
+  font-family: 'JetBrains Mono', monospace;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--bg-dark);
+  border: 1px solid var(--text-muted);
+  
+  &.online {
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+  
+  &.offline {
+    color: var(--text-error);
+    border-color: var(--text-error);
+  }
+  
+  &.sleeping {
+    color: var(--text-warning);
+    border-color: var(--text-warning);
+  }
+}
+
+/* Keeping old classes for temporary retro-compatibility while refactoring */
+.glass-panel {
+  @extend .mc-panel;
+}
+
+.premium-btn {
+  @extend .mc-btn-primary;
+}
+
+.search-input {
+  @extend .mc-input;
 }
 
 .action-btn {

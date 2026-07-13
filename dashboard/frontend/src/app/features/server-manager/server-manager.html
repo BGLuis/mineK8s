@@ -22,7 +22,7 @@
   }
 
   @if (!isLoading() && servers().length > 0) {
-    <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(375px, 1fr)); gap: 40px;">
+    <div class="grid">
       @for (server of servers(); track server.id) {
         <app-world-card 
           [world]="mapToWorldInfo(server)"

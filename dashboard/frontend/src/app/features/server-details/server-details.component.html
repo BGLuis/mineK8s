@@ -4,23 +4,29 @@
     <div class="title-area">
       <h1>Dashboard: {{ server()?.name || 'Carregando...' }}</h1>
     </div>
-    <div class="status-badge" [ngClass]="server()?.status === 'Online' ? 'online' : 'offline'">
+    <div class="status-badge" 
+         [ngClass]="{'online': server()?.status === 'Online' || server()?.status === 'ONLINE', 
+                     'offline': server()?.status === 'Offline' || server()?.status === 'OFFLINE',
+                     'sleeping': server()?.status === 'Sleeping' || server()?.status === 'SLEEPING'}">
       {{ server()?.status || '...' }}
     </div>
   </div>
 
   @if (isLoading()) {
     <div class="loading-state">
-      <p>Carregando informações do servidor...</p>
+      <div class="spinner"></div>
+      <p>Consultando oráculo do Kubernetes...</p>
     </div>
   } @else if (server()) {
     <div class="dashboard-grid">
       <!-- Info Panel -->
-      <div class="panel glass-panel info-panel">
-        <h2 style="font-family: 'Minecraftia', sans-serif; margin-bottom: 20px;">Informações</h2>
+      <div class="mc-panel panel info-panel">
+        <h2 style="font-family: 'JetBrains Mono', monospace; margin-bottom: 20px;">Painel de Controle</h2>
         
         <app-config-row label="Status">
-          <span [style.color]="server()?.status === 'Online' ? '#10b981' : '#f87171'">{{ server()?.status }}</span>
+          <span [style.color]="server()?.status === 'Online' || server()?.status === 'ONLINE' ? 'var(--primary)' : (server()?.status === 'Sleeping' || server()?.status === 'SLEEPING' ? 'var(--text-warning)' : 'var(--text-error)')">
+            {{ server()?.status }}
+          </span>
         </app-config-row>
         
         <app-config-row label="Endereço (IP/Domínio)">
@@ -33,22 +39,43 @@
         </app-config-row>
 
         <app-config-row label="Replicas Prontas">
-          <span>{{ server()?.readyReplicas }} / {{ server()?.desiredReplicas }}</span>
+          <span>{{ server()?.readyReplicas || 0 }} / {{ server()?.desiredReplicas || 1 }}</span>
         </app-config-row>
         
-        @if (server()?.metrics) {
-          <app-config-row label="Uso de CPU">
-            <span>{{ server()?.metrics?.cpuCores }} Cores</span>
-          </app-config-row>
-          <app-config-row label="Uso de RAM">
-            <span>{{ server()?.metrics?.memoryMb }} MB</span>
-          </app-config-row>
+        @if (server()?.status === 'Sleeping' || server()?.status === 'SLEEPING') {
+          <div style="margin-top: 15px;">
+            <app-button variant="Green" (click)="wakeServer()" class="full-width-btn">
+              <app-icon name="power" style="margin-right: 8px;"></app-icon> Acordar Servidor
+            </app-button>
+          </div>
         }
+        
+        @if (server()?.metrics) {
+          <div class="metrics-container" style="margin-top: 20px;">
+            <h3 style="font-family: 'JetBrains Mono', monospace; font-size: 1rem; margin-bottom: 10px;">Monitoramento (RAM)</h3>
+            <div class="mc-progress-bar">
+              <div class="mc-progress-fill" [style.width.%]="getMemoryPercent(server())"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">
+              <span>{{ server()?.metrics?.memoryMb }} MB</span>
+              <span>Limite: {{ server()?.memoryAllocated || '2G' }}</span>
+            </div>
+          </div>
+        }
+        
+        <div class="tailscale-notice" style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-left: 3px solid #6366f1;">
+          <h3 style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; margin-bottom: 5px; color: #818cf8;">
+            🛡️ Acesso Privado (Tailscale)
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+            Caso não consiga conectar pelo domínio público, certifique-se de estar conectado à malha Tailscale do servidor para acessar via IP privado.
+          </p>
+        </div>
       </div>
 
       <!-- Actions Panel -->
-      <div class="panel glass-panel actions-panel">
-        <h2 style="font-family: 'Minecraftia', sans-serif; margin-bottom: 20px;">Ações Rápidas</h2>
+      <div class="mc-panel panel actions-panel">
+        <h2 style="font-family: 'JetBrains Mono', monospace; margin-bottom: 20px;">Ações Rápidas</h2>
         
         <div class="action-buttons">
           <app-button variant="Blue" [routerLink]="['/server', serverId, 'console']" class="full-width-btn">

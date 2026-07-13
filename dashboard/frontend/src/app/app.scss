@@ -17,12 +17,14 @@
   top: 15px;
   left: 15px;
   z-index: 100;
-  background: var(--bg-glass);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-glass);
+  background: var(--surface);
+  border-top: var(--mc-border) solid var(--border-light);
+  border-left: var(--mc-border) solid var(--border-light);
+  border-bottom: var(--mc-border) solid var(--border-dark);
+  border-right: var(--mc-border) solid var(--border-dark);
   color: var(--text-main);
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
 }
 

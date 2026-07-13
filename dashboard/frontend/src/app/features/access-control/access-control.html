@@ -1,0 +1,185 @@
+<div class="network-container">
+  <div class="header">
+    <div class="title-area">
+      <h1>Controle de Acesso</h1>
+      <p>Gerencie usuários, grupos e acessos à rede Tailscale.</p>
+    </div>
+    <div class="tabs">
+      <button class="mc-btn" [class.mc-btn-primary]="activeTab() === 'users'" (click)="setTab('users')">👥 Usuários</button>
+      <button class="mc-btn" [class.mc-btn-primary]="activeTab() === 'groups'" (click)="setTab('groups')">📁 Grupos</button>
+      <button class="mc-btn" [class.mc-btn-primary]="activeTab() === 'tailscale'" (click)="setTab('tailscale')">🌐 Tailscale</button>
+    </div>
+  </div>
+
+  @if (activeTab() === 'users') {
+    <div class="grid">
+      <!-- Create User -->
+      <div class="mc-panel invite-card">
+        <div class="card-header">
+          <h3>➕ Novo Usuário</h3>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Tailscale User ID</label>
+            <input type="text" class="mc-input" [(ngModel)]="newUserModel.tailscaleUserId" placeholder="Ex: email@dominio.com">
+          </div>
+          <div class="form-group">
+            <label>Nick do Minecraft</label>
+            <input type="text" class="mc-input" [(ngModel)]="newUserModel.minecraftNick" placeholder="Ex: Notch">
+          </div>
+          <div class="form-group">
+            <label>Email (Opcional)</label>
+            <input type="email" class="mc-input" [(ngModel)]="newUserModel.email" placeholder="email@dominio.com">
+          </div>
+          <button class="mc-btn-primary" style="width: 100%; margin-top: 15px;" (click)="createUser()">Salvar Usuário</button>
+        </div>
+      </div>
+
+      <!-- Users List -->
+      <div class="mc-panel devices-card">
+        <div class="card-header">
+          <h3>👥 Usuários Cadastrados</h3>
+        </div>
+        <div class="devices-list">
+          @for (user of users(); track user.id) {
+            <div class="device-row">
+              <div class="device-info">
+                <span class="device-name">{{ user.minecraftNick }}</span>
+                <span class="device-ip">{{ user.tailscaleUserId }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeTab() === 'groups') {
+    <div class="grid">
+      <!-- Create Group -->
+      <div class="mc-panel invite-card">
+        <div class="card-header">
+          <h3>➕ Novo Grupo</h3>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Nome do Grupo</label>
+            <input type="text" class="mc-input" [(ngModel)]="newGroupModel.name" placeholder="Ex: Amigos VIP">
+          </div>
+          <div class="form-group">
+            <label>Descrição</label>
+            <input type="text" class="mc-input" [(ngModel)]="newGroupModel.description" placeholder="Acesso a X e Y">
+          </div>
+          <button class="mc-btn-primary" style="width: 100%; margin-top: 15px;" (click)="createGroup()">Criar Grupo</button>
+        </div>
+      </div>
+
+      <!-- Groups List -->
+      <div class="mc-panel devices-card">
+        <div class="card-header">
+          <h3>📁 Grupos Existentes</h3>
+        </div>
+        <div class="devices-list">
+          @for (group of groups(); track group.id) {
+            <div class="device-row">
+              <div class="device-info">
+                <span class="device-name">{{ group.name }}</span>
+                <span class="device-ip">{{ group.description || 'Sem descrição' }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeTab() === 'tailscale') {
+    <div class="grid">
+      <!-- Gerar Convite -->
+      <div class="mc-panel invite-card">
+        <div class="card-header">
+          <h3>🎟️ Gerar Novo Convite</h3>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label>Nome do Jogador</label>
+            <input type="text" class="mc-input" [(ngModel)]="inviteModel.playerName" placeholder="Ex: Notch">
+          </div>
+
+          <div class="form-group">
+            <label>Nível de Acesso</label>
+            <select class="mc-input" [(ngModel)]="inviteModel.scope">
+              <option value="global">Global (Todos os servidores)</option>
+              <option value="individual">Apenas Servidores Selecionados</option>
+            </select>
+          </div>
+
+          @if (inviteModel.scope === 'individual') {
+            <div class="form-group">
+              <label>Selecione os servidores:</label>
+              <select multiple class="mc-input multi-select" [(ngModel)]="inviteModel.serverIds">
+                @for (server of servers(); track server.id) {
+                  <option [value]="server.id">{{ server.name }}</option>
+                }
+              </select>
+            </div>
+          }
+
+          <div class="form-group">
+            <label>Expira em (Dias)</label>
+            <input type="number" class="mc-input" [(ngModel)]="inviteModel.expiresInDays" min="1" max="365">
+          </div>
+
+          <button class="mc-btn-primary" style="width: 100%; margin-top: 15px;" [disabled]="isLoading()" (click)="createInvite()">
+            {{ isLoading() ? 'Gerando...' : 'Gerar Link de Convite' }}
+          </button>
+
+          @if (generatedInviteUrl()) {
+            <div class="success-box mc-panel" style="margin-top: 20px; border-color: var(--primary);">
+              <p style="color: var(--primary); font-family: 'JetBrains Mono', monospace; margin-bottom: 10px;">Convite gerado com sucesso!</p>
+              <div class="url-box">
+                <input type="text" class="mc-input" readonly [value]="generatedInviteUrl()">
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Jogadores Conectados -->
+      <div class="mc-panel devices-card">
+        <div class="card-header">
+          <h3>🌐 Jogadores no Tailscale</h3>
+        </div>
+        
+        @if (isLoading() && devices().length === 0) {
+          <div class="loading-state">
+             <p style="text-align: center; padding: 20px;">Buscando dispositivos...</p>
+          </div>
+        }
+
+        @if (!isLoading() && devices().length === 0) {
+          <div class="empty-state">
+            <p style="text-align: center; padding: 20px; color: var(--text-muted);">Nenhum jogador externo conectado à rede Tailscale.</p>
+          </div>
+        }
+
+        @if (devices().length > 0) {
+          <div class="devices-list">
+            @for (device of devices(); track device.id) {
+              <div class="device-row">
+                <div class="device-info">
+                  <span class="device-name">{{ device.name }}</span>
+                  <span class="device-ip">{{ device.addresses?.[0] }}</span>
+                  <span class="mc-badge" [ngClass]="device.clientConnectivity?.online ? 'online' : 'offline'">
+                    {{ device.clientConnectivity?.online ? 'Online' : 'Offline' }}
+                  </span>
+                </div>
+                <button class="mc-btn" (click)="revokeDevice(device.id, device.name)" style="color: var(--text-error); border-color: var(--text-error);">Kickar</button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
