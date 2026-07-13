@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { GatewayService } from './gateway.service';
 import { TailscaleModule } from '../tailscale/tailscale.module';
+import { GatewayService } from './gateway.service';
 
 @Module({
-  imports: [TailscaleModule],
-  providers: [GatewayService],
-  exports: [GatewayService],
+	imports: [TailscaleModule],
+	providers: [GatewayService],
+	exports: [GatewayService],
 })
 export class GatewayModule {}

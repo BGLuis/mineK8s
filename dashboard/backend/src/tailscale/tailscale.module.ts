@@ -3,8 +3,8 @@ import { TailscaleController } from './tailscale.controller';
 import { TailscaleService } from './tailscale.service';
 
 @Module({
-  controllers: [TailscaleController],
-  providers: [TailscaleService],
-  exports: [TailscaleService], // exporta para outros módulos usarem futuramente
+	controllers: [TailscaleController],
+	providers: [TailscaleService],
+	exports: [TailscaleService], // exporta para outros módulos usarem futuramente
 })
 export class TailscaleModule {}

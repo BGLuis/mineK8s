@@ -9,14 +9,14 @@
  * Ou adicione ao package.json: "start:join": "ts-node src/join-server.ts"
  */
 
-import * as http from 'http';
+import * as http from 'node:http';
 
 const PORT = parseInt(process.env.JOIN_PORT ?? '3001', 10);
 const FUNNEL_HOST = process.env.TAILSCALE_FUNNEL_HOST ?? 'localhost:3001';
 
 // ─── Página HTML da tela de convite ──────────────────────────────────────────
-function buildJoinPage(host: string): string {
-  return `<!DOCTYPE html>
+function buildJoinPage(_host: string): string {
+	return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -297,37 +297,43 @@ function buildJoinPage(host: string): string {
 
 // ─── Servidor HTTP ────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
+	const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
-  // Health check (usado pelo Tailscale Funnel para verificar o serviço)
-  if (url.pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-    return;
-  }
+	// Health check (usado pelo Tailscale Funnel para verificar o serviço)
+	if (url.pathname === '/health') {
+		res.writeHead(200, { 'Content-Type': 'text/plain' });
+		res.end('OK');
+		return;
+	}
 
-  // Página de convite
-  if (url.pathname === '/join') {
-    const html = buildJoinPage(FUNNEL_HOST);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(html);
-    return;
-  }
+	// Página de convite
+	if (url.pathname === '/join') {
+		const html = buildJoinPage(FUNNEL_HOST);
+		res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+		res.end(html);
+		return;
+	}
 
-  // Redireciona raiz para /join (conveniência)
-  if (url.pathname === '/') {
-    res.writeHead(302, { Location: '/join' });
-    res.end();
-    return;
-  }
+	// Redireciona raiz para /join (conveniência)
+	if (url.pathname === '/') {
+		res.writeHead(302, { Location: '/join' });
+		res.end();
+		return;
+	}
 
-  // Qualquer outra rota: 404
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('Not found');
+	// Qualquer outra rota: 404
+	res.writeHead(404, { 'Content-Type': 'text/plain' });
+	res.end('Not found');
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[join-server] 🎟️  Servidor público de convites rodando na porta ${PORT}`);
-  console.log(`[join-server] 🌐  URL pública esperada: https://${FUNNEL_HOST}/join`);
-  console.log(`[join-server] 🔒  O NestJS principal permanece privado na porta 3000`);
+	console.log(
+		`[join-server] 🎟️  Servidor público de convites rodando na porta ${PORT}`,
+	);
+	console.log(
+		`[join-server] 🌐  URL pública esperada: https://${FUNNEL_HOST}/join`,
+	);
+	console.log(
+		`[join-server] 🔒  O NestJS principal permanece privado na porta 3000`,
+	);
 });

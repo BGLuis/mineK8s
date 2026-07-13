@@ -1,21 +1,19 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaClient } from '@prisma/client';
 import Database from 'better-sqlite3';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
-
-const dbPath = process.env.DATABASE_URL?.replace('file:', '') || './dev.db';
-const adapter = new PrismaBetterSqlite3({ url: dbPath });
+import { AppConfigService } from '../app-config/app-config.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
-    super({ adapter });
-  }
+	constructor(readonly appConfig: AppConfigService) {
+		const dbPath = appConfig.databaseUrl.replace('file:', '') || './dev.db';
+		const db = new Database(dbPath);
+		const adapter = new PrismaBetterSqlite3(db);
+		super({ adapter });
+	}
 
-  async onModuleInit() {
-    // connect() implícito na primeira query
-  }
+	async onModuleInit() {
+		// connect() implícito na primeira query
+	}
 }
