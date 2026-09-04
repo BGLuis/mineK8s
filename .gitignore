@@ -42,9 +42,6 @@ logs/
 .DS_Store
 Thumbs.db
 
-
-docs
-
 # ─── Bancos de Dados (SQLite) ─────────────────────────────────────────────────
 *.db
 *.db-journal
