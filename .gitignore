@@ -1,0 +1,43 @@
+# ─── Environment & Secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# ─── Legacy local artifacts ──────────────────────────────────────────────────
+create-minecraft-server/
+
+# ─── Node / Dependencies ─────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.npm/
+*.log
+
+# ─── Go / Rust / Java / Native builds ─────────────────────────────────────────
+bin/
+target/
+*.class
+*.jar
+__pycache__/
+*.pyc
+
+# ─── Databases ───────────────────────────────────────────────────────────────
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ─── IDEs & OS ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Kubernetes / Terraform local state ──────────────────────────────────────
+*.tfstate
+*.tfstate.*
+.terraform/
