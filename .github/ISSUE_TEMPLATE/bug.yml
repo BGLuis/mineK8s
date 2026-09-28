@@ -1,0 +1,29 @@
+name: Bug
+description: Comportamento incorreto em código já implementado
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options: [gateway, control-plane, rcon-logs, identity, lifecycle, storage, modpacks, infra, cloudflare, multi-game]
+    validations:
+      required: true
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Reprodução
+      description: Passos que outra pessoa consegue seguir.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Esperado × obtido
+    validations:
+      required: true
+  - type: textarea
+    id: ambiente
+    attributes:
+      label: Ambiente
+      description: Commit, versão do Minecraft/cliente, nó do cluster.

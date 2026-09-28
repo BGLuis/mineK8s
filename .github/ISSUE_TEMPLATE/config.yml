@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Inventário de requisitos
+    url: https://github.com/BGLuis/mineK8s/blob/main/docs/reports/INVENTARIO-REQUISITOS-HYPERVISOR.md
+    about: Consulte os IDs (RF-*, PR-*, C/E/D/L-*) antes de abrir uma issue nova.

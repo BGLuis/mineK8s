@@ -1,0 +1,36 @@
+name: Correção de SRS
+description: Contradição, premissa errada, algoritmo quebrado ou lacuna em uma SRS
+title: "[C-NN] <descrição curta>"
+labels: ["type:spec-fix"]
+body:
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo
+      options:
+        - C — contradição entre SRS
+        - E — premissa desmentida pela doc oficial
+        - D — algoritmo quebrado
+        - L — lacuna
+    validations:
+      required: true
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema
+      description: Cite as linhas das SRS (ex. `ARQ:353` × `STO:552`) e a fonte externa, se houver.
+    validations:
+      required: true
+  - type: textarea
+    id: mitigacao
+    attributes:
+      label: Mitigação proposta
+    validations:
+      required: true
+  - type: checkboxes
+    id: aceite
+    attributes:
+      label: Critério de aceite
+      options:
+        - label: SRS afetadas corrigidas e sem contradição entre si
+        - label: Decisão registrada na própria SRS (não só nesta issue)

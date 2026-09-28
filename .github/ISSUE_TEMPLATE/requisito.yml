@@ -1,0 +1,41 @@
+name: Requisito / feature
+description: Implementação de um ou mais requisitos do inventário
+title: "<descrição curta>"
+labels: ["type:feature"]
+body:
+  - type: dropdown
+    id: fase
+    attributes:
+      label: Fase
+      description: Defina o milestone correspondente depois de abrir a issue.
+      options: [F0, F1, F2, F3, F4, F5, F6, F7, F8, F9]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options: [gateway, control-plane, rcon-logs, identity, lifecycle, storage, modpacks, infra, cloudflare, multi-game]
+    validations:
+      required: true
+  - type: textarea
+    id: requisitos
+    attributes:
+      label: Requisitos
+      description: IDs do inventário com a origem na SRS (ex. `RF-GW-05` — `GW:199-205`).
+      value: |
+        - [ ] **RF-XXX-NN** — …
+    validations:
+      required: true
+  - type: textarea
+    id: aceite
+    attributes:
+      label: Critério de aceite
+      description: Algo falsificável — um comando, um teste, uma observação.
+    validations:
+      required: true
+  - type: input
+    id: epico
+    attributes:
+      label: Épico
+      description: Número do épico da fase (ex. `#49`) para vincular como sub-issue.
