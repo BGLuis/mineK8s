@@ -60,9 +60,9 @@ O sistema atua como um **Plano de Controle (Control Plane) e Hypervisor de Aplic
 
 O sistema sintetiza quatro responsabilidades operacionais em uma arquitetura unificada:
 1. **Orquestrador de Containers e Ciclo de Vida:** Responsável pelo provisionamento declarativo, escalonamento vertical e horizontal para zero (`scale-to-zero` / hibernação), destruição e monitoramento de processos de instâncias isoladas em contêineres OCI.
-2. **Gateway Reverso Dinâmico L7 (SNI Virtual Hosting para TCP):** Ponto único de terminação de conexões de jogo (porta padrão `25565`). Inspeciona o handshake binário da conexão TCP, resolve o subdomínio requisitado e despacha os sockets para a respectiva instância interna, eliminando a necessidade de expor múltiplas portas de rede (`NodePort`/`hostPort`) para o usuário final.
-3. **Controlador de Acesso Zero-Trust com Mapeamento de Identidade:** Integração com malha de rede privada segura (Tailscale), onde a identidade do jogador é validada antes de o tráfego alcançar a instância de jogo, garantindo controle de acesso granular por listas e grupos.
-4. **Gerenciador de Armazenamento e Backups Atômicos:** Manipulação e salvaguarda do sistema de arquivos das instâncias (`/data`), garantindo integridade de I/O em disco local e backups compactados sem corrupção de blocos de mundos.
+2. **Gateway Reverso Dinâmico L7 (SNI Virtual Hosting para TCP):** Ponto único de terminação de conexões de jogo (porta padrão `25565`). Inspeciona o handshake binário da conexão TCP, resolve o subdomínio requisitado e despacha os sockets para a respectiva instância interna, eliminando a necessidade de expor múltiplas portas de rede (`NodePort`/`hostPort`) para o usuário final. *(Especificação técnica e contratos detalhados em [SRS-GATEWAY-L7.md](SRS-GATEWAY-L7.md))*.
+3. **Controlador de Acesso Zero-Trust com Mapeamento de Identidade:** Integração com malha de rede privada segura (Tailscale), onde a identidade do jogador é validada antes de o tráfego alcançar a instância de jogo, garantindo controle de acesso granular por listas e grupos. *(Especificação técnica e arquitetura formal detalhada em [SRS-SUBSISTEMA-TAILSCALE.md](SRS-SUBSISTEMA-TAILSCALE.md))*.
+4. **Gerenciador de Armazenamento e Backups Atômicos:** Manipulação e salvaguarda do sistema de arquivos das instâncias (`/data`), garantindo integridade de I/O em disco local e backups compactados sem corrupção de blocos de mundos. *(Especificação técnica, pipeline de snapshot e motor de modpacks detalhados em [SRS-STORAGE-MODPACKS-BACKUPS.md](SRS-STORAGE-MODPACKS-BACKUPS.md))*.
 
 ### 1.2 Atores do Sistema e Superfícies de Interação
 * **Administrador do Sistema (Operator / Power User):**
@@ -171,8 +171,10 @@ O encerramento do processo do Minecraft exige garantia de integridade transacion
 ### 3.1 Captura de Fluxos de Entrada/Saída (`stdin`, `stdout`, `stderr`) e Console
 
 > **Diagnóstico de Engenharia Reversa:**
-> *O código faz X de forma frágil para resolver o problema Y; o requisito funcional real é Y:*
 > O código legado invoca `child_process.exec("kubectl exec ${podName} -- rcon-cli \"${command}\"")` diretamente na shell para cada comando de console, além de fazer polling HTTP a cada 3 segundos lendo logs brutos via Kubernetes API e executando filtros de string no navegador para ocultar o spam gerado pelo próprio polling; o requisito funcional real é um **Canal de Comando RCON Persistente em Memória** e um **Pipeline Reativo de Logs baseado em Streams/WebSockets** com desacoplamento total de shell.
+> 
+> *Para a especificação formal de engenharia deste subsistema, consulte o documento dedicado:* **[SRS-DRIVER-RCON-PIPELINE-LOGS.md](SRS-DRIVER-RCON-PIPELINE-LOGS.md)**.
+
 
 ```mermaid
 sequenceDiagram
@@ -260,6 +262,8 @@ flowchart LR
 5. **Serviços sem Suporte a Handshake de Nome de Domínio (Exceção Arquitetural):**
    - Servidores de jogos que não enviam hostname no handshake TCP (como Terraria) não são elegíveis ao roteamento por porta compartilhada L7. O orquestrador deve suportar um modelo alternativo de alocação de portas dinâmicas dedicadas a partir de um pool configurável (ex.: `7777`, `7778`, etc.).
 
+> **Especificação Exaustiva do Subsistema:** Para a máquina de estados assíncrona em Rust/Tokio, decodificação streaming de VarInts, Rich MOTD dinâmico, Auto-Wake com retenção de socket (Hold Connection), detecção de PROXY Protocol v2 e contratos gRPC/IPC, consulte o documento autoritativo: **[SRS-GATEWAY-L7.md](SRS-GATEWAY-L7.md)**.
+
 ---
 
 ### 3.3 Isolamento, Limites e Alocação de Recursos de Hardware
@@ -320,6 +324,9 @@ Cada instância possui um diretório de dados raiz unificado (`/data`) persistid
 ---
 
 ### 4.2 Estratégia de Armazenamento e Templating de Instâncias
+
+> **Especificação Exaustiva do Subsistema:** Para os algoritmos detalhados de backup quente com janela ultracurta via hardlinks, restauração transacional com staging e rollback, cache CAS com deduplicação por hash, resolução declarativa de modpacks CurseForge e Modrinth, modelos de dados TypeORM e manifestos Kubernetes Jobs, consulte o documento autoritativo: **[SRS-STORAGE-MODPACKS-BACKUPS.md](SRS-STORAGE-MODPACKS-BACKUPS.md)**.
+
 
 1. **Seleção de Storage de Alto Desempenho:**
    - Os volumes de dados dos mundos devem ser montados obrigatoriamente sobre **Armazenamento em Bloco Local com I/O Direto** (como K8s `local-path` ou volume bind de SSD NVMe dedicado do host).
@@ -425,6 +432,8 @@ sequenceDiagram
 ---
 
 #### Módulo: Identidade e Rede Privada (`/api/tailscale`)
+
+> **Especificação Exaustiva do Subsistema:** Para os modelos matemáticos de controle de acesso granular (Público, Grupo, Individual e Manutenção), fluxos de convites com cotas, túneis Tailcat em userspace (sem conta e sem root para usuários leigos), drivers de IPC e pirâmide formal de testes, consulte o documento autoritativo: **[SRS-SUBSISTEMA-TAILSCALE.md](SRS-SUBSISTEMA-TAILSCALE.md)**.
 
 | Método | Caminho | Contrato de Entrada (DTO) | Resposta Esperada | Regras de Negócio & Validações |
 | :--- | :--- | :--- | :--- | :--- |
@@ -554,11 +563,15 @@ sequenceDiagram
    - **Regra de Auto-Adoção:** Se o usuário é novo e não possui `minecraftNick` registrado no banco, o sistema grava o nome declarado no primeiro login, bloqueando esse nickname permanentemente para aquela identidade de rede.
    - **Regra de Rejeição:** Se um usuário tentar autenticar com um nickname pertencente a outro cadastro, o Gateway emite o pacote de encerramento de sessão formatado (`createDisconnectPacket`) e fecha o socket imediatamente.
 
-#### B. Restauração de Skins Oficiais via SkinsRestorer
+#### B. Restauração de Skins em Servidores Offline
 Como o modo offline impede o handshake com os servidores de sessão da Mojang, o cliente do jogo não recebe as texturas de skin originais assinadas, exibindo a skin padrão (Steve/Alex).
-- **Regra de Injeção de Plugins:** O provisionador deve priorizar motores com suporte a plugins (Paper/Purpur) e injetar automaticamente o plugin **`SkinsRestorer`**.
-- O plugin consulta a API pública da Mojang diretamente pelo nickname do jogador de forma assíncrona, capturando o blob base4 da textura assinada e injetando-a na sessão do jogador sem depender do handshake de autenticação da Mojang.
-- Para motores puros Vanilla ou modpacks estritos sem suporte a plugins Bukkit, a interface do usuário deve alertar que skins personalizadas não serão renderizadas em modo offline.
+- **Motores com Plugins (Paper/Purpur):** O provisionador injeta automaticamente o plugin **`SkinsRestorer`**, que consulta a API pública da Mojang diretamente pelo nickname e injeta o blob base64 da textura assinada na sessão do jogador.
+- **Modpacks Puros (Fabric/Forge/NeoForge):** Para modpacks que não suportam plugins Bukkit, o provisionador deve incluir nos templates mods de servidor como **`CustomSkinLoader`** ou **`Fabric Tailor`** para carregamento automático de skins sem intervenção manual.
+
+#### C. Compatibilidade com Chat Seguro (`enforce-secure-chat: false`)
+A partir do Minecraft 1.19, a Mojang introduziu validação criptográfica de mensagens de chat assinadas pelo cliente. Clientes alternativos/piratas não possuem chaves públicas atestadas pela Microsoft.
+- **Configuração Obrigatória de Bootstrap:** O provisionador do Hypervisor deve configurar obrigatoriamente `enforce-secure-chat=false` no arquivo `server.properties` e `paper-global.yml` de todas as instâncias criadas, prevenindo que jogadores offline sejam expulsos pela JVM com erros de *"Missing profile public key"*.
+- **Experiência Zero-Atrito:** Como a segurança de identidade é garantida na camada de rede pelo Gateway L7 e Tailscale, o ambiente é 100% livre de plugins intrusivos de autenticação por chat (`/login` e `/register`), permitindo que convidados piratas entrem diretamente no mundo.
 
 ---
 
