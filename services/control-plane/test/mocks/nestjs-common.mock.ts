@@ -14,6 +14,7 @@ export const UseGuards = () => (_target: any, _key?: string, desc?: any) => desc
 export const UseInterceptors = (..._interceptors: any[]) => (_target: any, _key?: string, desc?: any) => desc || _target;
 export const UploadedFile = () => (_target: any, _key: string, _idx: number) => {};
 export const Inject = (_token?: any) => (_target: any, _key: string | symbol | undefined, _idx?: number) => {};
+export const Optional = () => (_target: any, _key?: string | symbol, _idx?: number) => {};
 export const HttpCode = (_statusCode: number) => (_target: any, _key?: string, desc?: any) => desc || _target;
 export const Req = () => (_target: any, _key: string, _idx: number) => {};
 export const Res = () => (_target: any, _key: string, _idx: number) => {};

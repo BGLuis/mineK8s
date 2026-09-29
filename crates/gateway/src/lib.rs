@@ -1,6 +1,7 @@
 pub mod config;
 pub mod connection;
 pub mod error;
+pub mod identity;
 pub mod ipc;
 pub mod limiter;
 pub mod motd;
@@ -12,6 +13,7 @@ pub mod telemetry;
 pub use config::GatewayConfig;
 pub use connection::{ClientConnection, HandshakeResult};
 pub use error::{GatewayError, Result};
+pub use identity::{TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};
 pub use ipc::{GatewayIpcClient, RouteAction, RouteUpdateEvent};
 pub use limiter::ConnectionRateLimiter;
 pub use motd::{build_synthetic_status, handle_status_ping, StatusCache};
