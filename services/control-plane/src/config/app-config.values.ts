@@ -65,3 +65,11 @@ export class StorageConfig {
     public readonly backupsPath: string,
   ) {}
 }
+
+export class CloudflareConfig {
+  constructor(
+    public readonly apiToken?: string,
+    public readonly zoneId?: string,
+    public readonly rootDomain: string = 'minek8s.net',
+  ) {}
+}
