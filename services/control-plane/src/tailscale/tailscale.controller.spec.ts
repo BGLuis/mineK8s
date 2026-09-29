@@ -5,6 +5,7 @@ describe('TailscaleController', () => {
   let controller: TailscaleController;
   let mockPostureService: any;
   let mockInvitesService: any;
+  let mockDevicesService: any;
 
   beforeEach(() => {
     mockPostureService = {
@@ -78,7 +79,18 @@ describe('TailscaleController', () => {
       })),
     };
 
-    controller = new TailscaleController(mockPostureService, mockInvitesService);
+    mockDevicesService = {
+      listDevices: jest.fn(async () => [{ id: 'dev-1', status: 'ACTIVE' }]),
+      getDeviceById: jest.fn(async (id: string) => ({ id, status: 'ACTIVE' })),
+      revokeDevice: jest.fn(async (id: string) => ({ message: 'Dispositivo revogado', deviceId: id })),
+      cleanInactiveDevices: jest.fn(async (days: number) => ({ removedCount: 2, removedDeviceIds: ['dev-old-1', 'dev-old-2'] })),
+    };
+
+    controller = new TailscaleController(
+      mockPostureService,
+      mockInvitesService,
+      mockDevicesService,
+    );
   });
 
   describe('GET /api/tailscale/posture-audit', () => {
@@ -147,6 +159,32 @@ describe('TailscaleController', () => {
       const res = await controller.claimInvite(dto);
       expect(res.minecraftNick).toBe('LucasCraft');
       expect(mockInvitesService.claimInvite).toHaveBeenCalledWith(dto);
+    });
+  });
+
+  describe('Gestão de Dispositivos e Nível 2 de Revogação (/api/tailscale/devices)', () => {
+    it('deve listar dispositivos registrados', async () => {
+      const res = await controller.listDevices();
+      expect(res).toHaveLength(1);
+      expect(mockDevicesService.listDevices).toHaveBeenCalled();
+    });
+
+    it('deve obter dispositivo por ID', async () => {
+      const res = await controller.getDeviceById('dev-1');
+      expect(res.id).toBe('dev-1');
+      expect(mockDevicesService.getDeviceById).toHaveBeenCalledWith('dev-1');
+    });
+
+    it('deve executar revogação Nível 2 (Ban de Rede Total)', async () => {
+      const res = await controller.revokeDevice('dev-1');
+      expect(res.deviceId).toBe('dev-1');
+      expect(mockDevicesService.revokeDevice).toHaveBeenCalledWith('dev-1');
+    });
+
+    it('deve acionar DeviceGarbageCollector com threshold customizado', async () => {
+      const res = await controller.runDeviceGarbageCollector('15');
+      expect(res.removedCount).toBe(2);
+      expect(mockDevicesService.cleanInactiveDevices).toHaveBeenCalledWith(15);
     });
   });
 });

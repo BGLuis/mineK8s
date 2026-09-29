@@ -23,6 +23,7 @@ import { Public } from '../auth/public.decorator';
 import { PostureAuditReport } from './posture/posture-audit.dto';
 import { RawTailscalePolicy, TailscalePostureService } from './posture/tailscale-posture.service';
 import { InvitesService } from './invites/invites.service';
+import { DevicesService } from './devices/devices.service';
 import {
   CreateInviteDto,
   ClaimInviteDto,
@@ -36,6 +37,7 @@ export class TailscaleController {
   constructor(
     private readonly postureService: TailscalePostureService,
     private readonly invitesService: InvitesService,
+    private readonly devicesService: DevicesService,
   ) {}
 
   @Get('posture-audit')
@@ -132,5 +134,51 @@ export class TailscaleController {
   @ApiResponse({ status: 200, type: ClaimResultDto })
   async claimInvite(@Body() dto: ClaimInviteDto): Promise<ClaimResultDto> {
     return this.invitesService.claimInvite(dto);
+  }
+
+  // --- Gestão de Dispositivos e Nível 2 de Revogação (RF-TS-07, RF-TS-09, RF-TS-15) ---
+
+  @Get('devices')
+  @ApiBearerAuth()
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Listar todos os nós e dispositivos registrados na Tailnet (RF-TS-07)' })
+  @ApiResponse({ status: 200, description: 'Lista de dispositivos' })
+  async listDevices() {
+    return this.devicesService.listDevices();
+  }
+
+  @Get('devices/:id')
+  @ApiBearerAuth()
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Obter detalhes de um dispositivo por ID' })
+  @ApiResponse({ status: 200, description: 'Detalhes do dispositivo' })
+  async getDeviceById(@Param('id') id: string) {
+    return this.devicesService.getDeviceById(id);
+  }
+
+  @Delete('devices/:id')
+  @ApiBearerAuth()
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Nível 2 de Revogação: Ban de Rede Total, fechamento forçado de sessões e exclusão do nó na Tailnet (RF-TS-09)',
+  })
+  @ApiResponse({ status: 200, description: 'Dispositivo banido da rede privada e removido da Tailnet' })
+  async revokeDevice(@Param('id') id: string) {
+    return this.devicesService.revokeDevice(id);
+  }
+
+  @Post('devices/gc')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'DeviceGarbageCollector: Limpar nós órfãos e inativos há mais de 30 dias (RF-TS-15, E-03)',
+  })
+  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Threshold em dias (padrão: 30)' })
+  @ApiResponse({ status: 200, description: 'Relatório de nós removidos da Tailnet' })
+  async runDeviceGarbageCollector(@Query('days') days?: string) {
+    const thresholdDays = days ? parseInt(days, 10) : 30;
+    return this.devicesService.cleanInactiveDevices(thresholdDays);
   }
 }
