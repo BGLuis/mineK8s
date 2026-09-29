@@ -438,4 +438,253 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       await expect(service.restoreBackup(sampleServer, 'non-existent-backup.tar.gz')).rejects.toThrow(HttpException);
     });
   });
+
+  describe('Política de Retenção e Expurgos (RF-STO-15, RF-STO-16, RF-STO-17)', () => {
+    let mockBackupRepo: any;
+    let mockServerRepo: any;
+    let inMemoryBackups: any[];
+
+    beforeEach(() => {
+      inMemoryBackups = [];
+
+      mockBackupRepo = {
+        create: jest.fn().mockImplementation((dto) => ({
+          id: `backup-uuid-${inMemoryBackups.length + 1}`,
+          createdAt: new Date(),
+          ...dto,
+        })),
+        save: jest.fn().mockImplementation(async (entity) => {
+          const existingIdx = inMemoryBackups.findIndex((b) => b.id === entity.id);
+          if (existingIdx >= 0) {
+            inMemoryBackups[existingIdx] = entity;
+          } else {
+            inMemoryBackups.push(entity);
+          }
+          return entity;
+        }),
+        find: jest.fn().mockImplementation(async (options) => {
+          let list = [...inMemoryBackups];
+          if (options?.where?.serverId) {
+            list = list.filter((b) => b.serverId === options.where.serverId);
+          }
+          if (options?.order?.createdAt === 'DESC') {
+            list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          }
+          return list;
+        }),
+        findOne: jest.fn().mockImplementation(async (options) => {
+          return inMemoryBackups.find(
+            (b) => b.id === options?.where?.id && (!options?.where?.serverId || b.serverId === options.where.serverId),
+          );
+        }),
+        delete: jest.fn().mockImplementation(async (id) => {
+          inMemoryBackups = inMemoryBackups.filter((b) => b.id !== id);
+          return { affected: 1 };
+        }),
+      };
+
+      mockServerRepo = {
+        findOne: jest.fn().mockImplementation(async ({ where }) => {
+          if (where?.id === sampleServer.id) return sampleServer;
+          if (where?.id === readyServer.id) return readyServer;
+          return null;
+        }),
+      };
+
+      service = new ServersBackupService(
+        mockConfigService,
+        mockK8sService,
+        mockConsoleDriver,
+        undefined,
+        mockBackupRepo,
+        mockServerRepo,
+      );
+    });
+
+    it('critério de aceite: 6º backup rotineiro remove o mais antigo; pre-update nunca é removido pela contagem (RF-STO-15)', async () => {
+      const serverId = sampleServer.id;
+
+      // Cria backup pre-update protegido (14 dias)
+      const preUpdatePath = path.join(tempBackupsRoot, 'pre-update.tar.gz');
+      await fs.promises.writeFile(preUpdatePath, 'dummy-preupdate');
+      const preUpdate = await service.persistBackupRecord({
+        serverId,
+        filename: 'pre-update.tar.gz',
+        storagePath: preUpdatePath,
+        sizeBytes: 100,
+        sha256Checksum: 'dummy-sha',
+        backupType: 'PRE_UPDATE' as any,
+        status: 'COMPLETED' as any,
+        isProtected: true,
+        minecraftVersion: '1.20.4',
+        retentionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      });
+
+      // Cria 5 backups rotineiros
+      const routineBackups: any[] = [];
+      for (let i = 1; i <= 5; i++) {
+        const filePath = path.join(tempBackupsRoot, `routine-${i}.tar.gz`);
+        await fs.promises.writeFile(filePath, `routine-${i}`);
+        const b = await service.persistBackupRecord({
+          serverId,
+          filename: `routine-${i}.tar.gz`,
+          storagePath: filePath,
+          sizeBytes: 100,
+          sha256Checksum: `dummy-sha-${i}`,
+          backupType: 'HOT_SCHEDULED' as any,
+          status: 'COMPLETED' as any,
+          isProtected: false,
+          minecraftVersion: '1.20.4',
+        });
+        // Ajusta data para simular cronologia
+        b!.createdAt = new Date(Date.now() - (6 - i) * 60000);
+        routineBackups.push(b);
+      }
+
+      expect(inMemoryBackups.length).toBe(6); // 1 pre-update + 5 rotineiros
+
+      // Simula a criação do 6º backup rotineiro
+      const routine6Path = path.join(tempBackupsRoot, 'routine-6.tar.gz');
+      await fs.promises.writeFile(routine6Path, 'routine-6');
+      const routine6 = await service.persistBackupRecord({
+        serverId,
+        filename: 'routine-6.tar.gz',
+        storagePath: routine6Path,
+        sizeBytes: 100,
+        sha256Checksum: 'dummy-sha-6',
+        backupType: 'COLD_MANUAL' as any,
+        status: 'COMPLETED' as any,
+        isProtected: false,
+        minecraftVersion: '1.20.4',
+      });
+      routine6!.createdAt = new Date();
+
+      expect(inMemoryBackups.length).toBe(7);
+
+      // Aplica política de retenção FIFO com N=5
+      const { removedBackups } = await service.applyRetentionPolicy(serverId, 5);
+
+      // Deve ter removido exatamente 1 backup rotineiro (o mais antigo routine-1)
+      expect(removedBackups).toHaveLength(1);
+      expect(removedBackups[0]).toBe(routineBackups[0].id);
+
+      // Arquivo físico de routine-1 deve ter sido deletado
+      expect(fs.existsSync(routineBackups[0].storagePath)).toBe(false);
+
+      // O backup pre-update NUNCA pode ter sido removido
+      const remainingPreUpdate = inMemoryBackups.find((b) => b.id === preUpdate!.id);
+      expect(remainingPreUpdate).toBeDefined();
+      expect(fs.existsSync(preUpdatePath)).toBe(true);
+
+      // Devem restar 5 backups rotineiros + 1 pre-update = 6 backups no total
+      expect(inMemoryBackups.length).toBe(6);
+    });
+
+    it('deve proteger backups PRE_RESTORE por no mínimo 48 horas contra exclusão e rotação', async () => {
+      const serverId = sampleServer.id;
+      const preRestorePath = path.join(tempBackupsRoot, 'pre-restore.tar.gz');
+      await fs.promises.writeFile(preRestorePath, 'dummy-prerestore');
+
+      const preRestore = await service.persistBackupRecord({
+        serverId,
+        filename: 'pre-restore.tar.gz',
+        storagePath: preRestorePath,
+        sizeBytes: 200,
+        sha256Checksum: 'dummy-sha',
+        backupType: 'PRE_RESTORE' as any,
+        status: 'COMPLETED' as any,
+        isProtected: false,
+        minecraftVersion: '1.20.4',
+        retentionExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48h
+      });
+
+      // Tentar deletar sem force deve lançar HTTP 400
+      await expect(service.deleteBackup(serverId, preRestore!.id, false)).rejects.toThrow(
+        /sob retenção obrigatória de 48h/,
+      );
+
+      // Com force=true deve remover com sucesso
+      const res = await service.deleteBackup(serverId, preRestore!.id, true);
+      expect(res.message).toContain('removido com sucesso');
+      expect(fs.existsSync(preRestorePath)).toBe(false);
+      expect(inMemoryBackups).toHaveLength(0);
+    });
+
+    it('deve rejeitar exclusão de backup com isProtected=true sem force=true', async () => {
+      const serverId = sampleServer.id;
+      const protPath = path.join(tempBackupsRoot, 'protected.tar.gz');
+      await fs.promises.writeFile(protPath, 'dummy-protected');
+
+      const prot = await service.persistBackupRecord({
+        serverId,
+        filename: 'protected.tar.gz',
+        storagePath: protPath,
+        sizeBytes: 150,
+        sha256Checksum: 'dummy-sha',
+        backupType: 'PRE_UPDATE' as any,
+        status: 'COMPLETED' as any,
+        isProtected: true,
+        minecraftVersion: '1.20.4',
+      });
+
+      // Sem force -> HTTP 403 Forbidden
+      await expect(service.deleteBackup(serverId, prot!.id, false)).rejects.toThrow(
+        /isProtected: true/,
+      );
+
+      // Com force -> sucesso
+      const res = await service.deleteBackup(serverId, prot!.id, true);
+      expect(res.message).toContain('removido com sucesso');
+      expect(fs.existsSync(protPath)).toBe(false);
+    });
+
+    it('listBackups deve listar backups do servidor ordenados decrescentemente', async () => {
+      const serverId = sampleServer.id;
+      const b1 = await service.persistBackupRecord({
+        serverId,
+        filename: 'b1.tar.gz',
+        storagePath: '/tmp/b1',
+        sizeBytes: 10,
+        sha256Checksum: '1',
+        backupType: 'COLD_MANUAL' as any,
+        status: 'COMPLETED' as any,
+        minecraftVersion: '1.20.4',
+      });
+      b1!.createdAt = new Date(Date.now() - 10000);
+
+      const b2 = await service.persistBackupRecord({
+        serverId,
+        filename: 'b2.tar.gz',
+        storagePath: '/tmp/b2',
+        sizeBytes: 20,
+        sha256Checksum: '2',
+        backupType: 'HOT_SCHEDULED' as any,
+        status: 'COMPLETED' as any,
+        minecraftVersion: '1.20.4',
+      });
+      b2!.createdAt = new Date();
+
+      const list = await service.listBackups(serverId);
+      expect(list).toHaveLength(2);
+      expect(list[0].id).toBe(b2!.id);
+      expect(list[1].id).toBe(b1!.id);
+    });
+
+    it('restoreBackupById deve exigir que a instância esteja STOPPED', async () => {
+      readyServer.state = 'READY';
+      const b = await service.persistBackupRecord({
+        serverId: readyServer.id,
+        filename: 'ready-backup.tar.gz',
+        storagePath: '/tmp/ready-backup.tar.gz',
+        sizeBytes: 50,
+        sha256Checksum: '3',
+        backupType: 'COLD_MANUAL' as any,
+        status: 'COMPLETED' as any,
+        minecraftVersion: '1.20.4',
+      });
+
+      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(ConflictException);
+      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(/estado STOPPED/);
+    });
+  });
 });

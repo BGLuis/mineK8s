@@ -10,3 +10,5 @@ export * from './invite.entity';
 export * from './invite-group.entity';
 export * from './invite-server.entity';
 export * from './server-audit-log.entity';
+export * from './server-backup.entity';
+export * from './modpack-task.entity';

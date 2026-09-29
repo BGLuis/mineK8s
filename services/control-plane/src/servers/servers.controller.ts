@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import {
   Body,
   Controller,
@@ -5,15 +6,18 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Patch,
   Post,
   Put,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -22,11 +26,13 @@ import { UserRole } from '@database/entities/user.entity';
 
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
+import { ServersBackupService } from './servers-backup.service';
 import { CreateServerDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
+import { CreateBackupDto } from './dto/create-backup.dto';
 
 @ApiTags('Servers & Kubernetes Orchestration')
 @ApiBearerAuth()
@@ -36,6 +42,7 @@ export class ServersController {
   constructor(
     private readonly serversService: ServersService,
     private readonly filesService: ServersFilesService,
+    private readonly backupService: ServersBackupService,
   ) {}
 
   @Post('create')
@@ -187,6 +194,75 @@ export class ServersController {
     @UploadedFile() file?: any,
   ) {
     return this.filesService.uploadWorld(id, file);
+  }
+
+  @Post(':id/backups')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Criar backup do servidor (HOT ou COLD) (RF-STO-17)' })
+  @ApiResponse({ status: 202, description: 'Backup iniciado ou concluído com sucesso' })
+  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  @ApiResponse({ status: 409, description: 'Conflito de estado ou tarefa em andamento' })
+  async createBackup(
+    @Param('id') id: string,
+    @Body() dto?: CreateBackupDto,
+  ) {
+    return this.backupService.createBackupForServer(id, dto?.type || 'HOT');
+  }
+
+  @Get(':id/backups')
+  @ApiOperation({ summary: 'Listar backups ordenados por data decrescente (RF-STO-17)' })
+  @ApiResponse({ status: 200, description: 'Lista de backups da instância' })
+  async listBackups(@Param('id') id: string) {
+    return this.backupService.listBackups(id);
+  }
+
+  @Delete(':id/backups/:backupId')
+  @ApiOperation({ summary: 'Remover backup físico e registro do banco (RF-STO-15, RF-STO-17)' })
+  @ApiResponse({ status: 200, description: 'Backup removido com sucesso' })
+  @ApiResponse({ status: 403, description: 'Tentativa de remover backup protegido sem force=true' })
+  @ApiResponse({ status: 400, description: 'Tentativa de remover backup pre-restore dentro de 48h' })
+  @ApiResponse({ status: 404, description: 'Backup não encontrado' })
+  async deleteBackup(
+    @Param('id') id: string,
+    @Param('backupId') backupId: string,
+    @Query('force') force?: string,
+  ) {
+    return this.backupService.deleteBackup(id, backupId, force === 'true');
+  }
+
+  @Post(':id/backups/:backupId/restore')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Restaurar backup transacionalmente com staging e rollback (RF-STO-17)' })
+  @ApiResponse({ status: 202, description: 'Restauração transacional executada' })
+  @ApiResponse({ status: 404, description: 'Servidor ou backup não encontrado' })
+  @ApiResponse({ status: 409, description: 'Instância não está STOPPED' })
+  async restoreBackup(
+    @Param('id') id: string,
+    @Param('backupId') backupId: string,
+  ) {
+    return this.backupService.restoreBackupById(id, backupId);
+  }
+
+  @Get(':id/backups/:backupId/download')
+  @ApiOperation({ summary: 'Baixar arquivo de backup via streaming HTTP (.tar.gz) (RF-STO-17)' })
+  @ApiResponse({ status: 200, description: 'Stream binário do arquivo .tar.gz' })
+  @ApiResponse({ status: 404, description: 'Backup ou arquivo físico não encontrado' })
+  async downloadBackup(
+    @Param('id') id: string,
+    @Param('backupId') backupId: string,
+    @Res() res: Response,
+  ) {
+    const backup = await this.backupService.getBackup(id, backupId);
+    if (!fs.existsSync(backup.storagePath)) {
+      throw new NotFoundException(`Arquivo físico do backup não encontrado no pool de armazenamento`);
+    }
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${backup.filename}"`);
+    res.setHeader('Content-Length', backup.sizeBytes);
+
+    const stream = fs.createReadStream(backup.storagePath);
+    stream.pipe(res);
   }
 }
 
