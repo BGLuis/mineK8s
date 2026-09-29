@@ -5,6 +5,7 @@ pub mod limiter;
 pub mod motd;
 pub mod routing;
 pub mod server;
+pub mod session;
 
 pub use config::GatewayConfig;
 pub use connection::{ClientConnection, HandshakeResult};
@@ -13,3 +14,4 @@ pub use limiter::ConnectionRateLimiter;
 pub use motd::{build_synthetic_status, handle_status_ping, StatusCache};
 pub use routing::{CachedServerRoute, RouteKey, RouteTable, RoutingModel, ServerInstanceStatus};
 pub use server::GatewayServer;
+pub use session::{handle_login_proxy, ActiveSessionHandle, SessionManager};
