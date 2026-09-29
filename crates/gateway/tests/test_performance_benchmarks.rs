@@ -139,6 +139,7 @@ async fn bench_proxy_forwarding_latency_overhead() {
         proxy_protocol_upstream: false,
         max_players: 100,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -279,6 +280,7 @@ async fn bench_duplex_proxy_throughput() {
         proxy_protocol_upstream: false,
         max_players: 100,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -352,6 +354,7 @@ async fn bench_server_list_ping_burst() {
         proxy_protocol_upstream: false,
         max_players: 50,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -488,6 +491,7 @@ async fn bench_memory_under_concurrent_load() {
         proxy_protocol_upstream: false,
         max_players: 500,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 

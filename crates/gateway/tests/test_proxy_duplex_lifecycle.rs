@@ -58,6 +58,7 @@ async fn test_client_close_terminates_upstream_and_deregisters_session() {
         proxy_protocol_upstream: false,
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -155,6 +156,7 @@ async fn test_upstream_close_terminates_client_and_deregisters_session() {
         proxy_protocol_upstream: false,
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -257,6 +259,7 @@ async fn test_upstream_proxy_protocol_v2_injection() {
         proxy_protocol_upstream: true, // INJEÇÃO ATIVADA
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 
@@ -342,6 +345,7 @@ async fn test_anti_cloning_session_eviction() {
         proxy_protocol_upstream: false,
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(route);
 

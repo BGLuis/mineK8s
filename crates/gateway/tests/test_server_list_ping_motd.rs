@@ -55,6 +55,7 @@ async fn test_server_stopped_responds_hibernation_motd_without_touching_jvm() {
         proxy_protocol_upstream: false,
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(stopped_route);
 
@@ -235,6 +236,7 @@ async fn test_server_ready_status_cache_hit_and_expiry() {
         proxy_protocol_upstream: false,
         max_players: 100,
         protocol_version: 765,
+        ..Default::default()
     };
     route_table.insert(ready_route);
 

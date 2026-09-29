@@ -1,23 +1,67 @@
 use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 
+/// Política de acesso ao servidor (RF-ID-02, RF-ID-06).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AccessPolicy {
+    #[default]
+    Public,
+    Group,
+    Individual,
+    Maintenance,
+}
+
+impl From<&str> for AccessPolicy {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_uppercase().as_str() {
+            "GROUP" => AccessPolicy::Group,
+            "INDIVIDUAL" => AccessPolicy::Individual,
+            "MAINTENANCE" => AccessPolicy::Maintenance,
+            _ => AccessPolicy::Public,
+        }
+    }
+}
+
 /// Modelo de roteamento suportado pelo Gateway (RF-MG-03, Inventário §2.9).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RoutingModel {
     /// Roteamento L7 baseado em VirtualHost / Hostname do Minecraft (Handshake 0x00)
+    #[default]
     VirtualHost,
     /// Encaminhamento L4 direto sem parser de protocolo (porta dedicada para Terraria ou bypass)
     DedicatedPort,
 }
 
+impl From<&str> for RoutingModel {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "dedicatedport" | "dedicated_port" => RoutingModel::DedicatedPort,
+            _ => RoutingModel::VirtualHost,
+        }
+    }
+}
+
 /// Estado do ciclo de vida da instância de servidor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ServerInstanceStatus {
     Stopped,
     Starting,
+    #[default]
     Ready,
     Maintenance,
     Crashed,
+}
+
+impl From<&str> for ServerInstanceStatus {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_uppercase().as_str() {
+            "STOPPED" => ServerInstanceStatus::Stopped,
+            "STARTING" => ServerInstanceStatus::Starting,
+            "MAINTENANCE" => ServerInstanceStatus::Maintenance,
+            "CRASHED" => ServerInstanceStatus::Crashed,
+            _ => ServerInstanceStatus::Ready,
+        }
+    }
 }
 
 /// Chave composta para indexação na RouteTable.
@@ -44,7 +88,7 @@ impl RouteKey {
 }
 
 /// Representa uma rota em cache mantida em memória pelo Gateway L7.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CachedServerRoute {
     pub server_id: String,
     pub name: String,
@@ -56,4 +100,9 @@ pub struct CachedServerRoute {
     pub proxy_protocol_upstream: bool,
     pub max_players: u32,
     pub protocol_version: i32,
+    pub access_policy: AccessPolicy,
+    pub allowed_group_ids: Vec<String>,
+    pub allowed_user_ids: Vec<String>,
+    pub game_type: String,
 }
+

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import {
   DatabaseConfig,
+  GrpcConfig,
   JwtConfig,
   KubernetesConfig,
   RegistryConfig,
@@ -81,6 +82,13 @@ export class AppConfigService {
       this.config.get<string>('JWT_SECRET', ''),
       this.config.get<string>('JWT_EXPIRATION', '1d'),
       this.config.get<string>('INITIAL_BOOTSTRAP_TOKEN'),
+    );
+  }
+
+  get grpc(): GrpcConfig {
+    return new GrpcConfig(
+      this.config.get<string>('GRPC_HOST', '0.0.0.0'),
+      this.config.get<number>('GRPC_PORT', 50051),
     );
   }
 

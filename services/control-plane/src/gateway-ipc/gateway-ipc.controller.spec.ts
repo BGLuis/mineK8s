@@ -1,0 +1,110 @@
+import { of } from 'rxjs';
+
+import { RouteAction, RouteUpdateEvent } from './gateway-ipc.interfaces';
+import { GatewayIpcController } from './gateway-ipc.controller';
+
+describe('GatewayIpcController', () => {
+  let controller: GatewayIpcController;
+  let mockIpcService: any;
+
+  beforeEach(() => {
+    mockIpcService = {
+      getInitialRoutingSnapshot: jest.fn(async () => ({
+        routes: [
+          {
+            action: RouteAction.UPSERT,
+            server_id: 'srv-1',
+            subdomain: 'survival',
+            status: 'READY',
+          },
+        ],
+      })),
+      getRouteUpdatesStream: jest.fn(() =>
+        of<RouteUpdateEvent>({
+          action: RouteAction.UPSERT,
+          server_id: 'srv-1',
+          subdomain: 'survival',
+          target_ip_port: 'mc-survival:25565',
+          status: 'READY',
+          access_policy: 'PUBLIC',
+          allowed_group_ids: [],
+          allowed_user_ids: [],
+          proxy_protocol: false,
+          game_type: 'MINECRAFT',
+          routing_model: 'VirtualHost',
+          listen_port: 25565,
+        }),
+      ),
+      handleSessionEvent: jest.fn(),
+      revokePlayerSession: jest.fn(async () => ({
+        session_found: true,
+        terminated_connections_count: 1,
+      })),
+      resolvePlayerIdentity: jest.fn(async () => ({
+        found: true,
+        user_id: 'u-1',
+        minecraft_nick: 'Steve',
+        role: 'PLAYER',
+        group_ids: [],
+        is_active: true,
+        is_mojang_verified: false,
+      })),
+    };
+
+    controller = new GatewayIpcController(mockIpcService);
+  });
+
+  it('deve delegar getInitialRoutingSnapshot para o serviço', async () => {
+    const res = await controller.getInitialRoutingSnapshot({});
+    expect(res.routes).toHaveLength(1);
+    expect(mockIpcService.getInitialRoutingSnapshot).toHaveBeenCalled();
+  });
+
+  it('deve retornar stream de rotas', (done) => {
+    controller.streamRouteUpdates({}).subscribe({
+      next: (update) => {
+        expect(update.server_id).toBe('srv-1');
+        done();
+      },
+    });
+  });
+
+  it('deve processar stream de eventos de sessão', (done) => {
+    const events$ = of({
+      event_type: 0,
+      session_id: 'sess-1',
+      server_id: 'srv-1',
+      client_ip: '100.64.0.5',
+      minecraft_nick: 'Steve',
+      timestamp_epoch_ms: Date.now(),
+      reason: '',
+    });
+
+    controller.streamSessionEvents(events$).subscribe({
+      complete: () => {
+        expect(mockIpcService.handleSessionEvent).toHaveBeenCalled();
+        done();
+      },
+    });
+  });
+
+  it('deve delegar revokePlayerSession', async () => {
+    const res = await controller.revokePlayerSession({
+      server_id: 'srv-1',
+      client_ip: '100.64.0.5',
+      minecraft_nick: 'Steve',
+      reason_message: 'Kick',
+    });
+    expect(res.session_found).toBe(true);
+  });
+
+  it('deve delegar resolvePlayerIdentity', async () => {
+    const res = await controller.resolvePlayerIdentity({
+      tailscale_user_id: 'ts-1',
+      node_id: '',
+      client_ip: '100.64.0.5',
+    });
+    expect(res.found).toBe(true);
+    expect(res.minecraft_nick).toBe('Steve');
+  });
+});

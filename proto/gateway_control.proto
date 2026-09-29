@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package minekubernetes.gateway.v1;
+
+// Serviço IPC bidirecional entre o Control Plane e o Gateway L7 (RF-GW-16, RF-MG-04)
+service GatewayControlService {
+  // Streaming contínuo: Control Plane envia mutações de rotas e políticas para o Gateway
+  rpc StreamRouteUpdates (Empty) returns (stream RouteUpdateEvent);
+
+  // Streaming contínuo: Gateway despacha eventos de conexão, desconexão e métricas
+  rpc StreamSessionEvents (stream SessionLifecycleEvent) returns (Empty);
+
+  // Comando RPC pontual: Control Plane solicita expulsão imediata de jogador (Smart Kick)
+  rpc RevokePlayerSession (RevokeSessionRequest) returns (RevokeSessionResponse);
+
+  // Sincronização inicial: Gateway busca snapshot completo de todas as rotas no boot
+  rpc GetInitialRoutingSnapshot (Empty) returns (RoutingSnapshotResponse);
+
+  // Resolução de identidade sob demanda com cache local no Gateway
+  rpc ResolvePlayerIdentity (ResolvePlayerRequest) returns (ResolvePlayerResponse);
+}
+
+message RouteUpdateEvent {
+  enum Action {
+    UPSERT = 0;
+    DELETE = 1;
+    STATUS_CHANGE = 2;
+  }
+  Action action = 1;
+  string server_id = 2;
+  string subdomain = 3;
+  string target_ip_port = 4;
+  string status = 5; // STOPPED, STARTING, READY, MAINTENANCE
+  string access_policy = 6; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE
+  repeated string allowed_group_ids = 7;
+  repeated string allowed_user_ids = 8;
+  bool proxy_protocol = 9;
+  string game_type = 10; // MINECRAFT, TERRARIA, etc. (RF-MG-04)
+  string routing_model = 11; // VirtualHost, DedicatedPort (RF-MG-04)
+  int32 listen_port = 12; // 25565, 7777, etc. (RF-MG-04)
+}
+
+message SessionLifecycleEvent {
+  enum EventType {
+    CONNECTED = 0;
+    DISCONNECTED = 1;
+    WAKE_REQUESTED = 2;
+    ACCESS_DENIED = 3;
+  }
+  EventType event_type = 1;
+  string session_id = 2;
+  string server_id = 3;
+  string client_ip = 4;
+  string minecraft_nick = 5;
+  int64 timestamp_epoch_ms = 6;
+  string reason = 7;
+}
+
+message RevokeSessionRequest {
+  string server_id = 1;
+  string client_ip = 2;
+  string minecraft_nick = 3;
+  string reason_message = 4;
+}
+
+message RevokeSessionResponse {
+  bool session_found = 1;
+  int32 terminated_connections_count = 2;
+}
+
+message RoutingSnapshotResponse {
+  repeated RouteUpdateEvent routes = 1;
+}
+
+message ResolvePlayerRequest {
+  string tailscale_user_id = 1;
+  string node_id = 2;
+  string client_ip = 3;
+}
+
+message ResolvePlayerResponse {
+  bool found = 1;
+  string user_id = 2;
+  string minecraft_nick = 3;
+  string role = 4; // ADMIN, PLAYER
+  repeated string group_ids = 5;
+  bool is_active = 6;
+  bool is_mojang_verified = 7;
+}
+
+message Empty {}

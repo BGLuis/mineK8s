@@ -20,6 +20,13 @@ export class JwtConfig {
   ) {}
 }
 
+export class GrpcConfig {
+  constructor(
+    public readonly host: string = '0.0.0.0',
+    public readonly port: number = 50051,
+  ) {}
+}
+
 export class TailscaleConfig {
   constructor(
     public readonly socketPath: string,

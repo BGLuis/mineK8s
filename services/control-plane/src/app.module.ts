@@ -13,6 +13,7 @@ import { ServersModule } from './servers/servers.module';
 import { ReconcilerModule } from './reconciler/reconciler.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
+import { GatewayIpcModule } from './gateway-ipc/gateway-ipc.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TailscaleModule } from './tailscale/tailscale.module';
     ReconcilerModule,
     TerminalModule,
     TailscaleModule,
+    GatewayIpcModule,
   ],
   controllers: [AppController],
   providers: [

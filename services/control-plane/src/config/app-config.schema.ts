@@ -6,6 +6,8 @@ export const appConfigSchema = Joi.object({
     .default('development')
     .description('Environment mode'),
   PORT: Joi.number().port().default(3000),
+  GRPC_PORT: Joi.number().port().default(50051),
+  GRPC_HOST: Joi.string().default('0.0.0.0'),
   API_URL: Joi.string().uri().default('http://localhost:3000'),
   APP_URL: Joi.string().uri().default('http://localhost:4200'),
   ALLOWED_ORIGINS: Joi.string().default('http://localhost:4200'),
