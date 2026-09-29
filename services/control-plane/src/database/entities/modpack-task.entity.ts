@@ -24,7 +24,7 @@ export class ModpackTaskEntity {
   serverId: string;
 
   @Column({ type: 'varchar', length: 32 })
-  source: 'CURSEFORGE' | 'MODRINTH' | 'VANILLA';
+  source: 'CURSEFORGE' | 'MODRINTH' | 'VANILLA' | 'CUSTOM';
 
   @Column({ name: 'project_id', type: 'varchar', length: 128 })
   projectId: string;

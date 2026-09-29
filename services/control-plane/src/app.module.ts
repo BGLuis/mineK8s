@@ -16,6 +16,8 @@ import { TailscaleModule } from './tailscale/tailscale.module';
 import { GatewayIpcModule } from './gateway-ipc/gateway-ipc.module';
 import { AdminModule } from './admin/admin.module';
 import { ProbesModule } from './probes/probes.module';
+import { TasksModule } from './tasks/tasks.module';
+import { ModpacksModule } from './modpacks/modpacks.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { ProbesModule } from './probes/probes.module';
     GatewayIpcModule,
     AdminModule,
     ProbesModule,
+    TasksModule,
+    ModpacksModule,
   ],
   controllers: [AppController],
   providers: [
