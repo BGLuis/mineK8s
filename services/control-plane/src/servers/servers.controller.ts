@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -114,8 +115,16 @@ export class ServersController {
   @ApiOperation({ summary: 'Dispatch command to server via RCON or console driver' })
   @ApiResponse({ status: 200, description: 'Command response' })
   @ApiResponse({ status: 404, description: 'Server not found' })
-  async sendCommand(@Param('id') id: string, @Body() dto: CommandDto) {
-    return this.serversService.sendCommand(id, dto.command);
+  async sendCommand(
+    @Param('id') id: string,
+    @Body() dto: CommandDto,
+    @Req() req?: any,
+  ) {
+    return this.serversService.sendCommand(id, dto.command, {
+      user: req?.user,
+      ipAddress: req?.ip || req?.connection?.remoteAddress,
+      source: 'REST_API',
+    });
   }
 
   @Get(':id/files')

@@ -11,6 +11,7 @@ import { LoggingModule } from './logging/logging.module';
 import { KubernetesModule } from './k8s/k8s.module';
 import { ServersModule } from './servers/servers.module';
 import { ReconcilerModule } from './reconciler/reconciler.module';
+import { TerminalModule } from './terminal/terminal.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ReconcilerModule } from './reconciler/reconciler.module';
     KubernetesModule,
     ServersModule,
     ReconcilerModule,
+    TerminalModule,
   ],
   controllers: [AppController],
   providers: [

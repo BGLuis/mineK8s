@@ -7,6 +7,8 @@ import {
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { v4 as uuidv4 } from 'uuid';
+import { AppConfigModule } from '../config/app-config.module';
+import { K8sLogStreamerService } from './k8s-log-streamer.service';
 
 // Sensitive keys that must be redacted from request/response bodies and logs
 const SENSITIVE_BODY_KEYS = new Set([
@@ -75,6 +77,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 @Module({
   imports: [
+    AppConfigModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: isProduction ? 'info' : 'debug',
@@ -138,6 +141,7 @@ const isProduction = process.env.NODE_ENV === 'production';
       },
     }),
   ],
-  exports: [LoggerModule],
+  providers: [K8sLogStreamerService],
+  exports: [LoggerModule, K8sLogStreamerService],
 })
 export class LoggingModule {}

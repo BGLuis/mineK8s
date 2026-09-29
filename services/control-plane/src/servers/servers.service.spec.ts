@@ -8,6 +8,7 @@ describe('ServersService', () => {
   let service: ServersService;
   let mockServerRepo: any;
   let mockSettingsRepo: any;
+  let mockAuditRepo: any;
   let mockK8sService: any;
 
   let serversDb: Map<string, Server>;
@@ -75,10 +76,35 @@ describe('ServersService', () => {
       ]),
     };
 
+    const mockConsoleDriver = {
+      sendCommand: jest.fn().mockResolvedValue('Command output'),
+      listPlayers: jest.fn().mockResolvedValue(['Steve']),
+      saveOff: jest.fn().mockResolvedValue('OK'),
+      saveFlush: jest.fn().mockResolvedValue('OK'),
+      saveOn: jest.fn().mockResolvedValue('OK'),
+    };
+
+    mockAuditRepo = {
+      save: jest.fn(async (entity) => entity),
+      find: jest.fn(async () => []),
+      findOne: jest.fn(async () => null),
+    };
+
+    const mockLogStreamer = {
+      getBuffer: jest.fn().mockReturnValue({
+        getHistory: jest.fn().mockReturnValue([
+          { id: '1', timestamp: '12:00:00', level: 'INFO', message: 'Server initialized' },
+        ]),
+      }),
+    };
+
     service = new ServersService(
       mockServerRepo as any,
       mockSettingsRepo as any,
+      mockAuditRepo as any,
       mockK8sService as any,
+      mockConsoleDriver as any,
+      mockLogStreamer as any,
     );
   });
 
@@ -185,6 +211,53 @@ describe('ServersService', () => {
 
       await expect(service.updateDomain('srv-1', 'lobby')).rejects.toThrow(
         ConflictException,
+      );
+    });
+  });
+
+  describe('sendCommand (RF-RCON-03, RF-MG-05)', () => {
+    it('should dispatch command via ConsoleDriver', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        subdomain: 'survival',
+      } as any);
+
+      const result = await service.sendCommand('srv-1', 'time set day');
+      expect(result.success).toBe(true);
+      expect(result.response).toBe('Command output');
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
+      expect(mockAuditRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-1',
+          command: 'time set day',
+          execution_source: 'REST_API',
+        }),
+      );
+    });
+
+    it('should throw NotFoundException if server does not exist', async () => {
+      await expect(
+        service.sendCommand('srv-missing', 'time set day'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getLogs (RF-RCON-07, RF-RCON-08)', () => {
+    it('should return formatted logs and parsed lines from buffer', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        subdomain: 'survival',
+        state: 'READY',
+      } as any);
+
+      const result = await service.getLogs('srv-1', 50);
+      expect(result.lines).toHaveLength(1);
+      expect(result.logs).toContain('Server initialized');
+    });
+
+    it('should throw NotFoundException if server does not exist', async () => {
+      await expect(service.getLogs('srv-missing')).rejects.toThrow(
+        NotFoundException,
       );
     });
   });

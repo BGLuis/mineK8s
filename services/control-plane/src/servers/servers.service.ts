@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,7 +11,19 @@ import { Repository } from 'typeorm';
 
 import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
+import {
+  ServerAuditLog,
+  ExecutionSource,
+} from '@database/entities/server-audit-log.entity';
+import { User } from '@database/entities/user.entity';
 import { KubernetesService } from '@k8s/k8s.service';
+import {
+  CONSOLE_DRIVER_TOKEN,
+  ConsoleDriver,
+  CommandOptions,
+} from '@console/console-driver.interface';
+import { K8sLogStreamerService } from '@logging/k8s-log-streamer.service';
+import { LogEntry } from '@logging/circular-log-buffer';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
 import { ServerSummaryDto } from './dto/server-summary.dto';
@@ -24,7 +37,12 @@ export class ServersService {
     private readonly serverRepo: Repository<Server>,
     @InjectRepository(MinecraftServerSettings)
     private readonly settingsRepo: Repository<MinecraftServerSettings>,
+    @InjectRepository(ServerAuditLog)
+    private readonly auditRepo: Repository<ServerAuditLog>,
     private readonly k8sService: KubernetesService,
+    @Inject(CONSOLE_DRIVER_TOKEN)
+    private readonly consoleDriver: ConsoleDriver,
+    private readonly logStreamer: K8sLogStreamerService,
   ) {}
 
   async create(dto: CreateServerDto): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
@@ -234,25 +252,88 @@ export class ServersService {
     return { message: 'Domínio atualizado' };
   }
 
-  async getLogs(id: string, tail: number = 150): Promise<{ logs: string }> {
+  async getLogs(
+    id: string,
+    tail: number = 150,
+  ): Promise<{ logs: string; lines: LogEntry[] }> {
     const server = await this.serverRepo.findOne({ where: { id } });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
 
+    const buffer = this.logStreamer.getBuffer(id);
+    const history = buffer.getHistory();
+    const sliced = tail > 0 ? history.slice(-tail) : history;
+    const logs =
+      sliced.length > 0
+        ? sliced
+            .map((entry) => `[${entry.timestamp}] [${entry.level}]: ${entry.message}`)
+            .join('\n')
+        : `[MineKubernetes Control Plane] Logs for ${server.subdomain} (tail ${tail})\nServer is ${server.state}`;
+
     return {
-      logs: `[MineKubernetes Control Plane] Logs for ${server.subdomain} (tail ${tail})\nServer is ${server.state}`,
+      logs,
+      lines: sliced,
     };
   }
 
-  async sendCommand(id: string, command: string): Promise<{ response: string }> {
-    const server = await this.serverRepo.findOne({ where: { id } });
+  async sendCommand(
+    id: string,
+    command: string,
+    options?: CommandOptions & {
+      user?: User;
+      ipAddress?: string;
+      source?: ExecutionSource;
+    },
+  ): Promise<{
+    success: boolean;
+    serverId: string;
+    command: string;
+    response: string;
+    executionTimeMs: number;
+  }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
 
+    const startTime = Date.now();
+    let response = '';
+    let isError = false;
+
+    try {
+      response = await this.consoleDriver.sendCommand(
+        server,
+        command,
+        options,
+      );
+    } catch (err) {
+      response = (err as Error).message;
+      isError = true;
+      throw err;
+    } finally {
+      const durationMs = Date.now() - startTime;
+      await this.auditRepo.save({
+        server_id: server.id,
+        user_id: options?.user?.id ?? null,
+        command,
+        execution_source: options?.source || 'REST_API',
+        ip_address: options?.ipAddress || null,
+        response: response ? response.substring(0, 500) : null,
+        executed_at: new Date(),
+      });
+    }
+
+    const durationMs = Date.now() - startTime;
     return {
-      response: `[Command dispatched to ${server.subdomain}]: ${command}`,
+      success: !isError,
+      serverId: server.id,
+      command,
+      response,
+      executionTimeMs: durationMs,
     };
   }
 }

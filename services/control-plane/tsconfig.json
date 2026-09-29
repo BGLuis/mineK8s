@@ -27,7 +27,10 @@
       "@common/*": ["src/common/*"],
       "@servers/*": ["src/servers/*"],
       "@k8s/*": ["src/k8s/*"],
-      "@auth/*": ["src/auth/*"]
+      "@auth/*": ["src/auth/*"],
+      "@rcon/*": ["src/rcon/*"],
+      "@console/*": ["src/console/*"],
+      "@terminal/*": ["src/terminal/*"]
     }
   }
 }
