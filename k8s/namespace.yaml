@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minekubernetes
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/part-of: minekubernetes
+    app.kubernetes.io/managed-by: control-plane
