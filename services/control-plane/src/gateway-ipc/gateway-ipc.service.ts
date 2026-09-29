@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Observable, Subject } from 'rxjs';
 import { Repository } from 'typeorm';
@@ -9,6 +9,7 @@ import { User } from '@database/entities/user.entity';
 import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
+import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
 import {
   Empty,
   ResolvePlayerRequest,
@@ -37,6 +38,9 @@ export class GatewayIpcService {
     private readonly userServerAccessRepository: Repository<UserServerAccess>,
     @InjectRepository(UserGroup)
     private readonly userGroupRepository: Repository<UserGroup>,
+    @Optional()
+    @Inject(NETWORK_IDENTITY_PROVIDER)
+    private readonly identityProvider?: NetworkIdentityProvider,
   ) {}
 
   /**
@@ -124,6 +128,28 @@ export class GatewayIpcService {
         .innerJoin('user.devices', 'device')
         .where('device.tailscale_node_id = :nodeId', { nodeId: req.node_id })
         .getOne();
+    }
+
+    if (!user && req.client_ip && this.identityProvider) {
+      try {
+        const netId = await this.identityProvider.resolveIdentity(req.client_ip);
+        if (netId) {
+          if (netId.userId) {
+            user = await this.userRepository.findOne({
+              where: { tailscale_user_id: netId.userId },
+            });
+          }
+          if (!user && netId.nodeId) {
+            user = await this.userRepository
+              .createQueryBuilder('user')
+              .innerJoin('user.devices', 'device')
+              .where('device.tailscale_node_id = :nodeId', { nodeId: netId.nodeId })
+              .getOne();
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Falha na resolução de identidade de rede para IP ${req.client_ip}: ${err.message}`);
+      }
     }
 
     if (!user) {

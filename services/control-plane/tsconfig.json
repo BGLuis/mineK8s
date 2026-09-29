@@ -32,7 +32,8 @@
       "@rcon/*": ["src/rcon/*"],
       "@console/*": ["src/console/*"],
       "@terminal/*": ["src/terminal/*"],
-      "@tailscale/*": ["src/tailscale/*"]
+      "@tailscale/*": ["src/tailscale/*"],
+      "@nestjs/microservices": ["test/mocks/nestjs-microservices.mock.ts"]
     }
   }
 }
