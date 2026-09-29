@@ -8,24 +8,33 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '@auth/roles.decorator';
 import { UserRole } from '@database/entities/user.entity';
 
 import { ServersService } from './servers.service';
+import { ServersFilesService } from './servers-files.service';
 import { CreateServerDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { CommandDto } from './dto/command.dto';
+import { WriteFileDto } from './dto/write-file.dto';
 
 @ApiTags('Servers & Kubernetes Orchestration')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('api/servers')
 export class ServersController {
-  constructor(private readonly serversService: ServersService) {}
+  constructor(
+    private readonly serversService: ServersService,
+    private readonly filesService: ServersFilesService,
+  ) {}
 
   @Post('create')
   @HttpCode(HttpStatus.CREATED)
@@ -108,4 +117,57 @@ export class ServersController {
   async sendCommand(@Param('id') id: string, @Body() dto: CommandDto) {
     return this.serversService.sendCommand(id, dto.command);
   }
+
+  @Get(':id/files')
+  @ApiOperation({ summary: 'List files and directories inside server /data storage (RF-ARQ-17, L-04)' })
+  @ApiResponse({ status: 200, description: 'Directory contents' })
+  @ApiResponse({ status: 403, description: 'Path traversal or symlink violation' })
+  @ApiResponse({ status: 404, description: 'Server or path not found' })
+  async listFiles(@Param('id') id: string, @Query('path') relPath?: string) {
+    return this.filesService.listFiles(id, relPath || '');
+  }
+
+  @Get(':id/file')
+  @ApiOperation({ summary: 'Read text file content from server /data storage' })
+  @ApiResponse({ status: 200, description: 'File content' })
+  @ApiResponse({ status: 403, description: 'Path traversal or symlink violation' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  async readFile(@Param('id') id: string, @Query('path') relPath: string) {
+    return this.filesService.readFile(id, relPath);
+  }
+
+  @Put(':id/file')
+  @ApiOperation({ summary: 'Save/overwrite file content into server /data storage atomically' })
+  @ApiResponse({ status: 200, description: 'File saved successfully' })
+  @ApiResponse({ status: 403, description: 'Path traversal or symlink violation' })
+  async writeFile(
+    @Param('id') id: string,
+    @Query('path') relPath: string,
+    @Body() dto: WriteFileDto,
+  ) {
+    return this.filesService.writeFile(id, relPath, dto.content);
+  }
+
+  @Delete(':id/file')
+  @ApiOperation({ summary: 'Delete file or directory from server /data storage' })
+  @ApiResponse({ status: 200, description: 'File or directory removed successfully' })
+  @ApiResponse({ status: 403, description: 'Path traversal or symlink violation' })
+  async deleteFile(@Param('id') id: string, @Query('path') relPath: string) {
+    return this.filesService.deleteFile(id, relPath);
+  }
+
+  @Post(':id/world/upload')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload world archive (.zip, .tar.gz) and extract into server /data' })
+  @ApiResponse({ status: 202, description: 'World archive extracted successfully' })
+  @ApiResponse({ status: 409, description: 'Conflict: server is running or starting' })
+  @ApiResponse({ status: 403, description: 'Zip-slip or forbidden symlink detected' })
+  async uploadWorld(
+    @Param('id') id: string,
+    @UploadedFile() file?: any,
+  ) {
+    return this.filesService.uploadWorld(id, file);
+  }
 }
+

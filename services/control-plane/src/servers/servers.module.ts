@@ -7,6 +7,7 @@ import { KubernetesModule } from '@k8s/k8s.module';
 
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
+import { ServersFilesService } from './servers-files.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { ServersService } from './servers.service';
     KubernetesModule,
   ],
   controllers: [ServersController],
-  providers: [ServersService],
-  exports: [ServersService],
+  providers: [ServersService, ServersFilesService],
+  exports: [ServersService, ServersFilesService],
 })
 export class ServersModule {}
