@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServerAuditLog } from '@database/entities/server-audit-log.entity';
+import { ServerBackupEntity } from '@database/entities/server-backup.entity';
+import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
 import { AppConfigModule } from '@config/app-config.module';
 import { KubernetesModule } from '@k8s/k8s.module';
 import { ConsoleModule } from '@console/console.module';
@@ -20,7 +22,13 @@ import { GameStorageProviderRegistry } from './providers/game-storage-provider.r
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Server, MinecraftServerSettings, ServerAuditLog]),
+    TypeOrmModule.forFeature([
+      Server,
+      MinecraftServerSettings,
+      ServerAuditLog,
+      ServerBackupEntity,
+      ModpackTaskEntity,
+    ]),
     AppConfigModule,
     KubernetesModule,
     ConsoleModule,

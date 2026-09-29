@@ -10,9 +10,17 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
+import {
+  ServerBackupEntity,
+  BackupType,
+  BackupStatus,
+} from '@database/entities/server-backup.entity';
 import { KubernetesService } from '@k8s/k8s.service';
 import { ManifestBuilder } from '@k8s/manifest-builder';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
@@ -49,6 +57,12 @@ export class ServersBackupService {
     @Optional() private readonly k8sService?: KubernetesService,
     @Optional() private readonly consoleDriver?: MinecraftRconConsoleDriver,
     @Optional() private readonly gameStorageRegistry?: GameStorageProviderRegistry,
+    @Optional()
+    @InjectRepository(ServerBackupEntity)
+    private readonly backupRepo?: Repository<ServerBackupEntity>,
+    @Optional()
+    @InjectRepository(Server)
+    private readonly serverRepo?: Repository<Server>,
   ) {}
 
   public isServerBusy(serverId: string): boolean {
@@ -108,7 +122,11 @@ export class ServersBackupService {
   async createBackup(
     server: Server,
     type: 'HOT' | 'COLD',
-    options?: { watchdogTimeoutMs?: number },
+    options?: {
+      watchdogTimeoutMs?: number;
+      isPreUpdate?: boolean;
+      modpackVersion?: string | null;
+    },
   ): Promise<BackupResult> {
     // 1. Verificação de Concorrência (RF-STO-19)
     if (this.isServerBusy(server.id)) {
@@ -246,8 +264,43 @@ export class ServersBackupService {
         `Backup [${filename}] gerado com sucesso. Tamanho: ${stat.size} bytes, SHA-256: ${sha256Checksum}`,
       );
 
+      let backupId = `${server.id}-${timestamp}`;
+      if (this.backupRepo) {
+        const isPreUpdate = options?.isPreUpdate ?? false;
+        const backupTypeEnum = isPreUpdate
+          ? BackupType.PRE_UPDATE
+          : type === 'HOT'
+            ? BackupType.HOT_SCHEDULED
+            : BackupType.COLD_MANUAL;
+
+        const retentionExpiresAt = isPreUpdate
+          ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          : null;
+
+        const record = await this.persistBackupRecord({
+          serverId: server.id,
+          filename,
+          storagePath: targetArchive,
+          sizeBytes: stat.size,
+          sha256Checksum,
+          backupType: backupTypeEnum,
+          status: BackupStatus.COMPLETED,
+          isProtected: isPreUpdate,
+          minecraftVersion: server.game_version || 'unknown',
+          modpackVersion: options?.modpackVersion ?? server.modpack_id ?? null,
+          retentionExpiresAt,
+        });
+
+        if (record) {
+          backupId = record.id;
+        }
+
+        // Aplica política de retenção FIFO N=5 para backups rotineiros (RF-STO-15)
+        await this.applyRetentionPolicy(server.id);
+      }
+
       return {
-        backupId: `${server.id}-${timestamp}`,
+        backupId,
         serverId: server.id,
         filename,
         storagePath: targetArchive,
@@ -291,8 +344,27 @@ export class ServersBackupService {
       `[D-05] Backup PRE_RESTORE gerado com sucesso para [${server.subdomain}] em: ${targetArchive}`,
     );
 
+    let backupId = `${server.id}-pre-restore-${timestamp}`;
+    if (this.backupRepo) {
+      const record = await this.persistBackupRecord({
+        serverId: server.id,
+        filename,
+        storagePath: targetArchive,
+        sizeBytes: stat.size,
+        sha256Checksum,
+        backupType: BackupType.PRE_RESTORE,
+        status: BackupStatus.COMPLETED,
+        isProtected: false,
+        minecraftVersion: server.game_version || 'unknown',
+        retentionExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // Retenção obrigatória de 48h
+      });
+      if (record) {
+        backupId = record.id;
+      }
+    }
+
     return {
-      backupId: `${server.id}-pre-restore-${timestamp}`,
+      backupId,
       serverId: server.id,
       filename,
       storagePath: targetArchive,
@@ -715,5 +787,258 @@ export class ServersBackupService {
       }
       await fs.promises.copyFile(src, dest);
     }
+  }
+
+  /**
+   * Persiste metadados do backup na tabela server_backups (RF-STO-16).
+   */
+  async persistBackupRecord(data: {
+    serverId: string;
+    filename: string;
+    storagePath: string;
+    sizeBytes: number;
+    sha256Checksum: string;
+    backupType: BackupType;
+    status: BackupStatus;
+    isProtected?: boolean;
+    minecraftVersion?: string;
+    modpackVersion?: string | null;
+    failureReason?: string | null;
+    retentionExpiresAt?: Date | null;
+  }): Promise<ServerBackupEntity | null> {
+    if (!this.backupRepo) {
+      return null;
+    }
+
+    try {
+      const entity = this.backupRepo.create({
+        serverId: data.serverId,
+        filename: data.filename,
+        storagePath: data.storagePath,
+        sizeBytes: data.sizeBytes,
+        sha256Checksum: data.sha256Checksum,
+        backupType: data.backupType,
+        status: data.status,
+        isProtected: data.isProtected ?? false,
+        minecraftVersion: data.minecraftVersion || 'unknown',
+        modpackVersion: data.modpackVersion ?? null,
+        failureReason: data.failureReason ?? null,
+        retentionExpiresAt: data.retentionExpiresAt ?? null,
+      });
+
+      return await this.backupRepo.save(entity);
+    } catch (err: any) {
+      this.logger.error(`Erro ao persistir registro de backup no banco: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Aplica a política de rotação e retenção híbrida (RF-STO-15).
+   * - Backups rotineiros (HOT_SCHEDULED / COLD_MANUAL não-protegidos): mantém os N mais recentes (padrão 5).
+   *   O 6º descarta o mais antigo do disco e do banco.
+   * - Backups pre-update: protegidos (isProtected=true), imunes à contagem FIFO, retidos por 14 dias.
+   * - Backups pre-restore: retidos obrigatoriamente por 48 horas.
+   */
+  async applyRetentionPolicy(
+    serverId: string,
+    maxRoutine: number = 5,
+  ): Promise<{ removedBackups: string[] }> {
+    if (!this.backupRepo) {
+      return { removedBackups: [] };
+    }
+
+    const allBackups = await this.backupRepo.find({
+      where: { serverId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const now = new Date();
+    // Filtra backups rotineiros que NÃO têm isProtected e não são pre-update
+    // e pre-restore expirados ou que não são pre-restore
+    const routineBackups = allBackups.filter((b) => {
+      if (b.isProtected) return false;
+      if (b.backupType === BackupType.PRE_UPDATE) return false;
+      if (
+        b.backupType === BackupType.PRE_RESTORE &&
+        b.retentionExpiresAt &&
+        b.retentionExpiresAt > now
+      ) {
+        return false;
+      }
+      return (
+        b.backupType === BackupType.HOT_SCHEDULED ||
+        b.backupType === BackupType.COLD_MANUAL
+      );
+    });
+
+    const removedBackups: string[] = [];
+
+    if (routineBackups.length > maxRoutine) {
+      const toRemove = routineBackups.slice(maxRoutine);
+      for (const backup of toRemove) {
+        try {
+          if (fs.existsSync(backup.storagePath)) {
+            await fs.promises.unlink(backup.storagePath);
+          }
+          const shaPath = `${backup.storagePath}.sha256`;
+          if (fs.existsSync(shaPath)) {
+            await fs.promises.unlink(shaPath);
+          }
+        } catch (err: any) {
+          this.logger.warn(
+            `[RF-STO-15] Erro ao remover arquivo de backup físico ${backup.storagePath}: ${err.message}`,
+          );
+        }
+
+        await this.backupRepo.delete(backup.id);
+        removedBackups.push(backup.id);
+        this.logger.log(
+          `[RF-STO-15] Backup rotineiro excedente removido por política FIFO (N=${maxRoutine}): ${backup.filename} (${backup.id})`,
+        );
+      }
+    }
+
+    return { removedBackups };
+  }
+
+  /**
+   * Lista backups de um servidor ordenados decrescentemente por data (RF-STO-17).
+   */
+  async listBackups(serverId: string): Promise<ServerBackupEntity[]> {
+    if (!this.backupRepo) {
+      return [];
+    }
+    return this.backupRepo.find({
+      where: { serverId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Obtém detalhes de um backup específico (RF-STO-17).
+   */
+  async getBackup(serverId: string, backupId: string): Promise<ServerBackupEntity> {
+    if (!this.backupRepo) {
+      throw new NotFoundException(`Backup com ID "${backupId}" não encontrado.`);
+    }
+    const backup = await this.backupRepo.findOne({
+      where: { id: backupId, serverId },
+    });
+    if (!backup) {
+      throw new NotFoundException(
+        `Backup com ID "${backupId}" não encontrado para o servidor informado.`,
+      );
+    }
+    return backup;
+  }
+
+  /**
+   * Exclui um backup físico e seu registro TypeORM, validando regras de proteção (RF-STO-15, RF-STO-17).
+   */
+  async deleteBackup(
+    serverId: string,
+    backupId: string,
+    force: boolean = false,
+  ): Promise<{ message: string; backupId: string }> {
+    const backup = await this.getBackup(serverId, backupId);
+
+    // Rejeita se isProtected=true (salvo override admin / force)
+    if (backup.isProtected && !force) {
+      throw new HttpException(
+        'Backup protegido (isProtected: true / PRE_UPDATE) não pode ser removido sem force=true (RF-STO-15)',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // Rejeita se PRE_RESTORE sob salvaguarda de 48h (salvo force)
+    if (
+      backup.backupType === BackupType.PRE_RESTORE &&
+      backup.retentionExpiresAt &&
+      backup.retentionExpiresAt > new Date() &&
+      !force
+    ) {
+      throw new HttpException(
+        'Backup PRE_RESTORE está sob retenção obrigatória de 48h e não pode ser removido sem force=true (RF-STO-15)',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      if (fs.existsSync(backup.storagePath)) {
+        await fs.promises.unlink(backup.storagePath);
+      }
+      const shaPath = `${backup.storagePath}.sha256`;
+      if (fs.existsSync(shaPath)) {
+        await fs.promises.unlink(shaPath);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Erro ao excluir arquivo físico de backup ${backup.storagePath}: ${err.message}`);
+    }
+
+    if (this.backupRepo) {
+      await this.backupRepo.delete(backup.id);
+    }
+
+    this.logger.log(`[RF-STO-17] Backup [${backup.filename}] (${backup.id}) removido.`);
+    return { message: 'Backup removido com sucesso', backupId: backup.id };
+  }
+
+  /**
+   * Dispara restauração transacional a partir de um backup registrado (RF-STO-17).
+   */
+  async restoreBackupById(
+    serverId: string,
+    backupId: string,
+  ): Promise<{ taskId: string; message: string }> {
+    if (!this.serverRepo) {
+      throw new Error('Server repository não configurado');
+    }
+    const server = await this.serverRepo.findOne({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException(`Servidor com ID "${serverId}" não encontrado.`);
+    }
+
+    if (server.state !== 'STOPPED') {
+      throw new ConflictException(
+        `Restauração exige que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-17)`,
+      );
+    }
+
+    const backup = await this.getBackup(serverId, backupId);
+    const taskId = `restore-task-${Date.now()}`;
+
+    // Executa a restauração transacional em 5 fases (RF-STO-04)
+    await this.restoreBackup(server, backup.storagePath);
+
+    return {
+      taskId,
+      message: 'Restauração transacional concluída com sucesso',
+    };
+  }
+
+  /**
+   * Orquestra a criação de backup por ID de servidor a partir de chamadas da API REST (RF-STO-17).
+   */
+  async createBackupForServer(
+    serverId: string,
+    type: 'HOT' | 'COLD' = 'HOT',
+  ): Promise<{ taskId: string; backupId: string; result: BackupResult }> {
+    if (!this.serverRepo) {
+      throw new Error('Server repository não configurado');
+    }
+    const server = await this.serverRepo.findOne({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException(`Servidor com ID "${serverId}" não encontrado.`);
+    }
+
+    const taskId = `backup-task-${Date.now()}`;
+    const result = await this.createBackup(server, type);
+
+    return {
+      taskId,
+      backupId: result.backupId,
+      result,
+    };
   }
 }

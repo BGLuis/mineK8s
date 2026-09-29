@@ -11,6 +11,11 @@ import {
   User,
   UserGroup,
   UserServerAccess,
+  ServerBackupEntity,
+  BackupType,
+  BackupStatus,
+  ModpackTaskEntity,
+  ModpackTaskStatus,
 } from './entities';
 
 describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
@@ -100,5 +105,55 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     expect(log.command).toBe('say Hello World');
     expect(log.execution_source).toBe('REST_API');
     expect(log.ip_address).toBe('100.64.0.5');
+  });
+
+  it('should instantiate ServerBackupEntity with correct fields and defaults (RF-STO-16)', () => {
+    const backup = new ServerBackupEntity();
+    backup.id = '123e4567-e89b-12d3-a456-426614174000';
+    backup.serverId = 'server-1';
+    backup.filename = 'server-1_2026-09-29.tar.gz';
+    backup.storagePath = '/backups/server-1_2026-09-29.tar.gz';
+    backup.sizeBytes = 1048576;
+    backup.sha256Checksum = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+    backup.backupType = BackupType.HOT_SCHEDULED;
+    backup.status = BackupStatus.COMPLETED;
+    backup.isProtected = false;
+    backup.minecraftVersion = '1.20.4';
+
+    expect(backup.id).toBe('123e4567-e89b-12d3-a456-426614174000');
+    expect(backup.serverId).toBe('server-1');
+    expect(backup.filename).toBe('server-1_2026-09-29.tar.gz');
+    expect(backup.storagePath).toBe('/backups/server-1_2026-09-29.tar.gz');
+    expect(backup.sizeBytes).toBe(1048576);
+    expect(backup.sha256Checksum).toBe('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890');
+    expect(backup.backupType).toBe(BackupType.HOT_SCHEDULED);
+    expect(backup.status).toBe(BackupStatus.COMPLETED);
+    expect(backup.isProtected).toBe(false);
+    expect(backup.minecraftVersion).toBe('1.20.4');
+  });
+
+  it('should instantiate ModpackTaskEntity with tracking fields (RF-STO-16)', () => {
+    const task = new ModpackTaskEntity();
+    task.id = 'task-uuid-1';
+    task.serverId = 'server-1';
+    task.source = 'CURSEFORGE';
+    task.projectId = 'better-mc';
+    task.versionId = 'v1.0.0';
+    task.status = ModpackTaskStatus.DOWNLOADING;
+    task.progressPercent = 45;
+    task.currentStep = 'Baixando mods (45/100)';
+    task.downloadedFiles = 45;
+    task.totalFiles = 100;
+
+    expect(task.id).toBe('task-uuid-1');
+    expect(task.serverId).toBe('server-1');
+    expect(task.source).toBe('CURSEFORGE');
+    expect(task.projectId).toBe('better-mc');
+    expect(task.versionId).toBe('v1.0.0');
+    expect(task.status).toBe(ModpackTaskStatus.DOWNLOADING);
+    expect(task.progressPercent).toBe(45);
+    expect(task.currentStep).toBe('Baixando mods (45/100)');
+    expect(task.downloadedFiles).toBe(45);
+    expect(task.totalFiles).toBe(100);
   });
 });
