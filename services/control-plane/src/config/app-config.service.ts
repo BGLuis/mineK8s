@@ -58,6 +58,10 @@ export class AppConfigService {
     return this.config.get<string>('LOG_LEVEL', 'context=*;level=info');
   }
 
+  get reconciliationIntervalMs(): number {
+    return this.config.get<number>('RECONCILIATION_INTERVAL_MS', 30000);
+  }
+
   get database(): DatabaseConfig {
     return new DatabaseConfig(
       this.config.get<string>('DB_HOST', 'localhost'),

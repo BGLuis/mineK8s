@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { LoggingModule } from './logging/logging.module';
 import { KubernetesModule } from './k8s/k8s.module';
 import { ServersModule } from './servers/servers.module';
+import { ReconcilerModule } from './reconciler/reconciler.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ServersModule } from './servers/servers.module';
     AuthModule,
     KubernetesModule,
     ServersModule,
+    ReconcilerModule,
   ],
   controllers: [AppController],
   providers: [
