@@ -1,5 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
@@ -58,6 +61,28 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api/docs', app, document);
   }
+
+  // Connect gRPC Microservice for Gateway IPC
+  const protoCandidates = [
+    path.resolve(process.cwd(), 'proto/gateway_control.proto'),
+    path.resolve(__dirname, '../../../proto/gateway_control.proto'),
+    path.resolve(__dirname, '../../proto/gateway_control.proto'),
+  ];
+  const protoPath = protoCandidates.find((p) => fs.existsSync(p)) || protoCandidates[0];
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'minekubernetes.gateway.v1',
+      protoPath,
+      url: `${configService.grpc.host}:${configService.grpc.port}`,
+    },
+  });
+
+  await app.startAllMicroservices();
+  logger.log(
+    `Control Plane gRPC IPC listening on ${configService.grpc.host}:${configService.grpc.port}`,
+  );
 
   await app.listen(configService.port);
   logger.log(

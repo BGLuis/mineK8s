@@ -78,6 +78,29 @@ impl RouteTable {
         None
     }
 
+    /// Reconstrói a tabela de rotas inteira a partir de um snapshot recebido via IPC (RF-GW-16).
+    pub fn rebuild_from_snapshot(&self, routes: Vec<CachedServerRoute>) {
+        self.routes.clear();
+        self.server_index.clear();
+        for route in routes {
+            self.insert(route);
+        }
+    }
+
+    /// Retorna todas as rotas atualmente carregadas na tabela.
+    pub fn all_routes(&self) -> Vec<CachedServerRoute> {
+        self.routes.iter().map(|entry| entry.value().clone()).collect()
+    }
+
+    /// Retorna a rota associada ao server_id se existir.
+    pub fn get_by_server_id(&self, server_id: &str) -> Option<CachedServerRoute> {
+        if let Some(key) = self.server_index.get(server_id) {
+            self.routes.get(key.value()).map(|r| r.value().clone())
+        } else {
+            None
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.routes.len()
     }
@@ -86,3 +109,4 @@ impl RouteTable {
         self.routes.is_empty()
     }
 }
+

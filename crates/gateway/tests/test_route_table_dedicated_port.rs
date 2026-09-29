@@ -22,6 +22,7 @@ fn test_route_table_operations_and_fallback() {
         proxy_protocol_upstream: false,
         max_players: 20,
         protocol_version: 765,
+        ..Default::default()
     };
 
     let route_lobby = CachedServerRoute {
@@ -35,6 +36,7 @@ fn test_route_table_operations_and_fallback() {
         proxy_protocol_upstream: false,
         max_players: 50,
         protocol_version: 765,
+        ..Default::default()
     };
 
     table.insert(route_survival);
@@ -93,6 +95,7 @@ async fn test_dedicated_port_l4_forward_without_parser() {
         proxy_protocol_upstream: false,
         max_players: 8,
         protocol_version: 0,
+        ..Default::default()
     };
     route_table.insert(dedicated_route);
 
