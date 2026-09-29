@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "crates/minecraft-protocol",
+    "crates/gateway",
 ]
 resolver = "2"
