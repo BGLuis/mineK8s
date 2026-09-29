@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: control-plane-sa
+  namespace: minekubernetes
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: control-plane
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: control-plane-role
+  namespace: minekubernetes
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: control-plane
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/status
+      - services
+      - endpoints
+      - persistentvolumeclaims
+      - configmaps
+      - secrets
+      - events
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - deployments/scale
+      - deployments/status
+      - statefulsets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: control-plane-rolebinding
+  namespace: minekubernetes
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: control-plane
+subjects:
+  - kind: ServiceAccount
+    name: control-plane-sa
+    namespace: minekubernetes
+roleRef:
+  kind: Role
+  name: control-plane-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: control-plane-node-viewer
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: control-plane
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: control-plane-node-viewer-binding
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: control-plane
+subjects:
+  - kind: ServiceAccount
+    name: control-plane-sa
+    namespace: minekubernetes
+roleRef:
+  kind: ClusterRole
+  name: control-plane-node-viewer
+  apiGroup: rbac.authorization.k8s.io
