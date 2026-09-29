@@ -10,12 +10,14 @@ use crate::error::{GatewayError, Result};
 use crate::limiter::ConnectionRateLimiter;
 use crate::motd::{handle_status_ping, StatusCache};
 use crate::routing::{RouteTable, RoutingModel};
+use crate::session::{handle_login_proxy, SessionManager};
 
 pub struct GatewayServer {
     config: Arc<GatewayConfig>,
     rate_limiter: Arc<ConnectionRateLimiter>,
     route_table: RouteTable,
     status_cache: StatusCache,
+    session_manager: SessionManager,
 }
 
 impl GatewayServer {
@@ -26,6 +28,7 @@ impl GatewayServer {
             rate_limiter: Arc::new(ConnectionRateLimiter::new(rate_limit)),
             route_table: RouteTable::new(),
             status_cache: StatusCache::default(),
+            session_manager: SessionManager::default(),
         }
     }
 
@@ -39,12 +42,21 @@ impl GatewayServer {
         self
     }
 
+    pub fn with_session_manager(mut self, session_manager: SessionManager) -> Self {
+        self.session_manager = session_manager;
+        self
+    }
+
     pub fn route_table(&self) -> &RouteTable {
         &self.route_table
     }
 
     pub fn status_cache(&self) -> &StatusCache {
         &self.status_cache
+    }
+
+    pub fn session_manager(&self) -> &SessionManager {
+        &self.session_manager
     }
 
     /// Executa o loop principal de aceitação de conexões TCP (RF-GW-01).
@@ -65,6 +77,7 @@ impl GatewayServer {
                             let rate_limiter = Arc::clone(&self.rate_limiter);
                             let route_table = self.route_table.clone();
                             let status_cache = self.status_cache.clone();
+                            let session_manager = self.session_manager.clone();
 
                             // RF-GW-01: Runtime Tokio multi-thread, uma task leve por conexão
                             tokio::spawn(async move {
@@ -75,6 +88,7 @@ impl GatewayServer {
                                     rate_limiter,
                                     route_table,
                                     status_cache,
+                                    session_manager,
                                 ).await {
                                     debug!(peer = %peer_addr, error = %err, "Conexão encerrada com erro");
                                 }
@@ -104,6 +118,7 @@ impl GatewayServer {
         rate_limiter: Arc<ConnectionRateLimiter>,
         route_table: RouteTable,
         status_cache: StatusCache,
+        session_manager: SessionManager,
     ) -> Result<()> {
         // 1. Rate limiting pré-roteamento
         if !rate_limiter.check(peer_addr.ip()) {
@@ -154,8 +169,9 @@ impl GatewayServer {
             HandshakeResult::Login {
                 handshake,
                 login_start,
+                original_handshake,
+                original_login_start,
                 client_ip,
-                ..
             } => {
                 let route = route_table.lookup_virtual_host(local_port, &handshake.server_address);
                 info!(
@@ -163,8 +179,18 @@ impl GatewayServer {
                     server = %handshake.server_address,
                     route = ?route.as_ref().map(|r| &r.server_id),
                     client_ip = %client_ip,
-                    "Processado Handshake de Login com sucesso"
+                    "Iniciando proxy duplex e replay upstream para Login"
                 );
+                // RF-GW-11: Replay de Handshake + Login Start, PROXY v2 opcional e proxy duplex
+                handle_login_proxy(
+                    conn,
+                    route,
+                    handshake,
+                    login_start,
+                    original_handshake,
+                    original_login_start,
+                    &session_manager,
+                ).await?;
             }
         }
 
