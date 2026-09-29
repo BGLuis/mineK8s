@@ -31,6 +31,14 @@ export interface BackupResult {
   freezeDurationMs?: number;
 }
 
+export interface RestoreResult {
+  serverId: string;
+  backupFile: string;
+  preRestoreBackupPath?: string;
+  restoredAt: Date;
+  durationMs: number;
+}
+
 @Injectable()
 export class ServersBackupService {
   private readonly logger = new Logger(ServersBackupService.name);
@@ -261,6 +269,247 @@ export class ServersBackupService {
         }
       }
       this.activeBackupLocks.delete(server.id);
+    }
+  }
+
+  /**
+   * Gera backup preventivo formal PRE_RESTORE com retenção garantida de 48h (D-05).
+   */
+  async createPreRestoreBackup(server: Server): Promise<BackupResult> {
+    const timestamp = Date.now();
+    const filename = `${server.subdomain}_pre-restore_${timestamp}.tar.gz`;
+    const backupsDir = this.getBackupsDir();
+    const targetArchive = path.join(backupsDir, filename);
+    const serverDir = this.getServerDataDir(server);
+
+    await this.ensureBackupArchive(serverDir, targetArchive);
+    const stat = await fs.promises.stat(targetArchive);
+    const sha256Checksum = await this.calculateSha256(targetArchive);
+    await fs.promises.writeFile(`${targetArchive}.sha256`, `${sha256Checksum}  ${filename}\n`);
+
+    this.logger.log(
+      `[D-05] Backup PRE_RESTORE gerado com sucesso para [${server.subdomain}] em: ${targetArchive}`,
+    );
+
+    return {
+      backupId: `${server.id}-pre-restore-${timestamp}`,
+      serverId: server.id,
+      filename,
+      storagePath: targetArchive,
+      backupType: 'COLD',
+      sizeBytes: stat.size,
+      sha256Checksum,
+    };
+  }
+
+  /**
+   * Restauração Transacional em 5 fases com staging e rollback (RF-STO-04, D-05, RF-MG-07).
+   *
+   * @param server Instância a ser restaurada. Deve estar obrigatoriamente STOPPED.
+   * @param backupIdentifier Nome do arquivo ou caminho completo do arquivo .tar.gz a ser restaurado.
+   * @param options Opções adicionais (ex: expectedSha256, skipPreRestore).
+   */
+  async restoreBackup(
+    server: Server,
+    backupIdentifier: string,
+    options?: { expectedSha256?: string; skipPreRestore?: boolean },
+  ): Promise<RestoreResult> {
+    const startTime = Date.now();
+
+    // 1. Validação de Concorrência (RF-STO-19)
+    if (this.isServerBusy(server.id)) {
+      throw new ConflictException(
+        `O servidor [${server.subdomain}] já possui uma tarefa de storage/backup/restore em andamento (RF-STO-19).`,
+      );
+    }
+
+    // 2. Validação de Estado da Máquina de Estados (RF-STO-04)
+    if (server.state !== 'STOPPED') {
+      throw new ConflictException(
+        `Restauração requer que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-04).`,
+      );
+    }
+
+    // 3. Localização do arquivo de backup
+    const backupsDir = this.getBackupsDir();
+    const backupPath = path.isAbsolute(backupIdentifier)
+      ? backupIdentifier
+      : path.join(backupsDir, backupIdentifier);
+
+    if (!fs.existsSync(backupPath)) {
+      throw new HttpException(
+        `Arquivo de backup não encontrado no storage: ${backupPath}`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    this.activeBackupLocks.add(server.id);
+
+    const serverDir = this.getServerDataDir(server);
+    let preRestorePath: string | undefined;
+
+    try {
+      // 4. Criação do backup preventivo PRE_RESTORE formal com retenção de 48h (D-05)
+      if (!options?.skipPreRestore) {
+        this.logger.log(
+          `[D-05] Gerando backup preventivo PRE_RESTORE antes de modificar /data para [${server.subdomain}]...`,
+        );
+        const preRestoreResult = await this.createPreRestoreBackup(server);
+        preRestorePath = preRestoreResult.storagePath;
+      }
+
+      // 5. Determinação do checksum esperado (via options ou arquivo .sha256 adjacente)
+      let expectedSha = options?.expectedSha256;
+      if (!expectedSha) {
+        const adjacentShaFile = `${backupPath}.sha256`;
+        if (fs.existsSync(adjacentShaFile)) {
+          const content = await fs.promises.readFile(adjacentShaFile, 'utf-8');
+          expectedSha = content.trim().split(/\s+/)[0];
+        }
+      }
+
+      // 6. Despacho do Job K8s se k8sService estiver ativo
+      const timestamp = Date.now();
+      const backupFilename = path.basename(backupPath);
+      const jobName = `restore-${server.subdomain}-${timestamp}`;
+
+      if (this.k8sService) {
+        const manifest = ManifestBuilder.buildRestoreJob(
+          server,
+          backupFilename,
+          expectedSha,
+          timestamp,
+          this.configService,
+        );
+        await this.k8sService.createJob(manifest);
+        const jobSuccess = await this.k8sService.waitForJobCompletion(jobName);
+        await this.k8sService.deleteJob(jobName).catch((e) => {
+          this.logger.debug(`Cleanup do Job de restore ${jobName}: ${e.message}`);
+        });
+
+        if (!jobSuccess) {
+          throw new HttpException(
+            `Job de restauração no cluster K8s falhou. Rollback disparado no nó para restaurar /data intacto.`,
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+      }
+
+      // 7. Execução do algoritmo transacional em 5 fases (fiel no host / testbed / homelab)
+      await this.executeTransactionalRestore(server, serverDir, backupPath, expectedSha);
+
+      const durationMs = Date.now() - startTime;
+      this.logger.log(
+        `Restauração transacional concluída com sucesso para [${server.subdomain}] em ${durationMs}ms.`,
+      );
+
+      return {
+        serverId: server.id,
+        backupFile: backupPath,
+        preRestoreBackupPath: preRestorePath,
+        restoredAt: new Date(),
+        durationMs,
+      };
+    } finally {
+      this.activeBackupLocks.delete(server.id);
+    }
+  }
+
+  /**
+   * Executa o algoritmo transacional em 5 fases no sistema de arquivos local (RF-STO-04, D-05).
+   */
+  private async executeTransactionalRestore(
+    server: Server,
+    serverDir: string,
+    backupPath: string,
+    expectedSha?: string,
+  ): Promise<void> {
+    // Fase 1: Pré-Validação Criptográfica e Estrutural
+    if (expectedSha) {
+      const actualSha = await this.calculateSha256(backupPath);
+      if (actualSha !== expectedSha) {
+        throw new HttpException(
+          `[Fase 1] Checksum SHA-256 divergente do backup! Esperado: ${expectedSha}, Obtido: ${actualSha}`,
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    }
+
+    try {
+      await execFileAsync('tar', ['-tzf', backupPath]);
+    } catch {
+      throw new HttpException(
+        `[Fase 1] Arquivo de backup corrompido ou formato gzip inválido.`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    const stagingDir = path.join(serverDir, '.staging_safety');
+    if (fs.existsSync(stagingDir)) {
+      await fs.promises.rm(stagingDir, { recursive: true, force: true });
+    }
+    await fs.promises.mkdir(stagingDir, { recursive: true });
+
+    // Fase 2: Isolamento em Staging de Segurança (preservando dotfiles e ignorando .staging_safety e lost+found)
+    const existingEntries = await fs.promises.readdir(serverDir);
+    for (const name of existingEntries) {
+      if (name === '.staging_safety' || name === 'lost+found') {
+        continue;
+      }
+      await fs.promises.rename(path.join(serverDir, name), path.join(stagingDir, name));
+    }
+
+    let extractionSucceeded = false;
+    try {
+      // Fase 3: Extração do Backup para /data
+      await execFileAsync('tar', ['-xzf', backupPath, '-C', serverDir]);
+
+      // Fase 4: Validação de Sanidade via Hook Multi-jogo (RF-MG-07)
+      let isStructureValid = true;
+      if (this.gameStorageRegistry) {
+        isStructureValid = await this.gameStorageRegistry.validateRestoredData(server, serverDir);
+      } else {
+        const hasLevelDat =
+          fs.existsSync(path.join(serverDir, 'level.dat')) ||
+          fs.existsSync(path.join(serverDir, 'world', 'level.dat'));
+        const hasServerProperties = fs.existsSync(path.join(serverDir, 'server.properties'));
+        isStructureValid = hasLevelDat && hasServerProperties;
+      }
+
+      if (!isStructureValid) {
+        throw new Error('Falha na validação de sanidade do mundo restaurado (arquivos essenciais ausentes).');
+      }
+
+      extractionSucceeded = true;
+    } catch (err: any) {
+      this.logger.error(`[Fase 5 - Rollback] Falha na extração ou validação: ${err.message}. Acionando Rollback...`);
+
+      // Limpa dados parciais extraídos sem tocar em lost+found ou .staging_safety
+      const currentEntries = await fs.promises.readdir(serverDir);
+      for (const name of currentEntries) {
+        if (name === '.staging_safety' || name === 'lost+found') {
+          continue;
+        }
+        await fs.promises.rm(path.join(serverDir, name), { recursive: true, force: true });
+      }
+
+      // Restaura todos os arquivos do staging de volta para a raiz (preservando dotfiles)
+      const stagingEntries = await fs.promises.readdir(stagingDir);
+      for (const name of stagingEntries) {
+        await fs.promises.rename(path.join(stagingDir, name), path.join(serverDir, name));
+      }
+
+      await fs.promises.rm(stagingDir, { recursive: true, force: true });
+      throw new HttpException(
+        `Falha na restauração: ${err.message}. Rollback executado com sucesso e estado original preservado.`,
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    // Fase 5 - Commit: Purga staging de segurança
+    if (extractionSucceeded && fs.existsSync(stagingDir)) {
+      await fs.promises.rm(stagingDir, { recursive: true, force: true });
+      this.logger.log(`[Fase 5 - Commit] Staging purgado e restauração confirmada para ${server.subdomain}.`);
     }
   }
 
