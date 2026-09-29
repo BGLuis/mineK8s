@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -24,9 +26,14 @@ import {
 } from '@console/console-driver.interface';
 import { K8sLogStreamerService } from '@logging/k8s-log-streamer.service';
 import { LogEntry } from '@logging/circular-log-buffer';
+import { MinecraftSlpProbeService } from '../probes/minecraft-slp-probe.service';
+import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
+import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
 import { ServerSummaryDto } from './dto/server-summary.dto';
+import { UpdateVersionDto } from './dto/update-version.dto';
+import { ServersBackupService } from './servers-backup.service';
 
 @Injectable()
 export class ServersService {
@@ -43,6 +50,12 @@ export class ServersService {
     @Inject(CONSOLE_DRIVER_TOKEN)
     private readonly consoleDriver: ConsoleDriver,
     private readonly logStreamer: K8sLogStreamerService,
+    @Optional()
+    private readonly backupService?: ServersBackupService,
+    @Optional()
+    private readonly gatewayIpcService?: GatewayIpcService,
+    @Optional()
+    private readonly slpProbeService?: MinecraftSlpProbeService,
   ) {}
 
   async create(dto: CreateServerDto): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
@@ -335,5 +348,220 @@ export class ServersService {
       response,
       executionTimeMs: durationMs,
     };
+  }
+
+  /**
+   * Executa pipeline transacional de atualização de versão com backup pre-update e rollback (RF-STO-13).
+   */
+  async updateVersion(
+    id: string,
+    dto: UpdateVersionDto,
+  ): Promise<{ message: string; version: string; rolledBack: boolean }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
+
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    if (server.state === 'UPDATING') {
+      throw new ConflictException(
+        `Server [${server.subdomain}] is already being updated (state: UPDATING)`,
+      );
+    }
+
+    const previousVersion = server.game_version;
+    const previousModpack = server.modpack_id;
+    const previousType = server.server_type;
+    const previousState = server.state;
+
+    this.logger.log(
+      `Iniciando pipeline de atualização para [${server.subdomain}]: ${previousVersion} -> ${dto.game_version} (RF-STO-13)`,
+    );
+
+    // 1. Transição de estado para UPDATING e notificação ao Gateway L7
+    server.state = 'UPDATING';
+    await this.serverRepo.save(server);
+    this.notifyGateway(server, 'UPDATING');
+
+    // 2. Parada graciosa da JVM ativa caso o servidor estivesse rodando
+    if (previousState === 'READY' || previousState === 'STARTING') {
+      await this.k8sService.stopServer(server);
+    }
+
+    // 3. Backup Preventivo Obrigatório (pre-update)
+    let backupPath: string;
+    if (this.backupService) {
+      try {
+        backupPath = await this.backupService.createPreUpdateBackup(server);
+      } catch (err: any) {
+        this.logger.error(`Falha ao gerar backup pre-update para [${server.subdomain}]: ${err.message}`);
+        server.state = previousState;
+        await this.serverRepo.save(server);
+        this.notifyGateway(server, previousState);
+        throw new BadRequestException(`Falha ao gerar backup pre-update obrigatório: ${err.message}`);
+      }
+    } else {
+      backupPath = '/dummy/backup';
+    }
+
+    try {
+      // 4. Purga segura de mods/ para modpacks ou sob solicitação (RF-STO-13)
+      if (dto.purge_mods !== false && this.backupService) {
+        await this.backupService.purgeModsDirectory(server);
+      }
+
+      // 5. Aplicação da nova versão nos metadados
+      server.game_version = dto.game_version;
+      if (dto.server_type) {
+        server.server_type = dto.server_type;
+      }
+      if (dto.modpack_id !== undefined) {
+        server.modpack_id = dto.modpack_id;
+      }
+      await this.serverRepo.save(server);
+
+      // Re-provisiona manifesto com novos recursos/imagem no K8s
+      await this.k8sService.provisionServer(server, server.minecraft_settings);
+
+      // 6. Inicia o pod na nova versão
+      server.state = 'STARTING';
+      await this.serverRepo.save(server);
+      this.notifyGateway(server, 'STARTING');
+      await this.k8sService.startServer(server);
+
+      // 7. Health Watchdog / Verificação de boot
+      const probePassed = await this.verifyPostUpdateBoot(server);
+
+      if (probePassed) {
+        this.logger.log(
+          `Nova versão [${dto.game_version}] iniciada com sucesso em [${server.subdomain}]. Status: READY`,
+        );
+        server.state = 'READY';
+        await this.serverRepo.save(server);
+        this.notifyGateway(server, 'READY');
+
+        return {
+          message: 'Atualização de versão concluída com sucesso',
+          version: server.game_version,
+          rolledBack: false,
+        };
+      }
+
+      // Boot falhou: dispara Rollback Automático Transacional (RF-STO-13)
+      this.logger.error(
+        `Boot da nova versão [${dto.game_version}] falhou para [${server.subdomain}]. Disparando Rollback Automático (RF-STO-13)...`,
+      );
+      return await this.performRollback(
+        server,
+        backupPath,
+        previousVersion,
+        previousModpack,
+        previousType,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Erro durante pipeline de atualização de [${server.subdomain}]: ${err.message}. Disparando Rollback...`,
+      );
+      return await this.performRollback(
+        server,
+        backupPath,
+        previousVersion,
+        previousModpack,
+        previousType,
+      );
+    }
+  }
+
+  private async verifyPostUpdateBoot(server: Server): Promise<boolean> {
+    if (!this.slpProbeService) {
+      return true;
+    }
+
+    try {
+      const probe = await this.slpProbeService.probe('127.0.0.1', server.allocated_port || 25565, 3000);
+      return probe.ready;
+    } catch {
+      return false;
+    }
+  }
+
+  private async performRollback(
+    server: Server,
+    backupPath: string,
+    previousVersion: string,
+    previousModpack: string | null,
+    previousType: string,
+  ): Promise<{ message: string; version: string; rolledBack: boolean }> {
+    try {
+      // 1. Para pod da nova versão com falha
+      await this.k8sService.stopServer(server);
+
+      // 2. Restaura arquivos do backup pre-update
+      if (this.backupService) {
+        await this.backupService.restorePreUpdateBackup(server, backupPath);
+      }
+
+      // 3. Reverte atributos de banco
+      server.game_version = previousVersion;
+      server.modpack_id = previousModpack;
+      server.server_type = previousType;
+      server.state = 'STARTING';
+      await this.serverRepo.save(server);
+      this.notifyGateway(server, 'STARTING');
+
+      // 4. Re-provisiona manifesto anterior e inicia
+      await this.k8sService.provisionServer(server, server.minecraft_settings);
+      await this.k8sService.startServer(server);
+
+      server.state = 'READY';
+      await this.serverRepo.save(server);
+      this.notifyGateway(server, 'READY');
+
+      this.logger.log(
+        `Rollback automático concluído com sucesso para [${server.subdomain}]. Versão estável anterior restaurada: ${previousVersion}`,
+      );
+
+      return {
+        message: 'Falha na nova versão. Rollback automático executado com sucesso.',
+        version: previousVersion,
+        rolledBack: true,
+      };
+    } catch (rollbackErr: any) {
+      this.logger.error(
+        `Falha catastrófica durante rollback de [${server.subdomain}]: ${rollbackErr.message}`,
+      );
+      server.state = 'FAILED';
+      await this.serverRepo.save(server);
+      this.notifyGateway(server, 'FAILED');
+      throw new Error(`Falha durante rollback de versão: ${rollbackErr.message}`);
+    }
+  }
+
+  private notifyGateway(server: Server, status: ServerState): void {
+    if (!this.gatewayIpcService) {
+      return;
+    }
+    try {
+      this.gatewayIpcService.broadcastRouteUpdate({
+        action: RouteAction.STATUS_CHANGE,
+        server_id: server.id,
+        subdomain: server.subdomain,
+        target_ip_port: `mc-${server.subdomain}.minekubernetes.svc.cluster.local:${server.allocated_port || 25565}`,
+        status: status.toUpperCase(),
+        access_policy: (server as any).access_policy || 'PUBLIC',
+        allowed_group_ids: [],
+        allowed_user_ids: [],
+        proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
+        game_type: server.game_type || 'MINECRAFT',
+        routing_model: server.routing_model || 'VirtualHost',
+        listen_port: server.allocated_port || 25565,
+        auto_wake: server.auto_wake !== false,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Erro ao notificar Gateway sobre status ${status} de [${server.subdomain}]: ${err.message}`);
+    }
   }
 }

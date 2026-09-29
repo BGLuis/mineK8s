@@ -10,6 +10,9 @@ describe('ServersService', () => {
   let mockSettingsRepo: any;
   let mockAuditRepo: any;
   let mockK8sService: any;
+  let mockBackupService: any;
+  let mockGatewayIpcService: any;
+  let mockSlpProbeService: any;
 
   let serversDb: Map<string, Server>;
   let settingsDb: Map<string, MinecraftServerSettings>;
@@ -98,6 +101,20 @@ describe('ServersService', () => {
       }),
     };
 
+    mockBackupService = {
+      createPreUpdateBackup: jest.fn().mockResolvedValue('/tmp/backup-test-123'),
+      restorePreUpdateBackup: jest.fn().mockResolvedValue(undefined),
+      purgeModsDirectory: jest.fn().mockResolvedValue(undefined),
+    };
+
+    mockGatewayIpcService = {
+      broadcastRouteUpdate: jest.fn(),
+    };
+
+    mockSlpProbeService = {
+      probe: jest.fn().mockResolvedValue({ ready: true }),
+    };
+
     service = new ServersService(
       mockServerRepo as any,
       mockSettingsRepo as any,
@@ -105,6 +122,9 @@ describe('ServersService', () => {
       mockK8sService as any,
       mockConsoleDriver as any,
       mockLogStreamer as any,
+      mockBackupService as any,
+      mockGatewayIpcService as any,
+      mockSlpProbeService as any,
     );
   });
 
@@ -259,6 +279,72 @@ describe('ServersService', () => {
       await expect(service.getLogs('srv-missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('updateVersion (RF-STO-13 - Pre-Update Backup, Purge & Rollback)', () => {
+    beforeEach(() => {
+      serversDb.set('srv-update-1', {
+        id: 'srv-update-1',
+        name: 'Survival Server',
+        subdomain: 'survival',
+        state: 'READY',
+        game_version: '1.20.4',
+        server_type: 'PAPER',
+        modpack_id: 'atm9',
+        allocated_port: 25565,
+      } as any);
+    });
+
+    it('should update server version successfully with pre-update backup and purge of mods (RF-STO-13)', async () => {
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+        purge_mods: true,
+      });
+
+      expect(mockK8sService.stopServer).toHaveBeenCalled();
+      expect(mockBackupService.createPreUpdateBackup).toHaveBeenCalled();
+      expect(mockBackupService.purgeModsDirectory).toHaveBeenCalled();
+      expect(mockK8sService.provisionServer).toHaveBeenCalled();
+      expect(mockK8sService.startServer).toHaveBeenCalled();
+
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.game_version).toBe('1.20.5');
+      expect(server.state).toBe('READY');
+      expect(result.rolledBack).toBe(false);
+
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'UPDATING' }),
+      );
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'READY' }),
+      );
+    });
+
+    it('should trigger automated rollback when boot of new version fails (RF-STO-13)', async () => {
+      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.21.0',
+        purge_mods: true,
+      });
+
+      expect(mockBackupService.restorePreUpdateBackup).toHaveBeenCalled();
+
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.game_version).toBe('1.20.4'); // Restaurado para versão original
+      expect(server.state).toBe('READY');
+      expect(result.rolledBack).toBe(true);
+      expect(result.version).toBe('1.20.4');
+    });
+
+    it('should reject update with ConflictException if server is already in UPDATING state', async () => {
+      const server = serversDb.get('srv-update-1')!;
+      server.state = 'UPDATING';
+
+      await expect(
+        service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

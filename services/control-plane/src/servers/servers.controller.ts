@@ -26,6 +26,7 @@ import { CreateServerDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
+import { UpdateVersionDto } from './dto/update-version.dto';
 
 @ApiTags('Servers & Kubernetes Orchestration')
 @ApiBearerAuth()
@@ -84,6 +85,15 @@ export class ServersController {
   @ApiResponse({ status: 404, description: 'Server not found' })
   async stop(@Param('id') id: string) {
     return this.serversService.stop(id);
+  }
+
+  @Post(':id/update-version')
+  @ApiOperation({ summary: 'Update server version with pre-update backup and automated rollback (RF-STO-13)' })
+  @ApiResponse({ status: 200, description: 'Version update result' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is already being updated' })
+  async updateVersion(@Param('id') id: string, @Body() dto: UpdateVersionDto) {
+    return this.serversService.updateVersion(id, dto);
   }
 
   @Delete(':id')
