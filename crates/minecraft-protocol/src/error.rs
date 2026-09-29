@@ -35,4 +35,13 @@ pub enum ProtocolError {
 
     #[error("Invalid username format: {0}")]
     InvalidUsername(String),
+
+    #[error("Corrupted PROXY Protocol v2 preamble")]
+    CorruptedProxyPreamble,
+
+    #[error("Invalid PROXY Protocol header: {0}")]
+    InvalidProxyHeader(String),
+
+    #[error("Untrusted proxy IP attempting PROXY Protocol v2: {0}")]
+    UntrustedProxy(std::net::IpAddr),
 }
