@@ -18,6 +18,7 @@ import { AdminModule } from './admin/admin.module';
 import { ProbesModule } from './probes/probes.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ModpacksModule } from './modpacks/modpacks.module';
+import { DnsModule } from './dns/dns.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ModpacksModule } from './modpacks/modpacks.module';
     ProbesModule,
     TasksModule,
     ModpacksModule,
+    DnsModule,
   ],
   controllers: [AppController],
   providers: [

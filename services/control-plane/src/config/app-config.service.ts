@@ -9,6 +9,7 @@ import {
   RegistryConfig,
   StorageConfig,
   TailscaleConfig,
+  CloudflareConfig,
 } from './app-config.values';
 
 @Injectable()
@@ -128,6 +129,14 @@ export class AppConfigService {
       this.config.get<string>('SERVERS_DATA_ROOT', './storage/servers'),
       this.config.get<string>('SHARED_CACHE_PATH', '/cache'),
       this.config.get<string>('BACKUPS_PATH', '/backups'),
+    );
+  }
+
+  get cloudflare(): CloudflareConfig {
+    return new CloudflareConfig(
+      this.config.get<string>('CLOUDFLARE_API_TOKEN'),
+      this.config.get<string>('CLOUDFLARE_ZONE_ID'),
+      this.config.get<string>('CLOUDFLARE_ROOT_DOMAIN', 'minek8s.net'),
     );
   }
 }
