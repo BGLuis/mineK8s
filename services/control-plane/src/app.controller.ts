@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+import { Public } from './auth/public.decorator';
 import { AppConfigService } from './config/app-config.service';
 
 @ApiTags('System')
@@ -8,6 +9,7 @@ import { AppConfigService } from './config/app-config.service';
 export class AppController {
   constructor(private readonly configService: AppConfigService) {}
 
+  @Public()
   @Get('healthz')
   @ApiOperation({ summary: 'Liveness probe and system health check' })
   @ApiResponse({ status: 200, description: 'System is healthy' })
