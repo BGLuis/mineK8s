@@ -8,7 +8,7 @@ import { ReconcilerService } from './reconciler.service';
 
 @ApiTags('Reconciliation & Self-Healing')
 @ApiBearerAuth()
-@Roles(UserRole.ADMIN)
+@Roles('ADMIN')
 @Controller('api/reconciler')
 export class ReconcilerController {
   constructor(private readonly reconcilerService: ReconcilerService) {}

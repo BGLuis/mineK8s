@@ -101,6 +101,7 @@ export class AppConfigService {
       this.config.get<string>('KUBERNETES_NAMESPACE', 'minekubernetes'),
       this.config.get<string>('KUBERNETES_NODE_AFFINITY_KEY', 'kubernetes.io/hostname'),
       this.config.get<string>('KUBERNETES_NODE_AFFINITY_VALUE'),
+      this.config.get<boolean>('KUBERNETES_USE_MOCK_DRIVER', false),
     );
   }
 

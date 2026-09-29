@@ -37,6 +37,7 @@ export class KubernetesConfig {
     public readonly namespace: string = 'minekubernetes',
     public readonly nodeAffinityKey: string = 'kubernetes.io/hostname',
     public readonly nodeAffinityValue?: string,
+    public readonly useMockDriver: boolean = false,
   ) {}
 }
 

@@ -1,0 +1,48 @@
+// MineKubernetes — Tailscale Zero-Trust ACL Policy (huJSON)
+// Módulo: 04 — Tailscale Mesh, ACLs & Postura de Segurança (RF-TS-01, RF-TS-12)
+// Referência: docs/srs/04-SUBSISTEMA-TAILSCALE-IDENTIDADE.md
+{
+  "tagOwners": {
+    "tag:mc-gateway": ["autogroup:admin"],
+    "tag:mc-player": ["tag:mc-gateway"]
+  },
+
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["autogroup:admin"],
+      "dst": ["*:*"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:mc-player"],
+      "dst": ["tag:mc-gateway:25565"]
+    }
+  ],
+
+  "tests": [
+    {
+      "src": "tag:mc-player",
+      "accept": [
+        "tag:mc-gateway:25565"
+      ],
+      "deny": [
+        "tag:mc-gateway:22",
+        "tag:mc-gateway:80",
+        "tag:mc-gateway:443",
+        "tag:mc-gateway:3000",
+        "tag:mc-gateway:9090",
+        "192.168.1.0/24:*"
+      ]
+    },
+    {
+      "src": "autogroup:admin",
+      "accept": [
+        "tag:mc-gateway:22",
+        "tag:mc-gateway:25565",
+        "tag:mc-gateway:3000",
+        "tag:mc-gateway:9090"
+      ]
+    }
+  ]
+}

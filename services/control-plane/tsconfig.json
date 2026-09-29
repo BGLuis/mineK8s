@@ -10,6 +10,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "ignoreDeprecations": "6.0",
     "incremental": true,
     "skipLibCheck": true,
     "types": ["jest", "node"],
@@ -30,7 +31,8 @@
       "@auth/*": ["src/auth/*"],
       "@rcon/*": ["src/rcon/*"],
       "@console/*": ["src/console/*"],
-      "@terminal/*": ["src/terminal/*"]
+      "@terminal/*": ["src/terminal/*"],
+      "@tailscale/*": ["src/tailscale/*"]
     }
   }
 }

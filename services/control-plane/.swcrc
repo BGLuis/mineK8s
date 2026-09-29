@@ -21,14 +21,11 @@
       "@common/*": ["src/common/*"],
       "@servers/*": ["src/servers/*"],
       "@k8s/*": ["src/k8s/*"],
-      "@auth/*": ["src/auth/*"]
+      "@auth/*": ["src/auth/*"],
+      "@tailscale/*": ["src/tailscale/*"]
     }
   },
   "module": {
     "type": "commonjs"
-  },
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  }
 }

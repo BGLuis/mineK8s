@@ -13,6 +13,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "typecheck": "tsc --noEmit",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts"
@@ -88,6 +89,7 @@
       "^@nestjs/config$": "<rootDir>/../test/mocks/nestjs-config.mock.ts",
       "^@nestjs/typeorm$": "<rootDir>/../test/mocks/nestjs-typeorm.mock.ts",
       "^@nestjs/websockets$": "<rootDir>/../test/mocks/nestjs-websockets.mock.ts",
+      "^@nestjs/swagger$": "<rootDir>/../test/mocks/nestjs-swagger.mock.ts",
       "^@/(.*)$": "<rootDir>/$1",
       "^@config/(.*)$": "<rootDir>/config/$1",
       "^@logging/(.*)$": "<rootDir>/logging/$1",
@@ -98,7 +100,8 @@
       "^@auth/(.*)$": "<rootDir>/auth/$1",
       "^@rcon/(.*)$": "<rootDir>/rcon/$1",
       "^@console/(.*)$": "<rootDir>/console/$1",
-      "^@terminal/(.*)$": "<rootDir>/terminal/$1"
+      "^@terminal/(.*)$": "<rootDir>/terminal/$1",
+      "^@tailscale/(.*)$": "<rootDir>/tailscale/$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

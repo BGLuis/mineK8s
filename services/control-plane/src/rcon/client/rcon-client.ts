@@ -338,13 +338,14 @@ export class RconClient {
   }
 
   private handleDisconnect(): void {
+    const wasAuthFailed = this.state === RconConnectionState.AUTH_FAILED;
     this.state = RconConnectionState.DISCONNECTED;
     this.failPendingCommands(new Error('Conexão RCON encerrada'));
 
     if (
       !this.isDestroyed &&
       this.options.autoReconnect &&
-      this.state !== RconConnectionState.AUTH_FAILED
+      !wasAuthFailed
     ) {
       this.scheduleReconnect();
     }

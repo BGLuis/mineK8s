@@ -9,9 +9,15 @@ import { AppConfigService } from './app-config.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validationSchema: appConfigSchema,
-      validationOptions: {
-        abortEarly: false,
+      validate: (config: Record<string, unknown>) => {
+        const { error, value } = appConfigSchema.validate(config, {
+          abortEarly: false,
+          allowUnknown: true,
+        });
+        if (error) {
+          throw new Error(`Config validation error: ${error.message}`);
+        }
+        return value;
       },
     }),
   ],
