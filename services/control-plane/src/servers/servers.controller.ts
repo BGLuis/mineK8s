@@ -29,7 +29,7 @@ import { WriteFileDto } from './dto/write-file.dto';
 
 @ApiTags('Servers & Kubernetes Orchestration')
 @ApiBearerAuth()
-@Roles(UserRole.ADMIN)
+@Roles('ADMIN')
 @Controller('api/servers')
 export class ServersController {
   constructor(

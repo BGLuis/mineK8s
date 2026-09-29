@@ -1,0 +1,58 @@
+// MineKubernetes — Tailscale Zero-Trust ACL Policy (huJSON)
+// Módulo: 04 — Tailscale Mesh, ACLs & Postura de Segurança (RF-TS-01, RF-TS-12)
+// Referência: docs/srs/04-SUBSISTEMA-TAILSCALE-IDENTIDADE.md
+{
+  // 1. Definição de Proprietários de Tags (tagOwners)
+  // tag:mc-gateway é pertencente aos administradores do cluster.
+  // tag:mc-player é atribuída exclusivamente a jogadores convidados pelo Gateway/Control Plane.
+  "tagOwners": {
+    "tag:mc-gateway": ["autogroup:admin"],
+    "tag:mc-player": ["tag:mc-gateway"]
+  },
+
+  // 2. Regras de Firewall e Controle de Acesso (acls)
+  "acls": [
+    // Operadores e Administradores possuem acesso à infraestrutura
+    {
+      "action": "accept",
+      "src": ["autogroup:admin"],
+      "dst": ["*:*"]
+    },
+
+    // Regra Zero-Trust (RF-TS-01): Jogadores/convidados acessam EXCLUSIVAMENTE a porta do Gateway (25565).
+    // Nenhuma porta de host, SSH (22), API (3000) ou métricas (9090) é acessível.
+    {
+      "action": "accept",
+      "src": ["tag:mc-player"],
+      "dst": ["tag:mc-gateway:25565"]
+    }
+  ],
+
+  // 3. Suíte de Testes Declarativos de Política (RF-TS-12)
+  // Verificados automaticamente para garantir que não haja regressão de postura
+  "tests": [
+    {
+      "src": "tag:mc-player",
+      "accept": [
+        "tag:mc-gateway:25565"
+      ],
+      "deny": [
+        "tag:mc-gateway:22",
+        "tag:mc-gateway:80",
+        "tag:mc-gateway:443",
+        "tag:mc-gateway:3000",
+        "tag:mc-gateway:9090",
+        "192.168.1.0/24:*"
+      ]
+    },
+    {
+      "src": "autogroup:admin",
+      "accept": [
+        "tag:mc-gateway:22",
+        "tag:mc-gateway:25565",
+        "tag:mc-gateway:3000",
+        "tag:mc-gateway:9090"
+      ]
+    }
+  ]
+}

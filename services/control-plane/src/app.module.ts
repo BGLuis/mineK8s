@@ -12,6 +12,7 @@ import { KubernetesModule } from './k8s/k8s.module';
 import { ServersModule } from './servers/servers.module';
 import { ReconcilerModule } from './reconciler/reconciler.module';
 import { TerminalModule } from './terminal/terminal.module';
+import { TailscaleModule } from './tailscale/tailscale.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TerminalModule } from './terminal/terminal.module';
     ServersModule,
     ReconcilerModule,
     TerminalModule,
+    TailscaleModule,
   ],
   controllers: [AppController],
   providers: [
