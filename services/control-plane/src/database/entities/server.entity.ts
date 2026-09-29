@@ -67,6 +67,12 @@ export class Server {
   @Column({ type: 'int', default: 15 })
   sleep_timeout_minutes: number;
 
+  @Column({ type: 'int', default: 0 })
+  restart_count: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  last_restart_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

@@ -157,6 +157,7 @@ export class ManifestBuilder {
           },
           spec: {
             affinity,
+            terminationGracePeriodSeconds: 90,
             securityContext: {
               runAsUser: 1000,
               runAsGroup: 1000,

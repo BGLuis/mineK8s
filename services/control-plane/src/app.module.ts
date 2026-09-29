@@ -15,6 +15,7 @@ import { TerminalModule } from './terminal/terminal.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
 import { GatewayIpcModule } from './gateway-ipc/gateway-ipc.module';
 import { AdminModule } from './admin/admin.module';
+import { ProbesModule } from './probes/probes.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AdminModule } from './admin/admin.module';
     TailscaleModule,
     GatewayIpcModule,
     AdminModule,
+    ProbesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -2,11 +2,14 @@ import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ReconcilerService } from './reconciler.service';
 
-describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () => {
+describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler Loop)', () => {
   let reconciler: ReconcilerService;
   let mockServerRepo: any;
   let mockK8sService: any;
   let mockConfigService: any;
+  let mockSlpProbeService: any;
+  let mockGenericTcpProbeService: any;
+  let mockGatewayIpcService: any;
 
   let serversDb: Map<string, Server>;
   let clusterDeployments: Map<string, any>;
@@ -46,32 +49,65 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
           dep.status.readyReplicas = 0;
         }
       }),
+      restartServer: jest.fn(async (server: Server) => {
+        const dep = clusterDeployments.get(`mc-${server.subdomain}`);
+        if (dep) {
+          dep.replicas = 1;
+          dep.status.readyReplicas = 0; // simulating starting
+        }
+      }),
     };
 
     mockConfigService = {
       isTest: true,
       reconciliationIntervalMs: 30000,
+      kubernetes: {
+        namespace: 'minekubernetes',
+      },
+    };
+
+    mockSlpProbeService = {
+      supports: jest.fn(() => true),
+      probe: jest.fn(async () => ({
+        ready: true,
+        version: 'Paper 1.20.4',
+        playersOnline: 0,
+        maxPlayers: 20,
+      })),
+    };
+
+    mockGenericTcpProbeService = {
+      supports: jest.fn(() => false),
+      probe: jest.fn(async () => ({ ready: true })),
+    };
+
+    mockGatewayIpcService = {
+      broadcastRouteUpdate: jest.fn(),
     };
 
     reconciler = new ReconcilerService(
       mockServerRepo,
       mockK8sService,
       mockConfigService,
+      mockSlpProbeService,
+      mockGenericTcpProbeService,
+      mockGatewayIpcService,
     );
   });
 
-  describe('Acceptance Criterion: Apagar um Deployment à mão é corrigido no próximo ciclo', () => {
+  describe('Acceptance Criterion: Apagar um Deployment à mão é corrigido no próximo ciclo (RF-ARQ-25)', () => {
     it('should detect manually deleted deployment and auto-heal by reprovisioning it', async () => {
       const server: Server = {
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
         state: 'READY',
+        restart_count: 0,
+        last_restart_at: null,
         minecraft_settings: { motd: 'Auto heal test' } as MinecraftServerSettings,
       } as Server;
       serversDb.set(server.id, server);
 
-      // Deployment is NOT in cluster (was manually deleted via `kubectl delete deployment mc-smp`)
       expect(clusterDeployments.has('mc-smp')).toBe(false);
 
       const summary = await reconciler.reconcile();
@@ -90,10 +126,11 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
         name: 'Survival SMP',
         subdomain: 'smp',
         state: 'READY',
+        restart_count: 0,
+        last_restart_at: null,
       } as Server;
       serversDb.set(server.id, server);
 
-      // Deployment exists in cluster but someone scaled it down to 0
       clusterDeployments.set('mc-smp', {
         name: 'mc-smp',
         replicas: 0,
@@ -112,6 +149,8 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
         name: 'Survival SMP',
         subdomain: 'smp',
         state: 'STOPPED',
+        restart_count: 0,
+        last_restart_at: null,
       } as Server;
       serversDb.set(server.id, server);
 
@@ -128,13 +167,15 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
     });
   });
 
-  describe('Observed status promotion', () => {
-    it('should promote server from STARTING to READY when cluster pod becomes ready', async () => {
+  describe('Observed status promotion with SLP Probe (RF-ARQ-04, C-14)', () => {
+    it('should promote server from STARTING to READY only when SLP probe succeeds', async () => {
       const server: Server = {
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
         state: 'STARTING',
+        restart_count: 1,
+        last_restart_at: new Date(),
       } as Server;
       serversDb.set(server.id, server);
 
@@ -148,17 +189,24 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
 
       expect(summary.stateTransitions).toContain('smp: STARTING -> READY');
       expect(server.state).toBe('READY');
-      expect(mockServerRepo.save).toHaveBeenCalledWith(server);
+      expect(server.restart_count).toBe(0);
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: server.id,
+          status: 'READY',
+        }),
+      );
     });
-  });
 
-  describe('Healthy state', () => {
-    it('should do nothing when desired and observed state match', async () => {
+    it('should remain in STARTING if pod is ready in K8s but SLP probe fails', async () => {
       const server: Server = {
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
-        state: 'READY',
+        state: 'STARTING',
+        restart_count: 0,
+        last_restart_at: null,
+        updated_at: new Date(),
       } as Server;
       serversDb.set(server.id, server);
 
@@ -168,11 +216,128 @@ describe('ReconcilerService (RF-ARQ-25 - Desired vs Observed State Loop)', () =>
         status: { readyReplicas: 1 },
       });
 
+      mockSlpProbeService.probe.mockResolvedValueOnce({
+        ready: false,
+        error: 'Engine world not loaded yet',
+      });
+
       const summary = await reconciler.reconcile();
 
-      expect(summary.healedDeployments).toHaveLength(0);
-      expect(summary.reconciledReplicas).toHaveLength(0);
       expect(summary.stateTransitions).toHaveLength(0);
+      expect(server.state).toBe('STARTING');
+    });
+  });
+
+  describe('Liveness Watchdog and Deadlock Detection (RF-ARQ-05)', () => {
+    it('should detect deadlock after 3 consecutive failed pings in 15 seconds', async () => {
+      const server: Server = {
+        id: 'srv-smp-1',
+        name: 'Survival SMP',
+        subdomain: 'smp',
+        state: 'READY',
+        restart_count: 0,
+        last_restart_at: null,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      clusterDeployments.set('mc-smp', {
+        name: 'mc-smp',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: false,
+        error: 'Deadlock socket timeout',
+      });
+
+      // 1st failed ping
+      await reconciler.reconcile();
+      expect(server.state).toBe('READY');
+
+      // 2nd failed ping
+      await reconciler.reconcile();
+      expect(server.state).toBe('READY');
+
+      // 3rd failed ping -> deadlock detected -> auto-restart triggered
+      await reconciler.reconcile();
+      expect(server.state).toBe('STARTING');
+      expect(server.restart_count).toBe(1);
+      expect(mockK8sService.restartServer).toHaveBeenCalledWith(server);
+    });
+  });
+
+  describe('Auto-Restart Backoff Policy (RF-ARQ-06 - 3 falhas em 10 min -> CRASHED)', () => {
+    it('should auto-restart up to 3 times within 10 minutes and transition to CRASHED on the 4th failure', async () => {
+      const server: Server = {
+        id: 'srv-smp-1',
+        name: 'Survival SMP',
+        subdomain: 'smp',
+        state: 'READY',
+        restart_count: 0,
+        last_restart_at: null,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      const transitions: string[] = [];
+
+      // 1st failure
+      await reconciler.handleCrashOrDeadlock(server, transitions);
+      expect(server.state).toBe('STARTING');
+      expect(server.restart_count).toBe(1);
+
+      // 2nd failure
+      await reconciler.handleCrashOrDeadlock(server, transitions);
+      expect(server.state).toBe('STARTING');
+      expect(server.restart_count).toBe(2);
+
+      // 3rd failure
+      await reconciler.handleCrashOrDeadlock(server, transitions);
+      expect(server.state).toBe('STARTING');
+      expect(server.restart_count).toBe(3);
+
+      // 4th failure within 10 min window -> Exceeded threshold -> CRASHED
+      await reconciler.handleCrashOrDeadlock(server, transitions);
+      expect(server.state).toBe('CRASHED');
+      expect(server.restart_count).toBe(4);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: server.id,
+          status: 'CRASHED',
+        }),
+      );
+    });
+
+    it('should reset restart_count when server stays stable in READY for > 10 minutes', async () => {
+      const elevenMinutesAgo = new Date(Date.now() - 11 * 60 * 1000);
+      const server: Server = {
+        id: 'srv-smp-1',
+        name: 'Survival SMP',
+        subdomain: 'smp',
+        state: 'READY',
+        restart_count: 2,
+        last_restart_at: elevenMinutesAgo,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      clusterDeployments.set('mc-smp', {
+        name: 'mc-smp',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'Paper 1.20.4',
+        playersOnline: 0,
+        maxPlayers: 20,
+      });
+
+      await reconciler.reconcile();
+
+      expect(server.restart_count).toBe(0);
+      expect(mockServerRepo.save).toHaveBeenCalledWith(server);
     });
   });
 });

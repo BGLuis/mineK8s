@@ -75,6 +75,7 @@ describe('ManifestBuilder', () => {
         fsGroup: 1000,
         fsGroupChangePolicy: 'OnRootMismatch',
       });
+      expect(spec.terminationGracePeriodSeconds).toBe(90);
     });
 
     it('should configure memory requests equal to heap and limits equal to heap + 1.5Gi for <= 8G (RF-ARQ-09, C-17)', () => {

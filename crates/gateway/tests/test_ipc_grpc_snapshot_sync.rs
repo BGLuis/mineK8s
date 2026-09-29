@@ -151,7 +151,7 @@ fn test_live_route_update_stream_mutations() {
         server_id: "srv-creative".into(),
         subdomain: "creative.mine.lan".into(),
         target_ip_port: "".into(),
-        status: "MAINTENANCE".into(),
+        status: "STOPPING".into(),
         access_policy: "PUBLIC".into(),
         allowed_group_ids: vec![],
         allowed_user_ids: vec![],
@@ -162,7 +162,7 @@ fn test_live_route_update_stream_mutations() {
     };
     apply_route_update_event(&route_table, status_change);
     let updated = route_table.lookup_virtual_host(25565, "creative.mine.lan").unwrap();
-    assert_eq!(updated.status, ServerInstanceStatus::Maintenance);
+    assert_eq!(updated.status, ServerInstanceStatus::Stopping);
 
     // 4. Servidor deletado dinamicamente no Control Plane (DELETE)
     let delete_event = RouteUpdateEvent {

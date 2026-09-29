@@ -59,6 +59,20 @@ export class KubernetesService {
     );
   }
 
+  async restartServer(server: Server): Promise<void> {
+    this.logger.log(`Restarting server [${server.subdomain}]: scaling to 0 then 1...`);
+    await this.driver.scaleDeployment(
+      `mc-${server.subdomain}`,
+      0,
+      this.configService.kubernetes.namespace,
+    );
+    await this.driver.scaleDeployment(
+      `mc-${server.subdomain}`,
+      1,
+      this.configService.kubernetes.namespace,
+    );
+  }
+
   async deprovisionServer(server: Server): Promise<void> {
     this.logger.log(`Deprovisioning Kubernetes resources for server [${server.subdomain}]...`);
     await this.driver.deleteDeployment(

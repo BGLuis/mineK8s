@@ -41,24 +41,30 @@ impl From<&str> for RoutingModel {
     }
 }
 
-/// Estado do ciclo de vida da instância de servidor.
+/// Estado do ciclo de vida da instância de servidor (Resolução C-01 / RF-ARQ-01).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ServerInstanceStatus {
-    Stopped,
+    Provisioning,
     Starting,
     #[default]
     Ready,
-    Maintenance,
+    Stopping,
+    Stopped,
+    Updating,
     Crashed,
+    Failed,
 }
 
 impl From<&str> for ServerInstanceStatus {
     fn from(s: &str) -> Self {
         match s.to_ascii_uppercase().as_str() {
-            "STOPPED" => ServerInstanceStatus::Stopped,
+            "PROVISIONING" => ServerInstanceStatus::Provisioning,
             "STARTING" => ServerInstanceStatus::Starting,
-            "MAINTENANCE" => ServerInstanceStatus::Maintenance,
+            "STOPPING" => ServerInstanceStatus::Stopping,
+            "STOPPED" => ServerInstanceStatus::Stopped,
+            "UPDATING" => ServerInstanceStatus::Updating,
             "CRASHED" => ServerInstanceStatus::Crashed,
+            "FAILED" => ServerInstanceStatus::Failed,
             _ => ServerInstanceStatus::Ready,
         }
     }

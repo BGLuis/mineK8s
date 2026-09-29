@@ -30,7 +30,7 @@ message RouteUpdateEvent {
   string server_id = 2;
   string subdomain = 3;
   string target_ip_port = 4;
-  string status = 5; // STOPPED, STARTING, READY, MAINTENANCE
+  string status = 5; // PROVISIONING, STARTING, READY, STOPPING, STOPPED, UPDATING, CRASHED, FAILED
   string access_policy = 6; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE
   repeated string allowed_group_ids = 7;
   repeated string allowed_user_ids = 8;
