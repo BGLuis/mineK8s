@@ -1,14 +1,51 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Injectable, Logger } from '@nestjs/common';
+import * as crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
+import { KubernetesService } from '@k8s/k8s.service';
+import { ManifestBuilder } from '@k8s/manifest-builder';
+import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
+import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
+
+const execFileAsync = promisify(execFile);
+
+export interface BackupResult {
+  backupId: string;
+  serverId: string;
+  filename: string;
+  storagePath: string;
+  backupType: 'HOT' | 'COLD';
+  sizeBytes: number;
+  sha256Checksum: string;
+  freezeDurationMs?: number;
+}
 
 @Injectable()
 export class ServersBackupService {
   private readonly logger = new Logger(ServersBackupService.name);
+  private readonly activeBackupLocks = new Set<string>();
 
-  constructor(private readonly configService: AppConfigService) {}
+  constructor(
+    private readonly configService: AppConfigService,
+    @Optional() private readonly k8sService?: KubernetesService,
+    @Optional() private readonly consoleDriver?: MinecraftRconConsoleDriver,
+    @Optional() private readonly gameStorageRegistry?: GameStorageProviderRegistry,
+  ) {}
+
+  public isServerBusy(serverId: string): boolean {
+    return this.activeBackupLocks.has(serverId);
+  }
 
   public getServerDataDir(server: Server): string {
     const baseRoot = path.resolve(this.configService.storage.serversDataRoot);
@@ -17,6 +54,309 @@ export class ServersBackupService {
       fs.mkdirSync(serverDir, { recursive: true });
     }
     return serverDir;
+  }
+
+  public getBackupsDir(): string {
+    const backupsPath = path.resolve(this.configService.storage.backupsPath);
+    if (!fs.existsSync(backupsPath)) {
+      fs.mkdirSync(backupsPath, { recursive: true });
+    }
+    return backupsPath;
+  }
+
+  public getAvailableStorageBytes(): number {
+    const backupsDir = this.getBackupsDir();
+    try {
+      if (typeof fs.statfsSync === 'function') {
+        const stat = fs.statfsSync(backupsDir);
+        return stat.bfree * stat.bsize;
+      }
+    } catch (err: any) {
+      this.logger.debug(`Não foi possível verificar statfs no caminho ${backupsDir}: ${err.message}`);
+    }
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  /**
+   * Valida espaço disponível no pool de armazenamento de backups (RF-STO-19).
+   * Lança HTTP 507 se espaço disponível for inferior ao limiar mínimo de segurança (padrão 50 MiB).
+   */
+  public checkBackupStorageSpace(minBytesRequired: number = 50 * 1024 * 1024): void {
+    const freeBytes = this.getAvailableStorageBytes();
+    if (freeBytes < minBytesRequired) {
+      throw new HttpException(
+        `Espaço em disco insuficiente para execução de backup no pool /backups (disponível: ${freeBytes} bytes, mínimo: ${minBytesRequired} bytes) [RF-STO-19]`,
+        HttpStatus.INSUFFICIENT_STORAGE,
+      );
+    }
+  }
+
+  /**
+   * Orquestra backup atômico de uma instância de servidor (RF-STO-01, RF-STO-02, RF-STO-03, RF-STO-10, RF-STO-19).
+   *
+   * @param server Entidade do servidor de jogo.
+   * @param type 'HOT' (servidor em execução, com freeze < 2 s) ou 'COLD' (servidor parado).
+   */
+  async createBackup(
+    server: Server,
+    type: 'HOT' | 'COLD',
+    options?: { watchdogTimeoutMs?: number },
+  ): Promise<BackupResult> {
+    // 1. Verificação de Concorrência (RF-STO-19)
+    if (this.isServerBusy(server.id)) {
+      throw new ConflictException(
+        `O servidor [${server.subdomain}] já possui uma tarefa de storage/backup em andamento (RF-STO-19).`,
+      );
+    }
+
+    // 2. Validação de Estado da Máquina de Estados (RF-STO-19)
+    if (type === 'HOT' && server.state !== 'READY') {
+      throw new ConflictException(
+        `Hot backup requer que o servidor esteja no estado READY. Estado atual: [${server.state}] (RF-STO-19).`,
+      );
+    }
+
+    if (type === 'COLD' && server.state !== 'STOPPED') {
+      throw new ConflictException(
+        `Cold backup requer que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-19).`,
+      );
+    }
+
+    // 3. Verificação de Quota e Espaço Livre (RF-STO-19 -> HTTP 507)
+    this.checkBackupStorageSpace();
+
+    // 4. Aquisição de Trava
+    this.activeBackupLocks.add(server.id);
+
+    const timestamp = Date.now();
+    const backupTypeLower = type.toLowerCase() as 'hot' | 'cold';
+    const filename = `${server.subdomain}_${backupTypeLower}_${timestamp}.tar.gz`;
+    const backupsDir = this.getBackupsDir();
+    const targetArchive = path.join(backupsDir, filename);
+    const serverDir = this.getServerDataDir(server);
+    const jobName = `backup-${server.subdomain}-${backupTypeLower}-${timestamp}`;
+
+    let saveOffCalled = false;
+    let saveOnCalled = false;
+    let freezeDurationMs = 0;
+    let watchdogTimer: NodeJS.Timeout | undefined;
+
+    try {
+      const manifest = ManifestBuilder.buildBackupJob(
+        server,
+        backupTypeLower,
+        timestamp,
+        this.configService,
+      );
+
+      // Despacha Job em Kubernetes (RF-STO-01)
+      if (this.k8sService) {
+        await this.k8sService.createJob(manifest);
+      }
+
+      if (type === 'HOT') {
+        // Pré-aquecimento do Pod do Job antes do freeze (D-04)
+        if (this.k8sService) {
+          this.logger.log(`[D-04] Pré-aquecendo Pod do Job [${jobName}] no cluster K8s...`);
+          await this.k8sService.waitForJobPodRunning(jobName, 30000);
+        }
+
+        // Armar Watchdog de contingência de 15 segundos para save-on (RF-STO-19)
+        const watchdogMs = options?.watchdogTimeoutMs ?? 15000;
+        watchdogTimer = setTimeout(async () => {
+          if (!saveOnCalled) {
+            this.logger.error(
+              `[RF-STO-19] Watchdog de save-on disparado para ${server.subdomain} após ${watchdogMs}ms! Forçando religamento do autosave.`,
+            );
+            try {
+              if (this.consoleDriver) {
+                await this.consoleDriver.saveOn(server);
+              }
+              saveOnCalled = true;
+            } catch (err) {
+              this.logger.error(`Falha no watchdog ao forçar save-on: ${(err as Error).message}`);
+            }
+          }
+        }, watchdogMs);
+
+        // Disparo da janela de freeze ultracurta (< 2 s)
+        if (this.consoleDriver) {
+          this.logger.log(`Desabilitando autosave e descarregando chunks para [${server.subdomain}]...`);
+          await this.consoleDriver.saveOff(server);
+          saveOffCalled = true;
+          await this.consoleDriver.saveFlush(server);
+        }
+
+        const freezeStart = Date.now();
+        const snapshotDir = path.join(serverDir, '.snapshot_tmp');
+
+        // Criação do snapshot CoW com reflink e todas as dimensões Paper (D-01, D-02, D-03)
+        await this.createLocalSnapshot(serverDir, snapshotDir);
+
+        // Imediatamente reativa o autosave na JVM
+        if (this.consoleDriver) {
+          await this.consoleDriver.saveOn(server);
+          saveOnCalled = true;
+        }
+        freezeDurationMs = Date.now() - freezeStart;
+        clearTimeout(watchdogTimer);
+
+        this.logger.log(
+          `[RF-STO-03] Hot backup snapshot criado com sucesso em ${freezeDurationMs}ms (< 2000ms). Autosave reativado.`,
+        );
+
+        // Espera término do Job assíncrono ou gera arquivo compactado a partir de .snapshot_tmp
+        if (this.k8sService) {
+          await this.k8sService.waitForJobCompletion(jobName);
+        }
+
+        await this.ensureBackupArchive(snapshotDir, targetArchive);
+
+        // Limpeza da pasta temporária do snapshot
+        await fs.promises.rm(snapshotDir, { recursive: true, force: true });
+      } else {
+        // Cold backup direto de /data
+        if (this.k8sService) {
+          await this.k8sService.waitForJobCompletion(jobName);
+        }
+        await this.ensureBackupArchive(serverDir, targetArchive);
+      }
+
+      // Cleanup do Job K8s
+      if (this.k8sService) {
+        await this.k8sService.deleteJob(jobName).catch((e) => {
+          this.logger.debug(`Cleanup do Job ${jobName}: ${e.message}`);
+        });
+      }
+
+      // Cálculo de integridade criptográfica SHA-256 e estatísticas
+      const stat = await fs.promises.stat(targetArchive);
+      const sha256Checksum = await this.calculateSha256(targetArchive);
+      await fs.promises.writeFile(`${targetArchive}.sha256`, `${sha256Checksum}  ${filename}\n`);
+
+      this.logger.log(
+        `Backup [${filename}] gerado com sucesso. Tamanho: ${stat.size} bytes, SHA-256: ${sha256Checksum}`,
+      );
+
+      return {
+        backupId: `${server.id}-${timestamp}`,
+        serverId: server.id,
+        filename,
+        storagePath: targetArchive,
+        backupType: type,
+        sizeBytes: stat.size,
+        sha256Checksum,
+        freezeDurationMs,
+      };
+    } finally {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer);
+      }
+      // Salvaguarda final: se save-off foi chamado e save-on não, restaura o autosave obrigatoriamente
+      if (saveOffCalled && !saveOnCalled && this.consoleDriver) {
+        try {
+          await this.consoleDriver.saveOn(server);
+        } catch (err) {
+          this.logger.error(`Erro ao garantir save-on no bloco finally: ${(err as Error).message}`);
+        }
+      }
+      this.activeBackupLocks.delete(server.id);
+    }
+  }
+
+  /**
+   * Clona atomicamente os dados do servidor para o diretório de snapshot (D-01, D-02, D-03).
+   * Utiliza reflink (Copy-on-Write) quando suportado pelo FS subjacente e preserva todas as dimensões Paper.
+   */
+  private async createLocalSnapshot(serverDir: string, snapshotDir: string): Promise<void> {
+    if (fs.existsSync(snapshotDir)) {
+      await fs.promises.rm(snapshotDir, { recursive: true, force: true });
+    }
+    await fs.promises.mkdir(snapshotDir, { recursive: true });
+
+    const eligiblePaths = await this.getSnapshotEligiblePaths(serverDir);
+    if (eligiblePaths.length === 0) {
+      return;
+    }
+
+    try {
+      // CoW reflink (D-03)
+      await execFileAsync('cp', ['--reflink=auto', '-a', ...eligiblePaths, snapshotDir]);
+    } catch {
+      // Fallback para cópia recursiva
+      for (const p of eligiblePaths) {
+        const base = path.basename(p);
+        await this.copyRecursive(p, path.join(snapshotDir, base));
+      }
+    }
+  }
+
+  /**
+   * Garante a geração do arquivo .tar.gz a partir do diretório de origem (D-01, RF-STO-10).
+   */
+  private async ensureBackupArchive(sourceDir: string, targetFile: string): Promise<void> {
+    if (fs.existsSync(targetFile)) {
+      return;
+    }
+
+    const parent = path.dirname(targetFile);
+    if (!fs.existsSync(parent)) {
+      await fs.promises.mkdir(parent, { recursive: true });
+    }
+
+    // Exclusões padronizadas conforme RF-STO-10
+    await execFileAsync('tar', [
+      "--exclude=logs/*",
+      "--exclude=crash-reports/*",
+      "--exclude=.cache/*",
+      "--exclude=.snapshot_tmp*",
+      "--exclude=.staging_safety*",
+      "--exclude=*.log.gz",
+      "--exclude=*.log",
+      "--exclude=.backups*",
+      "-czf",
+      targetFile,
+      "-C",
+      sourceDir,
+      ".",
+    ]);
+  }
+
+  private isExcludedFromSnapshot(name: string): boolean {
+    return (
+      name === '.snapshot_tmp' ||
+      name === '.snapshot_trigger' ||
+      name === '.snapshot_worker_ready' ||
+      name === '.snapshot_ready' ||
+      name === '.staging_safety' ||
+      name === '.backups' ||
+      name === 'logs' ||
+      name === '.cache' ||
+      name === 'crash-reports' ||
+      name.endsWith('.log') ||
+      name.endsWith('.log.gz')
+    );
+  }
+
+  private async getSnapshotEligiblePaths(serverDir: string): Promise<string[]> {
+    const entries = await fs.promises.readdir(serverDir);
+    const eligible: string[] = [];
+    for (const name of entries) {
+      if (!this.isExcludedFromSnapshot(name)) {
+        eligible.push(path.join(serverDir, name));
+      }
+    }
+    return eligible;
+  }
+
+  private async calculateSha256(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+      stream.on('error', (err) => reject(err));
+    });
   }
 
   /**

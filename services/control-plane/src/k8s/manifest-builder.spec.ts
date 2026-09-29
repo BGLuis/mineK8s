@@ -141,4 +141,69 @@ describe('ManifestBuilder', () => {
       expect(container.args[0]).toContain('exec java');
     });
   });
+
+  describe('buildBackupJob (RF-STO-01, RF-STO-02, RF-STO-10, D-01..D-04)', () => {
+    it('should generate valid Job batch/v1 for HOT backup with pre-heating and CoW snapshot script', () => {
+      const timestamp = 1700000000;
+      const job = ManifestBuilder.buildBackupJob(sampleServer, 'hot', timestamp, mockConfigService);
+
+      expect(job.apiVersion).toBe('batch/v1');
+      expect(job.kind).toBe('Job');
+      expect(job.metadata.name).toBe('backup-smp-hot-1700000000');
+      expect(job.metadata.namespace).toBe('minekubernetes');
+      expect(job.metadata.labels['minekubernetes.io/backup-type']).toBe('hot');
+
+      const podSpec = job.spec.template.spec;
+      expect(podSpec.restartPolicy).toBe('Never');
+      expect(podSpec.securityContext.runAsUser).toBe(1000);
+      expect(podSpec.securityContext.fsGroup).toBe(1000);
+
+      // Volume mounts (RF-STO-01, RF-STO-02)
+      expect(podSpec.volumes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'data-volume',
+            persistentVolumeClaim: { claimName: 'data-smp' },
+          }),
+          expect.objectContaining({
+            name: 'backup-volume',
+            persistentVolumeClaim: { claimName: 'backup-storage' },
+          }),
+        ]),
+      );
+
+      const container = podSpec.containers[0];
+      expect(container.name).toBe('backup-worker');
+      expect(container.image).toBe('alpine:3.20');
+
+      const script = container.args[0];
+      // Notification of worker ready for pre-heating (D-04)
+      expect(script).toContain('.snapshot_worker_ready');
+      expect(script).toContain('.snapshot_trigger');
+      // CoW reflink snapshot (D-03)
+      expect(script).toContain('cp --reflink=auto -a');
+      expect(script).toContain('.snapshot_tmp');
+      // Tar compressing from .snapshot_tmp (D-01) with standard exclusions (RF-STO-10)
+      expect(script).toContain("-C /data/.snapshot_tmp .");
+      expect(script).toContain("--exclude='logs/*'");
+      expect(script).toContain("--exclude='crash-reports/*'");
+      expect(script).toContain("--exclude='.cache/*'");
+      expect(script).toContain("--exclude='.snapshot_tmp*'");
+      expect(script).toContain('sha256sum');
+    });
+
+    it('should generate valid Job batch/v1 for COLD backup directly compressing from /data', () => {
+      const timestamp = 1700000000;
+      const job = ManifestBuilder.buildBackupJob(sampleServer, 'cold', timestamp, mockConfigService);
+
+      expect(job.metadata.name).toBe('backup-smp-cold-1700000000');
+      expect(job.metadata.labels['minekubernetes.io/backup-type']).toBe('cold');
+
+      const script = job.spec.template.spec.containers[0].args[0];
+      expect(script).toContain('-C /data .');
+      expect(script).toContain("--exclude='logs/*'");
+      expect(script).toContain('sha256sum');
+      expect(script).not.toContain('.snapshot_worker_ready');
+    });
+  });
 });

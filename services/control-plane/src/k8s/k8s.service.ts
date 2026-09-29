@@ -4,7 +4,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { Server } from '@database/entities/server.entity';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 
-import { IKubernetesDriver, K8sDeploymentInfo, KUBERNETES_DRIVER } from './k8s.interface';
+import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, KUBERNETES_DRIVER } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
 
 @Injectable()
@@ -103,5 +103,41 @@ export class KubernetesService {
 
   async listDeployments(): Promise<K8sDeploymentInfo[]> {
     return this.driver.listDeployments(this.configService.kubernetes.namespace);
+  }
+
+  async createJob(manifest: any): Promise<void> {
+    await this.driver.createJob(manifest);
+  }
+
+  async getJob(name: string, namespace?: string): Promise<K8sJobInfo | null> {
+    return this.driver.getJob(name, namespace || this.configService.kubernetes.namespace);
+  }
+
+  async deleteJob(name: string, namespace?: string): Promise<void> {
+    await this.driver.deleteJob(name, namespace || this.configService.kubernetes.namespace);
+  }
+
+  async waitForJobPodRunning(
+    jobName: string,
+    timeoutMs?: number,
+    namespace?: string,
+  ): Promise<boolean> {
+    return this.driver.waitForJobPodRunning(
+      jobName,
+      timeoutMs,
+      namespace || this.configService.kubernetes.namespace,
+    );
+  }
+
+  async waitForJobCompletion(
+    jobName: string,
+    timeoutMs?: number,
+    namespace?: string,
+  ): Promise<boolean> {
+    return this.driver.waitForJobCompletion(
+      jobName,
+      timeoutMs,
+      namespace || this.configService.kubernetes.namespace,
+    );
   }
 }

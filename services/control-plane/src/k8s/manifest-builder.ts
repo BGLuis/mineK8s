@@ -232,4 +232,155 @@ export class ManifestBuilder {
       },
     };
   }
+
+  public static buildBackupJob(
+    server: Server,
+    backupType: 'hot' | 'cold',
+    timestamp: number,
+    configService: AppConfigService,
+  ) {
+    const namespace = configService.kubernetes.namespace;
+    const filename = `${server.subdomain}_${backupType}_${timestamp}.tar.gz`;
+    const affinity = configService.kubernetes.nodeAffinityKey
+      ? {
+          nodeAffinity: {
+            requiredDuringSchedulingIgnoredDuringExecution: {
+              nodeSelectorTerms: [
+                {
+                  matchExpressions: [
+                    {
+                      key: configService.kubernetes.nodeAffinityKey,
+                      operator: 'In',
+                      values: [configService.kubernetes.nodeAffinityValue],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        }
+      : undefined;
+
+    const hotScript = `set -e
+echo "[1/4] Backup worker pronto. Notificando Control Plane..."
+touch /data/.snapshot_worker_ready
+
+echo "Aguardando sinal de snapshot do Control Plane..."
+timeout 60 sh -c 'while [ ! -f /data/.snapshot_trigger ]; do sleep 0.05; done' || { echo "Timeout aguardando snapshot_trigger" >&2; exit 1; }
+
+echo "[2/4] Criando snapshot rapido via CoW reflink..."
+mkdir -p /data/.snapshot_tmp
+find /data -mindepth 1 -maxdepth 1 -not -name '.snapshot_tmp' -not -name '.snapshot_trigger' -not -name '.snapshot_worker_ready' -not -name '.snapshot_ready' -not -name '.backups' -not -name 'logs' -not -name '.cache' -not -name 'crash-reports' -exec cp --reflink=auto -a {} /data/.snapshot_tmp/ \\;
+
+touch /data/.snapshot_ready
+rm -f /data/.snapshot_trigger /data/.snapshot_worker_ready
+echo "Snapshot clonado. Control Plane liberado para save-on."
+
+echo "[3/4] Compactando tar.gz a partir de .snapshot_tmp..."
+tar --exclude='logs/*' \\
+    --exclude='crash-reports/*' \\
+    --exclude='.cache/*' \\
+    --exclude='.snapshot_tmp*' \\
+    --exclude='.staging_safety*' \\
+    --exclude='*.log.gz' \\
+    --exclude='*.log' \\
+    --exclude='.backups*' \\
+    -czf /backups/${filename} \\
+    -C /data/.snapshot_tmp .
+
+echo "[4/4] Calculando checksum SHA-256 e finalizando..."
+sha256sum /backups/${filename} > /backups/${filename}.sha256
+rm -rf /data/.snapshot_tmp /data/.snapshot_ready
+echo "Hot backup concluido com sucesso."
+`;
+
+    const coldScript = `set -e
+echo "[1/3] Iniciando Cold Backup direto de /data..."
+tar --exclude='logs/*' \\
+    --exclude='crash-reports/*' \\
+    --exclude='.cache/*' \\
+    --exclude='.snapshot_tmp*' \\
+    --exclude='.staging_safety*' \\
+    --exclude='*.log.gz' \\
+    --exclude='*.log' \\
+    --exclude='.backups*' \\
+    -czf /backups/${filename} \\
+    -C /data .
+
+echo "[2/3] Calculando checksum SHA-256..."
+sha256sum /backups/${filename} > /backups/${filename}.sha256
+echo "Cold backup concluido com sucesso."
+`;
+
+    return {
+      apiVersion: 'batch/v1',
+      kind: 'Job',
+      metadata: {
+        name: `backup-${server.subdomain}-${backupType}-${timestamp}`,
+        namespace,
+        labels: {
+          'app.kubernetes.io/name': `backup-${server.subdomain}`,
+          'app.kubernetes.io/part-of': 'minekubernetes',
+          'app.kubernetes.io/component': 'backup-worker',
+          'minekubernetes.io/server-id': server.id,
+          'minekubernetes.io/backup-type': backupType,
+        },
+      },
+      spec: {
+        ttlSecondsAfterFinished: 600,
+        backoffLimit: 0,
+        template: {
+          metadata: {
+            labels: {
+              'app.kubernetes.io/name': `backup-${server.subdomain}`,
+              'app.kubernetes.io/part-of': 'minekubernetes',
+              'app.kubernetes.io/component': 'backup-worker',
+              'job-name': `backup-${server.subdomain}-${backupType}-${timestamp}`,
+            },
+          },
+          spec: {
+            restartPolicy: 'Never',
+            affinity,
+            securityContext: {
+              runAsUser: 1000,
+              runAsGroup: 1000,
+              fsGroup: 1000,
+            },
+            containers: [
+              {
+                name: 'backup-worker',
+                image: 'alpine:3.20',
+                command: ['/bin/sh', '-c'],
+                args: [backupType === 'hot' ? hotScript : coldScript],
+                volumeMounts: [
+                  {
+                    name: 'data-volume',
+                    mountPath: '/data',
+                  },
+                  {
+                    name: 'backup-volume',
+                    mountPath: '/backups',
+                  },
+                ],
+              },
+            ],
+            volumes: [
+              {
+                name: 'data-volume',
+                persistentVolumeClaim: {
+                  claimName: `data-${server.subdomain}`,
+                },
+              },
+              {
+                name: 'backup-volume',
+                persistentVolumeClaim: {
+                  claimName: 'backup-storage',
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
 }
