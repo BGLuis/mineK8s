@@ -12,3 +12,4 @@ export * from './invite-server.entity';
 export * from './server-audit-log.entity';
 export * from './server-backup.entity';
 export * from './modpack-task.entity';
+export * from './cas-object.entity';

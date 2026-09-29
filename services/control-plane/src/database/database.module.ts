@@ -18,6 +18,7 @@ import {
   UserServerAccess,
   ServerBackupEntity,
   ModpackTaskEntity,
+  CasObjectEntity,
 } from './entities';
 import { InitialSchema1710000000000 } from './migrations/1710000000000-InitialSchema';
 
@@ -36,6 +37,7 @@ const entities = [
   ServerAuditLog,
   ServerBackupEntity,
   ModpackTaskEntity,
+  CasObjectEntity,
 ];
 
 @Module({

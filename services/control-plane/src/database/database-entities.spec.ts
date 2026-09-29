@@ -16,6 +16,7 @@ import {
   BackupStatus,
   ModpackTaskEntity,
   ModpackTaskStatus,
+  CasObjectEntity,
 } from './entities';
 
 describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
@@ -155,5 +156,22 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     expect(task.currentStep).toBe('Baixando mods (45/100)');
     expect(task.downloadedFiles).toBe(45);
     expect(task.totalFiles).toBe(100);
+  });
+
+  it('should instantiate CasObjectEntity with content-addressable storage metadata (RF-STO-05, L-07)', () => {
+    const cas = new CasObjectEntity();
+    cas.sha256 = '3a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b';
+    cas.sha1 = '1234567890abcdef1234567890abcdef12345678';
+    cas.fileName = 'sodium-fabric-0.5.8.jar';
+    cas.fileSize = 450123;
+    cas.contentType = 'application/java-archive';
+    cas.storagePath = '/cache/cas/sha256/3a/7b/3a7b...jar';
+    cas.lastAccessedAt = new Date();
+
+    expect(cas.sha256).toBe('3a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b');
+    expect(cas.sha1).toBe('1234567890abcdef1234567890abcdef12345678');
+    expect(cas.fileName).toBe('sodium-fabric-0.5.8.jar');
+    expect(cas.fileSize).toBe(450123);
+    expect(cas.contentType).toBe('application/java-archive');
   });
 });
