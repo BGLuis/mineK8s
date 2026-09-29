@@ -13,7 +13,10 @@ pub mod telemetry;
 pub use config::GatewayConfig;
 pub use connection::{ClientConnection, HandshakeResult};
 pub use error::{GatewayError, Result};
-pub use identity::{TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};
+pub use identity::{
+    is_valid_minecraft_nickname, validate_minecraft_nickname, AccessDecision, AccessDecisionEngine,
+    NicknameDecision, TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity,
+};
 pub use ipc::{GatewayIpcClient, RouteAction, RouteUpdateEvent};
 pub use limiter::ConnectionRateLimiter;
 pub use motd::{build_synthetic_status, handle_status_ping, StatusCache};

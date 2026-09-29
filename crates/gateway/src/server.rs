@@ -3,11 +3,16 @@ use std::time::Instant;
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::config::GatewayConfig;
 use crate::connection::{ClientConnection, HandshakeResult};
 use crate::error::{GatewayError, Result};
+use crate::identity::{
+    validate_minecraft_nickname, AccessDecision, AccessDecisionEngine, NicknameDecision,
+    TailscaleLocalWhoIs,
+};
+use minecraft_protocol::error::ProtocolError;
 use crate::limiter::ConnectionRateLimiter;
 use crate::motd::{handle_status_ping, StatusCache};
 use crate::routing::{RouteTable, RoutingModel};
@@ -21,6 +26,7 @@ pub struct GatewayServer {
     status_cache: StatusCache,
     session_manager: SessionManager,
     metrics: Arc<GatewayMetrics>,
+    whois: Option<TailscaleLocalWhoIs>,
 }
 
 impl GatewayServer {
@@ -33,7 +39,13 @@ impl GatewayServer {
             status_cache: StatusCache::default(),
             session_manager: SessionManager::default(),
             metrics: Arc::new(GatewayMetrics::new()),
+            whois: None,
         }
+    }
+
+    pub fn with_whois(mut self, whois: TailscaleLocalWhoIs) -> Self {
+        self.whois = Some(whois);
+        self
     }
 
     pub fn with_route_table(mut self, route_table: RouteTable) -> Self {
@@ -92,6 +104,7 @@ impl GatewayServer {
                             let status_cache = self.status_cache.clone();
                             let session_manager = self.session_manager.clone();
                             let metrics = Arc::clone(&self.metrics);
+                            let whois = self.whois.clone();
 
                             // RF-GW-01: Runtime Tokio multi-thread, uma task leve por conexão
                             tokio::spawn(async move {
@@ -104,6 +117,7 @@ impl GatewayServer {
                                     status_cache,
                                     session_manager,
                                     metrics,
+                                    whois,
                                 ).await {
                                     debug!(peer = %peer_addr, error = %err, "Conexão encerrada com erro");
                                 }
@@ -135,6 +149,7 @@ impl GatewayServer {
         status_cache: StatusCache,
         session_manager: SessionManager,
         metrics: Arc<GatewayMetrics>,
+        whois: Option<TailscaleLocalWhoIs>,
     ) -> Result<()> {
         let start_time = Instant::now();
 
@@ -176,9 +191,32 @@ impl GatewayServer {
 
         // 3. Rota padrão VirtualHost: Processa Handshake streaming do Minecraft L7
         let mut conn = ClientConnection::new(stream, peer_addr);
-        let handshake_res = conn
+        let handshake_res = match conn
             .process_initial_handshake(&config, &rate_limiter)
-            .await?;
+            .await
+        {
+            Ok(res) => res,
+            Err(GatewayError::Protocol(ProtocolError::InvalidUsername(ref username))) => {
+                warn!(
+                    user = %username,
+                    peer = %peer_addr,
+                    "Login rejeitado por formato de nickname inválido (< 50ms)"
+                );
+                let msg = match validate_minecraft_nickname(username) {
+                    Err(err) => err.message().to_string(),
+                    Ok(_) => "§cFormato de nickname inválido.".to_string(),
+                };
+                return Self::send_login_disconnect(conn, &msg).await;
+            }
+            Err(GatewayError::Protocol(ProtocolError::StringTooLong { .. })) => {
+                warn!(
+                    peer = %peer_addr,
+                    "Login rejeitado por tamanho de string excedido (< 50ms)"
+                );
+                return Self::send_login_disconnect(conn, "§cNickname deve ter no máximo 16 caracteres.").await;
+            }
+            Err(e) => return Err(e),
+        };
 
         // Métricas de latência do handshake
         let handshake_duration = start_time.elapsed().as_secs_f64();
@@ -210,15 +248,85 @@ impl GatewayServer {
                 original_login_start,
                 client_ip,
             } => {
+                // 1. Validação estrita do formato de nickname (RF-ARQ-21, GW:430-432)
+                if let Err(err) = validate_minecraft_nickname(&login_start.username) {
+                    warn!(
+                        user = %login_start.username,
+                        error = ?err,
+                        peer = %peer_addr,
+                        "Login rejeitado por formato de nickname inválido (< 50ms)"
+                    );
+                    return Self::send_login_disconnect(conn, err.message()).await;
+                }
+
+                // 2. Busca e validação de rota
                 let route = route_table.lookup_virtual_host(local_port, &handshake.server_address);
-                let server_id = route
-                    .as_ref()
-                    .map(|r| r.server_id.clone())
-                    .unwrap_or_else(|| "unknown".into());
-                let subdomain = route
-                    .as_ref()
-                    .map(|r| r.subdomain.clone())
-                    .unwrap_or_else(|| "unknown".into());
+                let route = match route {
+                    Some(r) => r,
+                    None => {
+                        warn!(
+                            host = %handshake.server_address,
+                            peer = %peer_addr,
+                            "Servidor de destino não encontrado na tabela de rotas"
+                        );
+                        return Self::send_login_disconnect(conn, "§cServidor não encontrado.").await;
+                    }
+                };
+
+                // 3. Validação de WhoIs, Anti-Impersonation e Avaliação de Acesso Zero-Trust (RF-TS-02, RF-ARQ-21)
+                if let Some(whois_driver) = &whois {
+                    if let Ok(Some(whois_id)) = whois_driver.query_whois(&client_ip.to_string()).await {
+                        let registered_nick = if !whois_id.display_name.is_empty() {
+                            &whois_id.display_name
+                        } else {
+                            &whois_id.login_name
+                        };
+
+                        // Validação de Anti-Impersonation (< 50ms)
+                        match AccessDecisionEngine::evaluate_nickname(&login_start.username, registered_nick) {
+                            NicknameDecision::Impersonation { registered_nick } => {
+                                warn!(
+                                    declared = %login_start.username,
+                                    registered = %registered_nick,
+                                    peer = %peer_addr,
+                                    "Tentativa de impersonação rejeitada (< 50ms)"
+                                );
+                                return Self::send_login_disconnect(
+                                    conn,
+                                    "§cEste nickname não pertence a este dispositivo/conta.",
+                                ).await;
+                            }
+                            NicknameDecision::Invalid(err) => {
+                                return Self::send_login_disconnect(conn, err.message()).await;
+                            }
+                            NicknameDecision::Match | NicknameDecision::AutoAdopt => {}
+                        }
+
+                        // Avaliação de Política de Acesso (PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE, ADMIN bypass)
+                        let is_admin = whois_id.tags.iter().any(|t| t == "tag:mc-gateway" || t == "autogroup:admin");
+                        let user_role = if is_admin { "ADMIN" } else { "PLAYER" };
+                        let decision = AccessDecisionEngine::evaluate_access(
+                            &whois_id.user_id,
+                            user_role,
+                            &whois_id.tags,
+                            true,
+                            &route,
+                        );
+
+                        if let AccessDecision::Denied { reason } = decision {
+                            warn!(
+                                user = %login_start.username,
+                                server = %route.name,
+                                reason = %reason,
+                                "Acesso negado pela política do servidor"
+                            );
+                            return Self::send_login_disconnect(conn, reason).await;
+                        }
+                    }
+                }
+
+                let server_id = route.server_id.clone();
+                let subdomain = route.subdomain.clone();
 
                 metrics
                     .connections_total
@@ -232,14 +340,14 @@ impl GatewayServer {
                 info!(
                     user = %login_start.username,
                     server = %handshake.server_address,
-                    route = ?route.as_ref().map(|r| &r.server_id),
+                    route = %route.server_id,
                     client_ip = %client_ip,
                     "Iniciando proxy duplex e replay upstream para Login"
                 );
                 // RF-GW-11: Replay de Handshake + Login Start, PROXY v2 opcional e proxy duplex
                 let proxy_res = handle_login_proxy(
                     conn,
-                    route,
+                    Some(route),
                     handshake,
                     login_start,
                     original_handshake,
@@ -256,6 +364,30 @@ impl GatewayServer {
             }
         }
 
+        Ok(())
+    }
+
+    /// Envia pacote de Disconnect na fase de Login e encerra a conexão TCP imediatamente (< 50ms).
+    pub async fn send_login_disconnect(mut conn: ClientConnection, reason: &str) -> Result<()> {
+        use bytes::BytesMut;
+        use minecraft_protocol::frame::RawPacket;
+        use minecraft_protocol::packets::disconnect::DisconnectPacket;
+        use tokio::io::AsyncWriteExt;
+
+        let packet = DisconnectPacket::from_plain_text(reason);
+        let mut payload = BytesMut::new();
+        packet.encode(&mut payload);
+
+        let raw = RawPacket {
+            packet_id: DisconnectPacket::LOGIN_PACKET_ID,
+            payload: payload.freeze(),
+        };
+        let mut wire = BytesMut::new();
+        raw.encode(&mut wire);
+
+        conn.stream.write_all(&wire).await?;
+        let _ = conn.stream.flush().await;
+        let _ = conn.stream.shutdown().await;
         Ok(())
     }
 }
