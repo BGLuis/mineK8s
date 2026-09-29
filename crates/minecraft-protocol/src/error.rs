@@ -26,4 +26,13 @@ pub enum ProtocolError {
 
     #[error("Invalid packet data: {0}")]
     InvalidData(String),
+
+    #[error("Invalid hostname format: {0}")]
+    InvalidHostname(String),
+
+    #[error("Invalid handshake next state: {0}")]
+    InvalidNextState(i32),
+
+    #[error("Invalid username format: {0}")]
+    InvalidUsername(String),
 }
