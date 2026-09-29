@@ -1,0 +1,370 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadGatewayException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as crypto from 'crypto';
+
+import { Invite } from '../../database/entities/invite.entity';
+import { InviteGroup } from '../../database/entities/invite-group.entity';
+import { InviteServer } from '../../database/entities/invite-server.entity';
+import { User } from '../../database/entities/user.entity';
+import { UserGroup } from '../../database/entities/user-group.entity';
+import { UserServerAccess } from '../../database/entities/user-server-access.entity';
+import { TailscaleDevice } from '../../database/entities/tailscale-device.entity';
+import { TailscaleCloudDriver } from '../drivers/tailscale-cloud.driver';
+import { validateNicknameFormat } from '../decision/nickname-validator';
+import {
+  CreateInviteDto,
+  ClaimInviteDto,
+  ClaimResultDto,
+  InviteSummaryDto,
+  computeInviteStatus,
+} from '../dto';
+
+@Injectable()
+export class InvitesService {
+  private readonly logger = new Logger(InvitesService.name);
+  private baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+
+  constructor(
+    @InjectRepository(Invite)
+    private readonly inviteRepo: Repository<Invite>,
+    @InjectRepository(InviteGroup)
+    private readonly inviteGroupRepo: Repository<InviteGroup>,
+    @InjectRepository(InviteServer)
+    private readonly inviteServerRepo: Repository<InviteServer>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    @InjectRepository(UserGroup)
+    private readonly userGroupRepo: Repository<UserGroup>,
+    @InjectRepository(UserServerAccess)
+    private readonly userServerAccessRepo: Repository<UserServerAccess>,
+    @InjectRepository(TailscaleDevice)
+    private readonly deviceRepo: Repository<TailscaleDevice>,
+    private readonly tailscaleCloudDriver: TailscaleCloudDriver,
+  ) {}
+
+  public setBaseUrl(url: string): void {
+    this.baseUrl = url;
+  }
+
+  /**
+   * Emite um novo convite multi-uso com permissões pré-vinculadas (RF-TS-03, RF-TS-06).
+   */
+  async createInvite(dto: CreateInviteDto): Promise<InviteSummaryDto> {
+    const token = crypto.randomBytes(16).toString('hex');
+    const maxUses = dto.maxUses ?? 1;
+    const expiresInDays = dto.expiresInDays ?? 7;
+    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+
+    const invite = this.inviteRepo.create({
+      name: dto.name,
+      token,
+      max_uses: maxUses,
+      used_count: 0,
+      expires_at: expiresAt,
+      is_active: true,
+    });
+
+    const savedInvite = await this.inviteRepo.save(invite);
+
+    if (dto.groupIds && dto.groupIds.length > 0) {
+      for (const groupId of dto.groupIds) {
+        await this.inviteGroupRepo.save(
+          this.inviteGroupRepo.create({
+            invite_id: savedInvite.id,
+            group_id: groupId,
+          }),
+        );
+      }
+    }
+
+    if (dto.serverIds && dto.serverIds.length > 0) {
+      for (const serverId of dto.serverIds) {
+        await this.inviteServerRepo.save(
+          this.inviteServerRepo.create({
+            invite_id: savedInvite.id,
+            server_id: serverId,
+          }),
+        );
+      }
+    }
+
+    return this.toSummaryDto(savedInvite, dto.groupIds || [], dto.serverIds || []);
+  }
+
+  /**
+   * Lista todos os convites com status computado (RF-TS-06).
+   */
+  async listInvites(): Promise<InviteSummaryDto[]> {
+    const invites = await this.inviteRepo.find({
+      relations: ['invite_groups', 'invite_servers'],
+      order: { created_at: 'DESC' },
+    });
+
+    return invites.map((inv) =>
+      this.toSummaryDto(
+        inv,
+        (inv.invite_groups || []).map((g) => g.group_id),
+        (inv.invite_servers || []).map((s) => s.server_id),
+      ),
+    );
+  }
+
+  /**
+   * Obtém os detalhes de um convite pelo seu ID.
+   */
+  async getInviteById(id: string): Promise<InviteSummaryDto> {
+    const invite = await this.inviteRepo.findOne({
+      where: { id },
+      relations: ['invite_groups', 'invite_servers'],
+    });
+
+    if (!invite) {
+      throw new NotFoundException(`Convite com ID ${id} não encontrado`);
+    }
+
+    return this.toSummaryDto(
+      invite,
+      (invite.invite_groups || []).map((g) => g.group_id),
+      (invite.invite_servers || []).map((s) => s.server_id),
+    );
+  }
+
+  /**
+   * Revoga explicitamente um convite (RF-TS-06: transição para Revoked).
+   */
+  async revokeInvite(id: string): Promise<InviteSummaryDto> {
+    const invite = await this.inviteRepo.findOne({
+      where: { id },
+      relations: ['invite_groups', 'invite_servers'],
+    });
+
+    if (!invite) {
+      throw new NotFoundException(`Convite com ID ${id} não encontrado`);
+    }
+
+    invite.is_active = false;
+    await this.inviteRepo.save(invite);
+
+    return this.toSummaryDto(
+      invite,
+      (invite.invite_groups || []).map((g) => g.group_id),
+      (invite.invite_servers || []).map((s) => s.server_id),
+    );
+  }
+
+  /**
+   * Valida se um token é resgatável antes do preenchimento do formulário no portal /join.
+   */
+  async validateToken(token: string): Promise<InviteSummaryDto> {
+    const invite = await this.inviteRepo.findOne({
+      where: { token },
+      relations: ['invite_groups', 'invite_servers'],
+    });
+
+    if (!invite) {
+      throw new NotFoundException('Convite não encontrado ou token inválido');
+    }
+
+    const status = computeInviteStatus(invite);
+    if (status === 'Revoked') {
+      throw new BadRequestException('Este convite foi revogado pelo administrador');
+    }
+    if (status === 'Expired') {
+      throw new BadRequestException('Este convite expirou');
+    }
+    if (status === 'Depleted') {
+      throw new ConflictException('O limite de utilizações deste convite foi atingido');
+    }
+
+    return this.toSummaryDto(
+      invite,
+      (invite.invite_groups || []).map((g) => g.group_id),
+      (invite.invite_servers || []).map((s) => s.server_id),
+    );
+  }
+
+  /**
+   * Resgate atômico de convite no portal /join com checagem de nickname e compensação L-03 (RF-TS-08, RF-TS-11).
+   * 
+   * Critério de Concorrência: 10 claims simultâneos em maxUses=1 garantem exatamente 1 sucesso e 9 conflitos.
+   */
+  async claimInvite(dto: ClaimInviteDto): Promise<ClaimResultDto> {
+    // 1. Validação estrita do Nickname Vanilla (RF-ARQ-21, GW:430-432)
+    const nickValidation = validateNicknameFormat(dto.minecraftNick);
+    if (!nickValidation.valid) {
+      throw new BadRequestException(
+        `Formato de nickname inválido: ${nickValidation.reason}`,
+      );
+    }
+
+    // 2. Reserva atômica da cota no banco via conditional update atômico (RF-TS-08)
+    const updateResult = await this.inviteRepo
+      .createQueryBuilder()
+      .update(Invite)
+      .set({ used_count: () => 'used_count + 1' })
+      .where('token = :token', { token: dto.token })
+      .andWhere('is_active = true')
+      .andWhere('used_count < max_uses')
+      .andWhere('expires_at > :now', { now: new Date() })
+      .execute();
+
+    if (updateResult.affected === 0) {
+      const invite = await this.inviteRepo.findOne({ where: { token: dto.token } });
+      if (!invite) {
+        throw new NotFoundException('Convite não encontrado ou token inválido');
+      }
+      const status = computeInviteStatus(invite);
+      if (status === 'Revoked') {
+        throw new BadRequestException('Este convite foi revogado pelo administrador');
+      }
+      if (status === 'Expired') {
+        throw new BadRequestException('Este convite expirou');
+      }
+      throw new ConflictException('O limite de utilizações deste convite foi atingido');
+    }
+
+    // Carrega o convite completo e suas permissões pré-vinculadas
+    const invite = await this.inviteRepo.findOne({
+      where: { token: dto.token },
+      relations: ['invite_groups', 'invite_servers'],
+    });
+
+    if (!invite) {
+      throw new NotFoundException('Convite não encontrado');
+    }
+
+    // 3. Validação de Unicidade e Anti-Impersonation de Nickname (RF-TS-08, TS:328-332)
+    const existingUser = await this.userRepo.findOne({
+      where: { minecraft_nick: dto.minecraftNick },
+    });
+
+    if (existingUser) {
+      // ⚠️ Compensação da cota reservada do convite
+      await this.inviteRepo
+        .createQueryBuilder()
+        .update(Invite)
+        .set({ used_count: () => 'used_count - 1' })
+        .where('id = :id', { id: invite.id })
+        .execute();
+
+      throw new ConflictException('Nickname já registrado por outro jogador');
+    }
+
+    // 4. Criação do Usuário e Vínculos de Permissões Pré-Atribuídas (RF-TS-03)
+    let user = this.userRepo.create({
+      real_name: dto.realName,
+      minecraft_nick: dto.minecraftNick,
+      role: 'PLAYER',
+    });
+    user = await this.userRepo.save(user);
+
+    // Associação de Grupos
+    if (invite.invite_groups && invite.invite_groups.length > 0) {
+      for (const ig of invite.invite_groups) {
+        await this.userGroupRepo.save(
+          this.userGroupRepo.create({
+            user_id: user.id,
+            group_id: ig.group_id,
+          }),
+        );
+      }
+    }
+
+    // Associação de Servidores Individuais
+    if (invite.invite_servers && invite.invite_servers.length > 0) {
+      for (const is of invite.invite_servers) {
+        await this.userServerAccessRepo.save(
+          this.userServerAccessRepo.create({
+            user_id: user.id,
+            server_id: is.server_id,
+          }),
+        );
+      }
+    }
+
+    // 5. Geração de AuthKey na Tailscale Cloud API (RF-TS-05, PR-11)
+    const playerTag = `tag:player-${user.id}`;
+    let authKeyResult;
+
+    try {
+      authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey(
+        [playerTag, 'tag:player'],
+        86400 * 7,
+      );
+    } catch (cloudErr: any) {
+      this.logger.error(
+        `Falha ao gerar Pre-Auth Key na Tailscale Cloud API: ${cloudErr.message}. Executando compensação L-03...`,
+      );
+
+      // ⚠️ L-03 COMPENSAÇÃO ATÔMICA:
+      // Devolve a cota do convite e desfaz o cadastro do usuário
+      await this.inviteRepo
+        .createQueryBuilder()
+        .update(Invite)
+        .set({ used_count: () => 'used_count - 1' })
+        .where('id = :id', { id: invite.id })
+        .execute();
+
+      await this.userRepo.delete({ id: user.id });
+
+      throw new BadGatewayException(
+        'Falha ao provisionar credencial de rede na Tailscale Cloud. A cota do convite foi preservada.',
+      );
+    }
+
+    // 6. Registro do Dispositivo Pendente (RF-TS-06, RF-TS-08)
+    const device = this.deviceRepo.create({
+      user_id: user.id,
+      tailscale_tag: playerTag,
+      status: 'PENDING',
+    });
+    await this.deviceRepo.save(device);
+
+    const deepLinkUrl = `tailscale://login?key=${authKeyResult.key}`;
+
+    return {
+      userId: user.id,
+      realName: user.real_name || dto.realName,
+      minecraftNick: user.minecraft_nick,
+      authKey: authKeyResult.key,
+      deepLinkUrl,
+      tailcatTunnel: {
+        serverAddress: 'survival.mine.lan:25565',
+        instructions:
+          'Para usuários sem privilégios de Administrador, execute o executável tailcat para conectar via 127.0.0.1:25565.',
+      },
+      expiresAt: authKeyResult.expires
+        ? authKeyResult.expires.toISOString()
+        : new Date(Date.now() + 86400000 * 7).toISOString(),
+    };
+  }
+
+  private toSummaryDto(
+    invite: Invite,
+    groupIds: string[],
+    serverIds: string[],
+  ): InviteSummaryDto {
+    const status = computeInviteStatus(invite);
+    return {
+      id: invite.id,
+      token: invite.token,
+      name: invite.name,
+      maxUses: invite.max_uses,
+      usedCount: invite.used_count,
+      expiresAt: invite.expires_at,
+      status,
+      joinUrl: `${this.baseUrl}/join?token=${invite.token}`,
+      groupIds,
+      serverIds,
+      createdAt: invite.created_at,
+    };
+  }
+}

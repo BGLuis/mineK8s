@@ -4,6 +4,7 @@ import { TailscaleController } from './tailscale.controller';
 describe('TailscaleController', () => {
   let controller: TailscaleController;
   let mockPostureService: any;
+  let mockInvitesService: any;
 
   beforeEach(() => {
     mockPostureService = {
@@ -42,7 +43,42 @@ describe('TailscaleController', () => {
       })),
     };
 
-    controller = new TailscaleController(mockPostureService);
+    mockInvitesService = {
+      createInvite: jest.fn(async (dto) => ({
+        id: 'inv-1',
+        token: 'token-abc-12345678',
+        name: dto.name,
+        maxUses: dto.maxUses || 1,
+        usedCount: 0,
+        status: 'Active',
+      })),
+      listInvites: jest.fn(async () => [
+        { id: 'inv-1', token: 'token-abc', status: 'Active' },
+      ]),
+      getInviteById: jest.fn(async (id) => ({
+        id,
+        token: 'token-abc',
+        status: 'Active',
+      })),
+      revokeInvite: jest.fn(async (id) => ({
+        id,
+        token: 'token-abc',
+        status: 'Revoked',
+      })),
+      validateToken: jest.fn(async (token) => ({
+        id: 'inv-1',
+        token,
+        status: 'Active',
+      })),
+      claimInvite: jest.fn(async (dto) => ({
+        userId: 'u-1',
+        minecraftNick: dto.minecraftNick,
+        authKey: 'tskey-auth-mock',
+        deepLinkUrl: 'tailscale://login?key=tskey-auth-mock',
+      })),
+    };
+
+    controller = new TailscaleController(mockPostureService, mockInvitesService);
   });
 
   describe('GET /api/tailscale/posture-audit', () => {
@@ -67,6 +103,50 @@ describe('TailscaleController', () => {
       const result = await controller.evaluateCustomPolicy(customPolicy as any);
       expect(result.status).toBe(SecurityPostureStatus.VULNERABLE);
       expect(mockPostureService.evaluatePolicy).toHaveBeenCalledWith(customPolicy, 'memory', false);
+    });
+  });
+
+  describe('Gestão de Convites (/api/tailscale/invites)', () => {
+    it('deve delegar criação de convite para InvitesService', async () => {
+      const dto = { name: 'Discord Amigos', maxUses: 3 };
+      const res = await controller.createInvite(dto as any);
+      expect(res.name).toBe('Discord Amigos');
+      expect(mockInvitesService.createInvite).toHaveBeenCalledWith(dto);
+    });
+
+    it('deve listar convites', async () => {
+      const res = await controller.listInvites();
+      expect(res).toHaveLength(1);
+      expect(mockInvitesService.listInvites).toHaveBeenCalled();
+    });
+
+    it('deve obter convite por ID', async () => {
+      const res = await controller.getInviteById('inv-1');
+      expect(res.id).toBe('inv-1');
+      expect(mockInvitesService.getInviteById).toHaveBeenCalledWith('inv-1');
+    });
+
+    it('deve revogar convite', async () => {
+      const res = await controller.revokeInvite('inv-1');
+      expect(res.status).toBe('Revoked');
+      expect(mockInvitesService.revokeInvite).toHaveBeenCalledWith('inv-1');
+    });
+
+    it('deve validar token público', async () => {
+      const res = await controller.validateToken('token-abc');
+      expect(res.status).toBe('Active');
+      expect(mockInvitesService.validateToken).toHaveBeenCalledWith('token-abc');
+    });
+
+    it('deve resgatar convite público', async () => {
+      const dto = {
+        token: 'token-abc-12345678',
+        realName: 'Lucas',
+        minecraftNick: 'LucasCraft',
+      };
+      const res = await controller.claimInvite(dto);
+      expect(res.minecraftNick).toBe('LucasCraft');
+      expect(mockInvitesService.claimInvite).toHaveBeenCalledWith(dto);
     });
   });
 });
