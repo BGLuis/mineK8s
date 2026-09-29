@@ -258,3 +258,17 @@ impl TailscaleLocalWhoIs {
         None
     }
 }
+
+/// Verifica se o endereço IP pertence à rede CGNAT do Tailscale (100.64.0.0/10 ou ULA fd7a:115c:a1e0::/48) ou loopback (SEC-01).
+pub fn is_tailscale_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            (octets[0] == 100 && (octets[1] & 0xC0) == 64) || v4.is_loopback()
+        }
+        std::net::IpAddr::V6(v6) => {
+            let segs = v6.segments();
+            (segs[0] == 0xfd7a && segs[1] == 0x115c && segs[2] == 0xa1e0) || v6.is_loopback()
+        }
+    }
+}

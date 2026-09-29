@@ -84,12 +84,37 @@ impl RouteTable {
     }
 
     /// Busca de rota para VirtualHost L7 por porta do listener e hostname.
-    /// Se não encontrar a rota específica, recorre ao servidor fallback padrão.
+    /// Se não encontrar a rota específica, recorre à busca por alvo SRV (RF-CF-05) ou servidor fallback padrão.
     pub fn lookup_virtual_host(&self, listener_port: u16, hostname: &str) -> Option<CachedServerRoute> {
         let normalized = hostname.to_ascii_lowercase();
-        let key = RouteKey::virtual_host(listener_port, normalized);
+        let key = RouteKey::virtual_host(listener_port, &normalized);
         if let Some(route) = self.routes.get(&key) {
             return Some(route.value().clone());
+        }
+
+        // RF-CF-05: Tentar buscar pelo prefixo de subdomínio do alvo SRV (ex: survival.minek8s.net -> survival)
+        if let Some(prefix) = normalized.split('.').next() {
+            if prefix != normalized {
+                let prefix_key = RouteKey::virtual_host(listener_port, prefix);
+                if let Some(route) = self.routes.get(&prefix_key) {
+                    return Some(route.value().clone());
+                }
+            }
+        }
+
+        // Se o listener for público ou dedicado, busca entre todas as rotas VirtualHost registradas
+        for item in self.routes.iter() {
+            let r = item.value();
+            if r.routing_model == RoutingModel::VirtualHost {
+                if r.subdomain.eq_ignore_ascii_case(&normalized) {
+                    return Some(r.clone());
+                }
+                if let Some(prefix) = normalized.split('.').next() {
+                    if r.subdomain.eq_ignore_ascii_case(prefix) {
+                        return Some(r.clone());
+                    }
+                }
+            }
         }
 
         // Se não encontrar rota exata, tenta fallback default_server

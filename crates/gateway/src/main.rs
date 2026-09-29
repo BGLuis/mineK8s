@@ -26,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut config = GatewayConfig::default();
     config.listen_addr = listen_addr;
+    let public_listen_addr = config.public_listen_addr;
 
     let server = GatewayServer::new(config);
     let metrics = Arc::clone(server.metrics());
@@ -54,7 +55,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    if let Err(err) = server.run(listener, shutdown_rx).await {
+    let public_listener = match public_listen_addr {
+        Some(addr) => {
+            info!("Iniciando listener público em {}", addr);
+            Some(TcpListener::bind(addr).await?)
+        }
+        None => None,
+    };
+
+    if let Err(err) = server.run_dual(listener, public_listener, shutdown_rx).await {
         error!("Erro fatal no GatewayServer: {}", err);
     }
 

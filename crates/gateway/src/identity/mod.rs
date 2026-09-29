@@ -6,4 +6,4 @@ pub use acl_engine::{AccessDecision, AccessDecisionEngine, NicknameDecision};
 pub use nickname_validator::{
     is_valid_minecraft_nickname, validate_minecraft_nickname, NicknameValidationError,
 };
-pub use tailscale_local::{TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};
+pub use tailscale_local::{is_tailscale_ip, TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};

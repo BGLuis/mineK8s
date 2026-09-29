@@ -12,6 +12,7 @@ import { ConsoleModule } from '@console/console.module';
 import { LoggingModule } from '@logging/logging.module';
 import { ProbesModule } from '../probes/probes.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
+import { DnsModule } from '../dns/dns.module';
 
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
@@ -35,6 +36,7 @@ import { GameStorageProviderRegistry } from './providers/game-storage-provider.r
     LoggingModule,
     ProbesModule,
     GatewayIpcModule,
+    DnsModule,
   ],
   controllers: [ServersController],
   providers: [

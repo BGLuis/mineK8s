@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 
-/// Política de acesso ao servidor (RF-ID-02, RF-ID-06).
+/// Política de acesso ao servidor (RF-ID-02, RF-ID-06, RF-CF-01).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AccessPolicy {
     #[default]
@@ -9,6 +9,7 @@ pub enum AccessPolicy {
     Group,
     Individual,
     Maintenance,
+    Internet,
 }
 
 impl From<&str> for AccessPolicy {
@@ -17,6 +18,7 @@ impl From<&str> for AccessPolicy {
             "GROUP" => AccessPolicy::Group,
             "INDIVIDUAL" => AccessPolicy::Individual,
             "MAINTENANCE" => AccessPolicy::Maintenance,
+            "INTERNET" => AccessPolicy::Internet,
             _ => AccessPolicy::Public,
         }
     }

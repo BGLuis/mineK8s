@@ -28,6 +28,8 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       updateDomain: jest.fn(),
       getLogs: jest.fn(),
       sendCommand: jest.fn(),
+      publishServer: jest.fn(),
+      unpublishServer: jest.fn(),
     };
 
     mockFilesService = {
@@ -171,5 +173,37 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     await expect(controller.downloadBackup('srv-1', 'backup-missing', res)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('Cloudflare Public Exposure Endpoints (RF-CF-07)', () => {
+    it('POST :id/publish deve delegar para serversService.publishServer', async () => {
+      const mockResult = {
+        id: 'srv-1',
+        subdomain: 'survival',
+        access_policy: 'INTERNET',
+        online_mode: true,
+        srv_record: '_minecraft._tcp.survival.minek8s.net',
+      };
+      mockServersService.publishServer.mockResolvedValue(mockResult);
+
+      const result = await controller.publish('srv-1');
+
+      expect(mockServersService.publishServer).toHaveBeenCalledWith('srv-1');
+      expect(result).toEqual(mockResult);
+    });
+
+    it('DELETE :id/publish deve delegar para serversService.unpublishServer', async () => {
+      const mockResult = {
+        id: 'srv-1',
+        subdomain: 'survival',
+        access_policy: 'GROUP',
+      };
+      mockServersService.unpublishServer.mockResolvedValue(mockResult);
+
+      const result = await controller.unpublish('srv-1');
+
+      expect(mockServersService.unpublishServer).toHaveBeenCalledWith('srv-1');
+      expect(result).toEqual(mockResult);
+    });
   });
 });

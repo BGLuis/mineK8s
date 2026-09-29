@@ -23,6 +23,13 @@ export type ServerState =
   | 'CRASHED'
   | 'FAILED';
 
+export type ServerAccessPolicy =
+  | 'PUBLIC'
+  | 'GROUP'
+  | 'INDIVIDUAL'
+  | 'MAINTENANCE'
+  | 'INTERNET';
+
 @Entity('servers')
 export class Server {
   @PrimaryGeneratedColumn('uuid')
@@ -57,6 +64,9 @@ export class Server {
 
   @Column({ type: 'varchar', length: 20, default: 'STOPPED' })
   state: ServerState;
+
+  @Column({ type: 'varchar', length: 20, default: 'GROUP' })
+  access_policy: ServerAccessPolicy;
 
   @Column({ type: 'boolean', default: false })
   is_maintenance: boolean;
