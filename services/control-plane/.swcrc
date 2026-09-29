@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json.schemastore.org/swcrc",
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true
+    },
+    "target": "es2023",
+    "keepClassNames": true,
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["src/*"],
+      "@config/*": ["src/config/*"],
+      "@logging/*": ["src/logging/*"],
+      "@database/*": ["src/database/*"],
+      "@common/*": ["src/common/*"],
+      "@servers/*": ["src/servers/*"],
+      "@k8s/*": ["src/k8s/*"],
+      "@auth/*": ["src/auth/*"]
+    }
+  },
+  "module": {
+    "type": "commonjs"
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

@@ -1,0 +1,15 @@
+process.env.NODE_ENV = 'test';
+process.env.PORT = '3000';
+process.env.DB_HOST = 'localhost';
+process.env.DB_PORT = '5432';
+process.env.DB_USER = 'minek8s';
+process.env.DB_PASSWORD = 'minek8s_test_password';
+process.env.DB_NAME = 'minekubernetes_test';
+process.env.JWT_SECRET =
+  'minek8s_super_secret_test_jwt_key_at_least_32_chars';
+process.env.JWT_EXPIRATION = '1d';
+process.env.TAILSCALE_SOCKET_PATH = '/run/tailscale/tailscaled.sock';
+process.env.TAILSCALE_AUTH_ENABLED = 'true';
+process.env.KUBERNETES_IN_CLUSTER = 'false';
+process.env.KUBERNETES_NAMESPACE = 'minekubernetes';
+process.env.LOG_LEVEL = 'context=*;level=info';
