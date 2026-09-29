@@ -33,6 +33,7 @@ describe('GatewayIpcController', () => {
           game_type: 'MINECRAFT',
           routing_model: 'VirtualHost',
           listen_port: 25565,
+          auto_wake: false,
         }),
       ),
       handleSessionEvent: jest.fn(),

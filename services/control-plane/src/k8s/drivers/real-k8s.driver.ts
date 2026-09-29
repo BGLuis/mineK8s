@@ -6,7 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { AppConfigService } from '@config/app-config.service';
 
-import { IKubernetesDriver, K8sDeploymentInfo } from '../k8s.interface';
+import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo } from '../k8s.interface';
 
 @Injectable()
 export class RealKubernetesDriver implements IKubernetesDriver {
@@ -14,6 +14,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
   private readonly kc: k8s.KubeConfig;
   private readonly coreV1Api: k8s.CoreV1Api;
   private readonly appsV1Api: k8s.AppsV1Api;
+  private readonly batchV1Api: k8s.BatchV1Api;
 
   constructor(private readonly configService: AppConfigService) {
     this.kc = new k8s.KubeConfig();
@@ -37,6 +38,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
 
     this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
     this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
+    this.batchV1Api = this.kc.makeApiClient(k8s.BatchV1Api);
   }
 
   async createPersistentVolumeClaim(manifest: any): Promise<void> {
@@ -160,5 +162,103 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         unavailableReplicas: item.status?.unavailableReplicas,
       },
     }));
+  }
+
+  async createJob(manifest: any): Promise<void> {
+    const ns = manifest.metadata.namespace || this.configService.kubernetes.namespace;
+    await this.batchV1Api.createNamespacedJob({
+      namespace: ns,
+      body: manifest,
+    });
+  }
+
+  async getJob(
+    name: string,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<K8sJobInfo | null> {
+    try {
+      const res = await this.batchV1Api.readNamespacedJob({
+        name,
+        namespace,
+      });
+      return {
+        name,
+        namespace,
+        status: {
+          active: res.status?.active,
+          succeeded: res.status?.succeeded,
+          failed: res.status?.failed,
+        },
+      };
+    } catch (err: any) {
+      if (err?.statusCode === 404) return null;
+      throw err;
+    }
+  }
+
+  async deleteJob(
+    name: string,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<void> {
+    try {
+      await this.batchV1Api.deleteNamespacedJob({
+        name,
+        namespace,
+        propagationPolicy: 'Foreground',
+      });
+    } catch (err: any) {
+      if (err?.statusCode !== 404) throw err;
+    }
+  }
+
+  async waitForJobPodRunning(
+    jobName: string,
+    timeoutMs = 60000,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const pods = await this.coreV1Api.listNamespacedPod({
+          namespace,
+          labelSelector: `job-name=${jobName}`,
+        });
+        const pod = pods.items?.[0];
+        if (pod) {
+          const phase = pod.status?.phase;
+          if (phase === 'Running' || phase === 'Succeeded') {
+            return true;
+          }
+          if (phase === 'Failed') {
+            return false;
+          }
+        }
+      } catch (err) {
+        this.logger.debug(`Error checking pod status for job ${jobName}: ${(err as Error).message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    return false;
+  }
+
+  async waitForJobCompletion(
+    jobName: string,
+    timeoutMs = 120000,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const job = await this.getJob(jobName, namespace);
+      if (job) {
+        if ((job.status.succeeded ?? 0) > 0) {
+          return true;
+        }
+        if ((job.status.failed ?? 0) > 0) {
+          return false;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return false;
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IKubernetesDriver, K8sDeploymentInfo } from '../k8s.interface';
+import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo } from '../k8s.interface';
 
 @Injectable()
 export class MockKubernetesDriver implements IKubernetesDriver {
@@ -7,11 +7,13 @@ export class MockKubernetesDriver implements IKubernetesDriver {
   public readonly pvcs = new Map<string, any>();
   public readonly deployments = new Map<string, any>();
   public readonly services = new Map<string, any>();
+  public readonly jobs = new Map<string, any>();
 
   public reset() {
     this.pvcs.clear();
     this.deployments.clear();
     this.services.clear();
+    this.jobs.clear();
   }
 
   async createPersistentVolumeClaim(manifest: any): Promise<void> {
@@ -107,5 +109,55 @@ export class MockKubernetesDriver implements IKubernetesDriver {
       }
     }
     return list;
+  }
+
+  async createJob(manifest: any): Promise<void> {
+    const key = `${manifest.metadata.namespace || 'minekubernetes'}/${manifest.metadata.name}`;
+    this.jobs.set(key, {
+      manifest,
+      status: { active: 1, succeeded: 0, failed: 0, podPhase: 'Running' },
+    });
+    this.logger.debug(`[MockK8s] Created Job: ${key}`);
+  }
+
+  async getJob(name: string, namespace = 'minekubernetes'): Promise<K8sJobInfo | null> {
+    const key = `${namespace}/${name}`;
+    const job = this.jobs.get(key);
+    if (!job) return null;
+    return {
+      name,
+      namespace,
+      status: job.status,
+    };
+  }
+
+  async deleteJob(name: string, namespace = 'minekubernetes'): Promise<void> {
+    const key = `${namespace}/${name}`;
+    this.jobs.delete(key);
+    this.logger.debug(`[MockK8s] Deleted Job: ${key}`);
+  }
+
+  async waitForJobPodRunning(
+    jobName: string,
+    _timeoutMs = 60000,
+    namespace = 'minekubernetes',
+  ): Promise<boolean> {
+    const key = `${namespace}/${jobName}`;
+    const job = this.jobs.get(key);
+    return !!job;
+  }
+
+  async waitForJobCompletion(
+    jobName: string,
+    _timeoutMs = 120000,
+    namespace = 'minekubernetes',
+  ): Promise<boolean> {
+    const key = `${namespace}/${jobName}`;
+    const job = this.jobs.get(key);
+    if (!job) return false;
+    job.status.active = 0;
+    job.status.succeeded = 1;
+    job.status.podPhase = 'Succeeded';
+    return true;
   }
 }

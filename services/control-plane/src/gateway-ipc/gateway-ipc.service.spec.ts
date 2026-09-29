@@ -146,6 +146,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
         game_type: 'MINECRAFT',
         routing_model: 'VirtualHost',
         listen_port: 25565,
+        auto_wake: false,
       };
 
       service.broadcastRouteUpdate(updateEvent);
