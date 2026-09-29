@@ -8,6 +8,8 @@ import { RolesGuard } from './auth/roles.guard';
 import { AppConfigModule } from './config/app-config.module';
 import { DatabaseModule } from './database/database.module';
 import { LoggingModule } from './logging/logging.module';
+import { KubernetesModule } from './k8s/k8s.module';
+import { ServersModule } from './servers/servers.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { LoggingModule } from './logging/logging.module';
     LoggingModule,
     DatabaseModule,
     AuthModule,
+    KubernetesModule,
+    ServersModule,
   ],
   controllers: [AppController],
   providers: [

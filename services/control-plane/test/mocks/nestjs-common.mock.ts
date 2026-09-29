@@ -11,6 +11,11 @@ export const Body = () => (_target: any, _key: string, _idx: number) => {};
 export const Param = () => (_target: any, _key: string, _idx: number) => {};
 export const Query = () => (_target: any, _key: string, _idx: number) => {};
 export const UseGuards = () => (_target: any, _key?: string, desc?: any) => desc || _target;
+export const Inject = (_token?: any) => (_target: any, _key: string | symbol | undefined, _idx?: number) => {};
+export const HttpCode = (_statusCode: number) => (_target: any, _key?: string, desc?: any) => desc || _target;
+export const Req = () => (_target: any, _key: string, _idx: number) => {};
+export const Res = () => (_target: any, _key: string, _idx: number) => {};
+export const Headers = () => (_target: any, _key: string, _idx: number) => {};
 export const SetMetadata = (_key: any, _val: any) => (_target: any, _keyName?: string, desc?: any) => desc || _target;
 
 export class Logger {
