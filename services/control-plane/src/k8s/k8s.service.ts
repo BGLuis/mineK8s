@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
+import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 
 import { IKubernetesDriver, K8sDeploymentInfo, KUBERNETES_DRIVER } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
@@ -14,6 +15,8 @@ export class KubernetesService {
     @Inject(KUBERNETES_DRIVER)
     private readonly driver: IKubernetesDriver,
     private readonly configService: AppConfigService,
+    @Optional()
+    private readonly consoleDriver?: MinecraftRconConsoleDriver,
   ) {}
 
   async provisionServer(
@@ -51,6 +54,15 @@ export class KubernetesService {
   }
 
   async stopServer(server: Server): Promise<void> {
+    const isMinecraft = !server.game_type || server.game_type.toUpperCase() === 'MINECRAFT';
+    if (isMinecraft && this.consoleDriver && (server.state === 'READY' || server.state === 'STOPPING')) {
+      try {
+        await this.consoleDriver.gracefulShutdown(server);
+      } catch (err: any) {
+        this.logger.warn(`Aviso no graceful shutdown de [${server.subdomain}]: ${err.message}`);
+      }
+    }
+
     this.logger.log(`Stopping server [${server.subdomain}]: scaling deployment to 0...`);
     await this.driver.scaleDeployment(
       `mc-${server.subdomain}`,
@@ -60,17 +72,9 @@ export class KubernetesService {
   }
 
   async restartServer(server: Server): Promise<void> {
-    this.logger.log(`Restarting server [${server.subdomain}]: scaling to 0 then 1...`);
-    await this.driver.scaleDeployment(
-      `mc-${server.subdomain}`,
-      0,
-      this.configService.kubernetes.namespace,
-    );
-    await this.driver.scaleDeployment(
-      `mc-${server.subdomain}`,
-      1,
-      this.configService.kubernetes.namespace,
-    );
+    this.logger.log(`Restarting server [${server.subdomain}]: performing graceful stop and starting...`);
+    await this.stopServer(server);
+    await this.startServer(server);
   }
 
   async deprovisionServer(server: Server): Promise<void> {

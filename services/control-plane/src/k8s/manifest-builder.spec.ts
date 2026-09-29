@@ -131,5 +131,14 @@ describe('ManifestBuilder', () => {
       expect(probe.failureThreshold).toBe(90);
       expect(probe.initialDelaySeconds).toBe(30);
     });
+
+    it('should set terminationGracePeriodSeconds to 90 and include session.lock fuser check in entrypoint (RF-ARQ-08, RF-STO-09)', () => {
+      const dep = ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService);
+      expect(dep.spec.template.spec.terminationGracePeriodSeconds).toBe(90);
+
+      const container = dep.spec.template.spec.containers[0];
+      expect(container.args[0]).toContain('fuser -s /data/world/session.lock');
+      expect(container.args[0]).toContain('exec java');
+    });
   });
 });

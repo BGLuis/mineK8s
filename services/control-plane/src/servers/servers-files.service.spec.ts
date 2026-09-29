@@ -213,4 +213,30 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
       expect(levelDat).toBe('seed=999');
     });
   });
+
+  describe('RF-STO-09, RF-ARQ-16: Session.lock Protection and Active World Guard', () => {
+    it('should strictly prohibit deletion of session.lock with BadRequestException', async () => {
+      await expect(
+        service.deleteFile(sampleServer.id, 'world/session.lock'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should strictly prohibit manual writing to session.lock with BadRequestException', async () => {
+      await expect(
+        service.writeFile(sampleServer.id, 'world/session.lock', 'binary-lock-data'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject world file modification when server is READY with ConflictException', async () => {
+      sampleServer.state = 'READY';
+
+      await expect(
+        service.writeFile(sampleServer.id, 'world/data/raids.dat', 'content'),
+      ).rejects.toThrow(ConflictException);
+
+      await expect(
+        service.deleteFile(sampleServer.id, 'world/data/raids.dat'),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
 });

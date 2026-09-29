@@ -38,6 +38,16 @@ export interface ConsoleDriver {
    * Reativa a gravação automática no disco após término do backup.
    */
   saveOn(server: Server): Promise<string>;
+
+  /**
+   * Envia comando de encerramento ordenado para o servidor de jogo (RF-ARQ-08).
+   */
+  stop(server: Server): Promise<string>;
+
+  /**
+   * Executa o protocolo de graceful shutdown completo: save-all flush seguido de stop (RF-ARQ-08).
+   */
+  gracefulShutdown(server: Server): Promise<void>;
 }
 
 export const CONSOLE_DRIVER_TOKEN = Symbol('CONSOLE_DRIVER_TOKEN');

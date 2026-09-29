@@ -78,4 +78,41 @@ describe('KubernetesService', () => {
     expect(driver.services.has('minekubernetes/mc-lobby')).toBe(false);
     expect(driver.pvcs.has('minekubernetes/data-lobby')).toBe(false);
   });
+
+  describe('RF-ARQ-08: Graceful Shutdown (save-all flush -> stop -> scale to 0)', () => {
+    let mockConsoleDriver: any;
+
+    beforeEach(() => {
+      mockConsoleDriver = {
+        gracefulShutdown: jest.fn().mockResolvedValue(undefined),
+      };
+      service = new KubernetesService(driver, mockConfigService, mockConsoleDriver);
+    });
+
+    it('should invoke gracefulShutdown via consoleDriver when stopping a READY Minecraft server', async () => {
+      server.state = 'READY';
+      server.game_type = 'MINECRAFT';
+
+      await service.provisionServer(server, settings);
+      await service.startServer(server);
+      await service.stopServer(server);
+
+      expect(mockConsoleDriver.gracefulShutdown).toHaveBeenCalledWith(server);
+      const dep = await driver.getDeployment('mc-lobby', 'minekubernetes');
+      expect(dep?.replicas).toBe(0);
+    });
+
+    it('should proceed with scale to 0 even if gracefulShutdown throws or times out', async () => {
+      server.state = 'READY';
+      mockConsoleDriver.gracefulShutdown.mockRejectedValue(new Error('RCON connection timeout'));
+
+      await service.provisionServer(server, settings);
+      await service.startServer(server);
+      await service.stopServer(server);
+
+      expect(mockConsoleDriver.gracefulShutdown).toHaveBeenCalledWith(server);
+      const dep = await driver.getDeployment('mc-lobby', 'minekubernetes');
+      expect(dep?.replicas).toBe(0);
+    });
+  });
 });

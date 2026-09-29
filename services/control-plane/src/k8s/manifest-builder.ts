@@ -170,7 +170,9 @@ export class ManifestBuilder {
                 image: configService.registry.jvmRunnerImage,
                 workingDir: '/data',
                 command: ['/bin/sh', '-c'],
-                args: [`exec java ${aikarsFlags.join(' ')}`],
+                args: [
+                  `if [ -f /data/world/session.lock ] && fuser -s /data/world/session.lock 2>/dev/null; then echo "[FATAL] Outro processo ainda esta segurando session.lock! Abortando boot." >&2; exit 1; fi; exec java ${aikarsFlags.join(' ')}`,
+                ],
                 resources: {
                   requests: {
                     memory: `${heapMb}Mi`,

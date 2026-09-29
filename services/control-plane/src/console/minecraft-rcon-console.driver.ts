@@ -64,4 +64,30 @@ export class MinecraftRconConsoleDriver implements ConsoleDriver {
   public async saveOn(server: Server): Promise<string> {
     return this.sendCommand(server, 'save-on');
   }
+
+  public async stop(server: Server): Promise<string> {
+    return this.sendCommand(server, 'stop');
+  }
+
+  /**
+   * Executa graceful shutdown completo (RF-ARQ-08):
+   * 1. save-all flush (persistência síncrona do mundo)
+   * 2. stop (encerramento ordenado da JVM)
+   */
+  public async gracefulShutdown(server: Server): Promise<void> {
+    this.logger.log(`Iniciando graceful shutdown para o servidor [${server.subdomain}] via RCON (RF-ARQ-08)...`);
+    try {
+      await this.saveFlush(server, 15000);
+      this.logger.log(`save-all flush concluído com sucesso para [${server.subdomain}].`);
+    } catch (err: any) {
+      this.logger.warn(`Aviso no save-all flush durante shutdown de [${server.subdomain}]: ${err.message}`);
+    }
+
+    try {
+      await this.stop(server);
+      this.logger.log(`Comando stop emitido com sucesso para [${server.subdomain}].`);
+    } catch (err: any) {
+      this.logger.warn(`Aviso no envio de stop para [${server.subdomain}]: ${err.message}`);
+    }
+  }
 }

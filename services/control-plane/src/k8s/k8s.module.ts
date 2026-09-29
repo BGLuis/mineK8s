@@ -7,8 +7,10 @@ import { KUBERNETES_DRIVER } from './k8s.interface';
 import { RealKubernetesDriver } from './drivers/real-k8s.driver';
 import { MockKubernetesDriver } from './drivers/mock-k8s.driver';
 
+import { ConsoleModule } from '@console/console.module';
+
 @Module({
-  imports: [AppConfigModule],
+  imports: [AppConfigModule, ConsoleModule],
   providers: [
     KubernetesService,
     {

@@ -69,4 +69,19 @@ describe('MinecraftRconConsoleDriver (RF-MG-05, Guarda L-08)', () => {
     await driver.saveFlush(mockServer);
     expect(mockClient.sendCommand).toHaveBeenCalledWith('save-all flush', 60000);
   });
+
+  it('should execute stop command via RconClient (RF-ARQ-08)', async () => {
+    mockClient.sendCommand.mockResolvedValue('Stopping the server');
+    const result = await driver.stop(mockServer);
+    expect(mockClient.sendCommand).toHaveBeenCalledWith('stop', undefined);
+    expect(result).toBe('Stopping the server');
+  });
+
+  it('should perform gracefulShutdown sending save-all flush and stop sequentially (RF-ARQ-08)', async () => {
+    mockClient.sendCommand.mockResolvedValue('OK');
+    await driver.gracefulShutdown(mockServer);
+
+    expect(mockClient.sendCommand).toHaveBeenNthCalledWith(1, 'save-all flush', 15000);
+    expect(mockClient.sendCommand).toHaveBeenNthCalledWith(2, 'stop', undefined);
+  });
 });

@@ -105,7 +105,21 @@ export class ServersFilesService {
       throw new BadRequestException('Path parameter is required');
     }
 
+    const normalizedRelPath = relPath.replace(/\\/g, '/').toLowerCase();
+    if (normalizedRelPath.endsWith('session.lock')) {
+      throw new BadRequestException(
+        'Proibição de segurança: o arquivo session.lock não pode ser manipulado manualmente (RF-STO-09 / RF-ARQ-16)',
+      );
+    }
+
     const server = await this.getServer(id);
+    const isWorldPath = normalizedRelPath.startsWith('world/') || normalizedRelPath === 'world';
+    if (isWorldPath && (server.state === 'READY' || server.state === 'STARTING')) {
+      throw new ConflictException(
+        `Cannot modify world files while server is running (state: ${server.state}). Server must be in STOPPED state (RF-ARQ-16).`,
+      );
+    }
+
     const baseDir = this.getServerDataDir(server);
     const safePath = resolveSafePath(baseDir, relPath);
 
@@ -125,7 +139,21 @@ export class ServersFilesService {
       throw new BadRequestException('Path parameter is required');
     }
 
+    const normalizedRelPath = relPath.replace(/\\/g, '/').toLowerCase();
+    if (normalizedRelPath.endsWith('session.lock')) {
+      throw new BadRequestException(
+        'Proibição de segurança: o arquivo session.lock nunca deve ser deletado manualmente (RF-STO-09 / RF-ARQ-16)',
+      );
+    }
+
     const server = await this.getServer(id);
+    const isWorldPath = normalizedRelPath.startsWith('world/') || normalizedRelPath === 'world';
+    if (isWorldPath && (server.state === 'READY' || server.state === 'STARTING')) {
+      throw new ConflictException(
+        `Cannot delete world files while server is running (state: ${server.state}). Server must be in STOPPED state (RF-ARQ-16).`,
+      );
+    }
+
     const baseDir = this.getServerDataDir(server);
     const safePath = resolveSafePath(baseDir, relPath);
 
