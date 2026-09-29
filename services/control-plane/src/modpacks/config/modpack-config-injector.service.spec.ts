@@ -59,5 +59,20 @@ describe('ModpackConfigInjectorService (RF-STO-14, C-08, C-15)', () => {
     );
     expect(paperGlobal).toContain('velocity:\n    enabled: false');
     expect(paperGlobal).toContain('bungee-cord:\n    online-mode: false');
+    // Armadilha C-15: enforce-secure-chat NUNCA deve estar no paper-global.yml
+    expect(paperGlobal).not.toContain('enforce-secure-chat');
+  });
+
+  it('deve delegar o provisionamento de skins para SkinsProvisionerService (RF-ARQ-22)', async () => {
+    const mockSkinsProvisioner = {
+      provisionSkins: jest.fn().mockResolvedValue({ injected: ['SkinsRestorer.jar'], purgedClientMods: [] }),
+    };
+
+    const serviceWithSkins = new ModpackConfigInjectorService(mockSkinsProvisioner as any);
+    await serviceWithSkins.injectConfigurationMatrix(tempServerDir, {
+      serverType: 'PAPER',
+    });
+
+    expect(mockSkinsProvisioner.provisionSkins).toHaveBeenCalledWith(tempServerDir, 'PAPER');
   });
 });

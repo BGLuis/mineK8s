@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
+import { SkinsProvisionerService } from '../skins/skins-provisioner.service';
 
 export interface ConfigInjectionOptions {
   rconPassword?: string;
@@ -13,8 +14,13 @@ export interface ConfigInjectionOptions {
 export class ModpackConfigInjectorService {
   private readonly logger = new Logger(ModpackConfigInjectorService.name);
 
+  constructor(
+    @Optional()
+    private readonly skinsProvisioner?: SkinsProvisionerService,
+  ) {}
+
   /**
-   * Injeta determinística e obrigatoriamente a matriz de configurações críticas (RF-STO-14, C-08, C-15).
+   * Injeta determinística e obrigatoriamente a matriz de configurações críticas (RF-STO-14, RF-ARQ-22, RF-ARQ-23, C-08, C-15, E-05).
    *
    * @param serverDataDir Diretório /data da instância.
    * @param options Opções incluindo senha RCON e flags.
@@ -28,15 +34,20 @@ export class ModpackConfigInjectorService {
     // 1. Injeção mandatória de eula.txt (RF-STO-14)
     await this.injectEula(serverDataDir);
 
-    // 2. Injeção e merge de server.properties (RF-STO-14, C-08, C-15)
+    // 2. Injeção e merge de server.properties com enforce-secure-chat=false (RF-STO-14, RF-ARQ-23, C-08, C-15)
     await this.injectServerProperties(serverDataDir, options);
 
-    // 3. Injeção de paper-global.yml para compatibilidade de proxy Gateway L7 (RF-STO-14)
+    // 3. Injeção de paper-global.yml para compatibilidade de proxy Gateway L7 (RF-STO-14, C-15)
     const isPaperLike =
       options.serverType &&
       ['PAPER', 'PURPUR'].includes(options.serverType.toUpperCase());
     if (isPaperLike) {
       await this.injectPaperGlobal(serverDataDir);
+    }
+
+    // 4. Provisionamento e saneamento de skins (RF-ARQ-22, E-05)
+    if (this.skinsProvisioner) {
+      await this.skinsProvisioner.provisionSkins(serverDataDir, options.serverType || 'PAPER');
     }
 
     this.logger.log(`[RF-STO-14] Matriz de configuração injetada com sucesso em ${serverDataDir}`);
