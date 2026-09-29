@@ -31,7 +31,7 @@ message RouteUpdateEvent {
   string subdomain = 3;
   string target_ip_port = 4;
   string status = 5; // PROVISIONING, STARTING, READY, STOPPING, STOPPED, UPDATING, CRASHED, FAILED
-  string access_policy = 6; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE
+  string access_policy = 6; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE, INTERNET
   repeated string allowed_group_ids = 7;
   repeated string allowed_user_ids = 8;
   bool proxy_protocol = 9;

@@ -147,6 +147,11 @@ export class CreateServerDto {
   sleep_timeout_minutes?: number = 15;
 
   @IsOptional()
+  @IsString()
+  @IsIn(['PUBLIC', 'GROUP', 'INDIVIDUAL', 'MAINTENANCE', 'INTERNET'])
+  access_policy?: 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET' = 'GROUP';
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => MinecraftSettingsDto)
   minecraft_settings?: MinecraftSettingsDto;

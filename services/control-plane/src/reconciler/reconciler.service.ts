@@ -398,7 +398,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
         subdomain: server.subdomain,
         target_ip_port: `${this.getProbeHost(server)}:${server.allocated_port || 25565}`,
         status: status.toUpperCase(),
-        access_policy: (server as any).access_policy || 'PUBLIC',
+        access_policy: server.access_policy || 'GROUP',
         allowed_group_ids: [],
         allowed_user_ids: [],
         proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),

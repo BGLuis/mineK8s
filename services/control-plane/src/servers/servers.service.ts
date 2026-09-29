@@ -29,6 +29,7 @@ import { LogEntry } from '@logging/circular-log-buffer';
 import { MinecraftSlpProbeService } from '../probes/minecraft-slp-probe.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
+import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
 import { ServerSummaryDto } from './dto/server-summary.dto';
@@ -56,6 +57,8 @@ export class ServersService {
     private readonly gatewayIpcService?: GatewayIpcService,
     @Optional()
     private readonly slpProbeService?: MinecraftSlpProbeService,
+    @Optional()
+    private readonly dnsDriver?: CloudflareDnsDriver,
   ) {}
 
   async create(dto: CreateServerDto): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
@@ -65,6 +68,8 @@ export class ServersService {
     if (existing) {
       throw new ConflictException(`Subdomain "${dto.subdomain}" is already in use`);
     }
+
+    const accessPolicy = dto.access_policy || 'GROUP';
 
     const server = this.serverRepo.create({
       name: dto.name,
@@ -79,6 +84,7 @@ export class ServersService {
       auto_wake: dto.auto_wake ?? true,
       sleep_timeout_minutes: dto.sleep_timeout_minutes ?? 15,
       state: 'PROVISIONING',
+      access_policy: accessPolicy,
     });
 
     const savedServer = await this.serverRepo.save(server);
@@ -87,6 +93,8 @@ export class ServersService {
     if (savedServer.game_type === 'minecraft') {
       const rconPassword =
         dto.minecraft_settings?.rcon_password || randomBytes(12).toString('hex');
+      // RF-CF-02: Se access_policy for INTERNET, obriga online-mode=true
+      const onlineMode = accessPolicy === 'INTERNET' ? true : (dto.minecraft_settings?.online_mode ?? false);
       const settings = this.settingsRepo.create({
         server_id: savedServer.id,
         motd: dto.minecraft_settings?.motd || `A MineKubernetes Server [${dto.name}]`,
@@ -102,7 +110,7 @@ export class ServersService {
         rcon_port: 25575,
         rcon_password: rconPassword,
         enforce_secure_chat: dto.minecraft_settings?.enforce_secure_chat ?? false,
-        online_mode: dto.minecraft_settings?.online_mode ?? false,
+        online_mode: onlineMode,
       });
       savedSettings = await this.settingsRepo.save(settings);
     }
@@ -540,6 +548,117 @@ export class ServersService {
     }
   }
 
+  async publishServer(id: string): Promise<{
+    id: string;
+    subdomain: string;
+    access_policy: string;
+    online_mode: boolean;
+    srv_record: string;
+  }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      throw new NotFoundException(`Servidor com ID ${id} não encontrado`);
+    }
+
+    // RF-CF-02: Mundo INTERNET obriga online-mode=true
+    if (server.minecraft_settings) {
+      server.minecraft_settings.online_mode = true;
+      await this.settingsRepo.save(server.minecraft_settings);
+    }
+
+    // RF-CF-01: Nova política INTERNET explícita no servers
+    server.access_policy = 'INTERNET';
+    const updatedServer = await this.serverRepo.save(server);
+
+    const rootDomain = this.dnsDriver?.getRootDomain() || 'minek8s.net';
+    const srvName = `${server.subdomain}.${rootDomain}`;
+    const srvTarget = `${server.subdomain}.${rootDomain}`;
+    const publicPort = 25566;
+
+    // RF-CF-05 e RF-CF-07: Cria registro SRV no Cloudflare
+    if (this.dnsDriver) {
+      try {
+        await this.dnsDriver.upsertSrvRecord(srvName, srvTarget, publicPort);
+      } catch (err: any) {
+        this.logger.error(`Erro ao criar registro SRV para ${srvName}: ${err.message}`, err.stack);
+        throw new Error(`Erro ao criar registro SRV na Cloudflare: ${err.message}`);
+      }
+    }
+
+    // Notificar Gateway L7 sobre a política INTERNET
+    this.notifyGateway(updatedServer, updatedServer.state);
+
+    // Auditoria
+    await this.auditRepo.save(
+      this.auditRepo.create({
+        server_id: server.id,
+        command: 'PUBLISH_SERVER',
+        execution_source: 'REST_API',
+        response: `Servidor ${server.subdomain} publicado na internet (online-mode=true, SRV: ${srvName})`,
+      }),
+    );
+
+    return {
+      id: updatedServer.id,
+      subdomain: updatedServer.subdomain,
+      access_policy: updatedServer.access_policy,
+      online_mode: true,
+      srv_record: `_minecraft._tcp.${srvName} -> ${srvTarget}:${publicPort}`,
+    };
+  }
+
+  async unpublishServer(id: string): Promise<{
+    id: string;
+    subdomain: string;
+    access_policy: string;
+  }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      throw new NotFoundException(`Servidor com ID ${id} não encontrado`);
+    }
+
+    const rootDomain = this.dnsDriver?.getRootDomain() || 'minek8s.net';
+    const srvFullName = `_minecraft._tcp.${server.subdomain}.${rootDomain}`;
+
+    // RF-CF-07: Remove registro SRV do Cloudflare
+    if (this.dnsDriver) {
+      try {
+        await this.dnsDriver.deleteRecordByNameAndType(srvFullName, 'SRV');
+      } catch (err: any) {
+        this.logger.warn(`Erro ao remover registro SRV ${srvFullName}: ${err.message}`);
+      }
+    }
+
+    // Retorna para política padrão Zero-Trust privada
+    server.access_policy = 'GROUP';
+    const updatedServer = await this.serverRepo.save(server);
+
+    // Notificar Gateway L7
+    this.notifyGateway(updatedServer, updatedServer.state);
+
+    // Auditoria
+    await this.auditRepo.save(
+      this.auditRepo.create({
+        server_id: server.id,
+        command: 'UNPUBLISH_SERVER',
+        execution_source: 'REST_API',
+        response: `Servidor ${server.subdomain} despublicado da internet (access_policy=GROUP)`,
+      }),
+    );
+
+    return {
+      id: updatedServer.id,
+      subdomain: updatedServer.subdomain,
+      access_policy: updatedServer.access_policy,
+    };
+  }
+
   private notifyGateway(server: Server, status: ServerState): void {
     if (!this.gatewayIpcService) {
       return;
@@ -551,7 +670,7 @@ export class ServersService {
         subdomain: server.subdomain,
         target_ip_port: `mc-${server.subdomain}.minekubernetes.svc.cluster.local:${server.allocated_port || 25565}`,
         status: status.toUpperCase(),
-        access_policy: (server as any).access_policy || 'PUBLIC',
+        access_policy: server.access_policy || 'GROUP',
         allowed_group_ids: [],
         allowed_user_ids: [],
         proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),

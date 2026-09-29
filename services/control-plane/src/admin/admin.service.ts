@@ -152,7 +152,7 @@ export class AdminService {
 
       const serverContext = {
         serverId: server.id,
-        policy: (server as any).access_policy || 'GROUP',
+        policy: server.access_policy || 'GROUP',
         allowedGroupIds: (server.server_groups || []).map((g) => g.group_id),
         allowedUserIds: (user.server_accesses || []).map((sa) => sa.user_id),
         isMaintenance: Boolean(server.is_maintenance),

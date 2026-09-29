@@ -11,7 +11,7 @@ export interface UserContext {
 
 export interface ServerContext {
   serverId: string;
-  policy: 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE';
+  policy: 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET';
   allowedGroupIds?: string[];
   allowedUserIds?: string[];
 }
@@ -34,7 +34,7 @@ export class AccessDecisionEngineService {
 
   /**
    * Avalia a política de acesso a uma instância de servidor (RF-TS-02).
-   * Suporta: PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE e bypass de ADMIN.
+   * Suporta: PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE, INTERNET e bypass de ADMIN.
    */
   public evaluateAccess(user: UserContext, server: ServerContext): AccessDecisionResult {
     // 1. Usuário inativo / revogado
@@ -52,8 +52,8 @@ export class AccessDecisionEngineService {
       return { allowed: false, reason: 'MAINTENANCE_MODE' };
     }
 
-    // 4. Servidor público
-    if (server.policy === 'PUBLIC') {
+    // 4. Servidor público ou internet
+    if (server.policy === 'PUBLIC' || server.policy === 'INTERNET') {
       return { allowed: true };
     }
 

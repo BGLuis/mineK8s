@@ -88,6 +88,7 @@ describe('ServersService', () => {
     };
 
     mockAuditRepo = {
+      create: jest.fn((dto) => dto),
       save: jest.fn(async (entity) => entity),
       find: jest.fn(async () => []),
       findOne: jest.fn(async () => null),
@@ -115,6 +116,12 @@ describe('ServersService', () => {
       probe: jest.fn().mockResolvedValue({ ready: true }),
     };
 
+    const mockDnsDriver = {
+      upsertSrvRecord: jest.fn().mockResolvedValue({ id: 'rec-srv-1' }),
+      deleteRecordByNameAndType: jest.fn().mockResolvedValue(true),
+      getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
+    };
+
     service = new ServersService(
       mockServerRepo as any,
       mockSettingsRepo as any,
@@ -125,6 +132,7 @@ describe('ServersService', () => {
       mockBackupService as any,
       mockGatewayIpcService as any,
       mockSlpProbeService as any,
+      mockDnsDriver as any,
     );
   });
 
@@ -345,6 +353,79 @@ describe('ServersService', () => {
       await expect(
         service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('Public Worlds & Cloudflare Exposure (RF-CF-01, RF-CF-02, RF-CF-07)', () => {
+    it('deve forçar online_mode=true ao criar um servidor com access_policy INTERNET (RF-CF-02)', async () => {
+      const res = await service.create({
+        name: 'Public World',
+        subdomain: 'public-world',
+        access_policy: 'INTERNET',
+        minecraft_settings: {
+          online_mode: false, // Mesmo passando false, deve ser forçado a true
+        },
+      });
+
+      const server = serversDb.get(res.id)!;
+      expect(server.access_policy).toBe('INTERNET');
+      const settings = Array.from(settingsDb.values()).find((s) => s.server_id === server.id)!;
+      expect(settings.online_mode).toBe(true);
+    });
+
+    it('deve publicar servidor (publishServer), criando SRV no Cloudflare e forçando online_mode=true', async () => {
+      const server = mockServerRepo.create({
+        id: 'srv-pub-1',
+        name: 'Survival Public',
+        subdomain: 'survival-pub',
+        state: 'READY',
+        access_policy: 'GROUP',
+      });
+      serversDb.set(server.id, server);
+
+      const settings = mockSettingsRepo.create({
+        id: 'set-pub-1',
+        server_id: server.id,
+        online_mode: false,
+      });
+      settingsDb.set(server.id, settings);
+      server.minecraft_settings = settings;
+
+      const result = await service.publishServer('srv-pub-1');
+
+      expect(result.access_policy).toBe('INTERNET');
+      expect(result.online_mode).toBe(true);
+      expect(result.srv_record).toContain('_minecraft._tcp.survival-pub.minek8s.net');
+      expect(settings.online_mode).toBe(true);
+      expect(server.access_policy).toBe('INTERNET');
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_policy: 'INTERNET',
+          subdomain: 'survival-pub',
+        }),
+      );
+    });
+
+    it('deve despublicar servidor (unpublishServer), removendo SRV e restaurando access_policy para GROUP', async () => {
+      const server = mockServerRepo.create({
+        id: 'srv-pub-2',
+        name: 'Survival Public 2',
+        subdomain: 'survival-pub2',
+        state: 'READY',
+        access_policy: 'INTERNET',
+      });
+      serversDb.set(server.id, server);
+
+      const result = await service.unpublishServer('srv-pub-2');
+
+      expect(result.access_policy).toBe('GROUP');
+      expect(server.access_policy).toBe('GROUP');
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_policy: 'GROUP',
+          subdomain: 'survival-pub2',
+        }),
+      );
     });
   });
 });

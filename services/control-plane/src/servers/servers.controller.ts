@@ -264,5 +264,23 @@ export class ServersController {
     const stream = fs.createReadStream(backup.storagePath);
     stream.pipe(res);
   }
+
+  @Post(':id/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Publicar servidor publicamente na internet via Cloudflare SRV (RF-CF-07)' })
+  @ApiResponse({ status: 200, description: 'Servidor publicado com política INTERNET e online-mode=true' })
+  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  async publish(@Param('id') id: string) {
+    return this.serversService.publishServer(id);
+  }
+
+  @Delete(':id/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Despublicar servidor da internet e reverter registro Cloudflare (RF-CF-07)' })
+  @ApiResponse({ status: 200, description: 'Servidor despublicado e retornado à política padrão' })
+  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  async unpublish(@Param('id') id: string) {
+    return this.serversService.unpublishServer(id);
+  }
 }
 

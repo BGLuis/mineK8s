@@ -17,7 +17,7 @@ export interface RouteUpdateEvent {
   subdomain: string;
   target_ip_port: string;
   status: string; // STOPPED, STARTING, READY, MAINTENANCE
-  access_policy: string; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE
+  access_policy: string; // PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE, INTERNET
   allowed_group_ids: string[];
   allowed_user_ids: string[];
   proxy_protocol: boolean;
