@@ -38,6 +38,7 @@ message RouteUpdateEvent {
   string game_type = 10; // MINECRAFT, TERRARIA, etc. (RF-MG-04)
   string routing_model = 11; // VirtualHost, DedicatedPort (RF-MG-04)
   int32 listen_port = 12; // 25565, 7777, etc. (RF-MG-04)
+  bool auto_wake = 13;
 }
 
 message SessionLifecycleEvent {

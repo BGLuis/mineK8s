@@ -44,7 +44,7 @@ export class GatewayIpcController {
   streamSessionEvents(messages: Observable<SessionLifecycleEvent>): Observable<Empty> {
     this.logger.log('Gateway L7 abriu stream de eventos de ciclo de vida de sessão (StreamSessionEvents)');
     messages.subscribe({
-      next: (event) => this.ipcService.handleSessionEvent(event),
+      next: (event) => void this.ipcService.handleSessionEvent(event),
       error: (err) => this.logger.error(`Erro no stream de eventos de sessão: ${err?.message}`),
       complete: () => this.logger.log('Stream de eventos de sessão finalizado pelo Gateway'),
     });

@@ -1,6 +1,6 @@
 import { firstValueFrom, take } from 'rxjs';
 
-import { RouteAction, RouteUpdateEvent } from './gateway-ipc.interfaces';
+import { RouteAction, RouteUpdateEvent, SessionEventType } from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
 
 describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
@@ -10,6 +10,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let mockServerGroupRepo: any;
   let mockUserServerAccessRepo: any;
   let mockUserGroupRepo: any;
+  let mockK8sService: any;
 
   beforeEach(() => {
     mockServerRepo = {
@@ -83,12 +84,19 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       find: jest.fn(async () => [{ group_id: 'group-vip' }]),
     };
 
+    mockK8sService = {
+      startServer: jest.fn().mockResolvedValue(undefined),
+      stopServer: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new GatewayIpcService(
       mockServerRepo,
       mockUserRepo,
       mockServerGroupRepo,
       mockUserServerAccessRepo,
       mockUserGroupRepo,
+      undefined,
+      mockK8sService,
     );
   });
 
@@ -206,6 +214,72 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
 
       expect(resp.session_found).toBe(true);
       expect(resp.terminated_connections_count).toBe(1);
+    });
+  });
+
+  describe('Auto-Wake on demand (RF-GW-10, RF-ARQ-27)', () => {
+    it('deve disparar scale-up do pod, mudar estado para STARTING e notificar Gateway ao receber WAKE_REQUESTED', async () => {
+      const stoppedServer = {
+        id: 'server-stopped-1',
+        subdomain: 'vanilla',
+        state: 'STOPPED',
+        auto_wake: true,
+        allocated_port: 25565,
+        game_type: 'MINECRAFT',
+        routing_model: 'VirtualHost',
+        minecraft_settings: { proxy_protocol: false },
+      };
+
+      mockServerRepo.findOne = jest.fn(async () => stoppedServer);
+      mockServerRepo.save = jest.fn(async (s) => s);
+
+      const streamPromise = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.handleSessionEvent({
+        event_type: SessionEventType.WAKE_REQUESTED,
+        session_id: 'sess-123',
+        server_id: 'server-stopped-1',
+        client_ip: '100.64.0.10',
+        minecraft_nick: 'Steve',
+        timestamp_epoch_ms: Date.now(),
+        reason: 'Hold Connection Trigger',
+      });
+
+      expect(stoppedServer.state).toBe('STARTING');
+      expect(mockServerRepo.save).toHaveBeenCalledWith(stoppedServer);
+      expect(mockK8sService.startServer).toHaveBeenCalledWith(stoppedServer);
+
+      const event = await streamPromise;
+      expect(event.server_id).toBe('server-stopped-1');
+      expect(event.status).toBe('STARTING');
+      expect(event.action).toBe(RouteAction.STATUS_CHANGE);
+      expect(event.auto_wake).toBe(true);
+    });
+
+    it('não deve iniciar servidor nem notificar quando auto_wake for desabilitado', async () => {
+      const disabledServer = {
+        id: 'server-nowake',
+        subdomain: 'nowake',
+        state: 'STOPPED',
+        auto_wake: false,
+      };
+
+      mockServerRepo.findOne = jest.fn(async () => disabledServer);
+      mockServerRepo.save = jest.fn();
+
+      await service.handleSessionEvent({
+        event_type: SessionEventType.WAKE_REQUESTED,
+        session_id: 'sess-456',
+        server_id: 'server-nowake',
+        client_ip: '100.64.0.10',
+        minecraft_nick: 'Steve',
+        timestamp_epoch_ms: Date.now(),
+        reason: 'Hold Connection Trigger',
+      });
+
+      expect(disabledServer.state).toBe('STOPPED');
+      expect(mockServerRepo.save).not.toHaveBeenCalled();
+      expect(mockK8sService.startServer).not.toHaveBeenCalled();
     });
   });
 });

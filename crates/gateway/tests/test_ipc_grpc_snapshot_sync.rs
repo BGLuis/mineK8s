@@ -25,6 +25,7 @@ fn test_route_table_rebuild_from_snapshot() {
             game_type: "MINECRAFT".into(),
             routing_model: "VirtualHost".into(),
             listen_port: 25565,
+            auto_wake: true,
         },
         RouteUpdateEvent {
             action: RouteAction::Upsert as i32,
@@ -39,6 +40,7 @@ fn test_route_table_rebuild_from_snapshot() {
             game_type: "MINECRAFT".into(),
             routing_model: "VirtualHost".into(),
             listen_port: 25565,
+            auto_wake: true,
         },
         RouteUpdateEvent {
             action: RouteAction::Upsert as i32,
@@ -53,6 +55,7 @@ fn test_route_table_rebuild_from_snapshot() {
             game_type: "TERRARIA".into(),
             routing_model: "DedicatedPort".into(),
             listen_port: 7777,
+            auto_wake: false,
         },
     ];
 
@@ -120,6 +123,7 @@ fn test_live_route_update_stream_mutations() {
         game_type: "MINECRAFT".into(),
         routing_model: "VirtualHost".into(),
         listen_port: 25565,
+        auto_wake: true,
     };
     apply_route_update_event(&route_table, upsert_lobby);
     assert_eq!(route_table.len(), 1);
@@ -138,6 +142,7 @@ fn test_live_route_update_stream_mutations() {
         game_type: "MINECRAFT".into(),
         routing_model: "VirtualHost".into(),
         listen_port: 25565,
+        auto_wake: true,
     };
     apply_route_update_event(&route_table, upsert_creative);
     assert_eq!(route_table.len(), 2);
@@ -159,6 +164,7 @@ fn test_live_route_update_stream_mutations() {
         game_type: "MINECRAFT".into(),
         routing_model: "VirtualHost".into(),
         listen_port: 25565,
+        auto_wake: true,
     };
     apply_route_update_event(&route_table, status_change);
     let updated = route_table.lookup_virtual_host(25565, "creative.mine.lan").unwrap();
@@ -178,6 +184,7 @@ fn test_live_route_update_stream_mutations() {
         game_type: "".into(),
         routing_model: "".into(),
         listen_port: 0,
+        auto_wake: false,
     };
     apply_route_update_event(&route_table, delete_event);
     assert_eq!(route_table.len(), 1);
@@ -201,6 +208,7 @@ fn test_protobuf_codec_roundtrips() {
         game_type: "MINECRAFT".into(),
         routing_model: "VirtualHost".into(),
         listen_port: 25565,
+        auto_wake: true,
     };
 
     let mut buf = Vec::new();

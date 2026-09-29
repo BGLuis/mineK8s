@@ -26,6 +26,8 @@ pub struct RouteUpdateEvent {
     pub routing_model: String,
     #[prost(int32, tag = "12")]
     pub listen_port: i32,
+    #[prost(bool, tag = "13")]
+    pub auto_wake: bool,
 }
 
 impl RouteUpdateEvent {
@@ -51,6 +53,7 @@ impl RouteUpdateEvent {
             allowed_group_ids: self.allowed_group_ids.clone(),
             allowed_user_ids: self.allowed_user_ids.clone(),
             game_type: self.game_type.clone(),
+            auto_wake: self.auto_wake,
         }
     }
 }

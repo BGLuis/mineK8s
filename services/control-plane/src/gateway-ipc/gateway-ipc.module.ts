@@ -7,12 +7,15 @@ import { User } from '@database/entities/user.entity';
 import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
+import { KubernetesModule } from '@k8s/k8s.module';
+
 import { GatewayIpcController } from './gateway-ipc.controller';
 import { GatewayIpcService } from './gateway-ipc.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Server, User, ServerGroup, UserGroup, UserServerAccess]),
+    KubernetesModule,
   ],
   controllers: [GatewayIpcController],
   providers: [GatewayIpcService],

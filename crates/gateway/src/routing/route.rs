@@ -110,5 +110,6 @@ pub struct CachedServerRoute {
     pub allowed_group_ids: Vec<String>,
     pub allowed_user_ids: Vec<String>,
     pub game_type: String,
+    pub auto_wake: bool,
 }
 

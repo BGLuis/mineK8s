@@ -24,6 +24,7 @@ export interface RouteUpdateEvent {
   game_type: string; // MINECRAFT, TERRARIA
   routing_model: string; // VirtualHost, DedicatedPort
   listen_port: number;
+  auto_wake: boolean;
 }
 
 export interface SessionLifecycleEvent {

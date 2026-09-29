@@ -10,6 +10,7 @@ import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
+import { KubernetesService } from '@k8s/k8s.service';
 import {
   Empty,
   ResolvePlayerRequest,
@@ -19,6 +20,7 @@ import {
   RouteAction,
   RouteUpdateEvent,
   RoutingSnapshotResponse,
+  SessionEventType,
   SessionLifecycleEvent,
 } from './gateway-ipc.interfaces';
 
@@ -41,6 +43,8 @@ export class GatewayIpcService {
     @Optional()
     @Inject(NETWORK_IDENTITY_PROVIDER)
     private readonly identityProvider?: NetworkIdentityProvider,
+    @Optional()
+    private readonly k8sService?: KubernetesService,
   ) {}
 
   /**
@@ -99,6 +103,7 @@ export class GatewayIpcService {
         game_type: server.game_type || 'MINECRAFT',
         routing_model: server.routing_model || 'VirtualHost',
         listen_port: server.allocated_port || 25565,
+        auto_wake: server.auto_wake !== false,
       });
     }
 
@@ -182,10 +187,71 @@ export class GatewayIpcService {
   /**
    * Processa eventos de ciclo de vida de sessão streaming vindos do Gateway.
    */
-  handleSessionEvent(event: SessionLifecycleEvent): void {
+  async handleSessionEvent(event: SessionLifecycleEvent): Promise<void> {
     this.logger.log(
       `Evento de sessão recebido do Gateway: [${event.event_type}] user=${event.minecraft_nick} server=${event.server_id} ip=${event.client_ip}`,
     );
+
+    if (event.event_type === SessionEventType.WAKE_REQUESTED) {
+      await this.handleWakeRequest(event.server_id);
+    }
+  }
+
+  /**
+   * Processa requisição de Auto-Wake sob demanda (RF-GW-10, RF-ARQ-27).
+   */
+  async handleWakeRequest(serverId: string): Promise<void> {
+    const server = await this.serverRepository.findOne({
+      where: { id: serverId },
+      relations: ['minecraft_settings'],
+    });
+
+    if (!server) {
+      this.logger.warn(`Wake requested for non-existent server ID: ${serverId}`);
+      return;
+    }
+
+    if (server.auto_wake === false) {
+      this.logger.warn(`Wake requested for server [${server.subdomain}], but auto_wake is disabled.`);
+      return;
+    }
+
+    if (server.state === 'STOPPED') {
+      this.logger.log(`Wake requested for hibernating server [${server.subdomain}] (RF-GW-10). Scaling up pod...`);
+      server.state = 'STARTING';
+      server.last_player_active_at = new Date();
+      await this.serverRepository.save(server);
+
+      const targetPort = 25565;
+      const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
+
+      this.broadcastRouteUpdate({
+        action: RouteAction.STATUS_CHANGE,
+        server_id: server.id,
+        subdomain: server.subdomain,
+        target_ip_port: `${targetHost}:${targetPort}`,
+        status: 'STARTING',
+        access_policy: (server as any).access_policy || 'PUBLIC',
+        allowed_group_ids: [],
+        allowed_user_ids: [],
+        proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
+        game_type: server.game_type || 'MINECRAFT',
+        routing_model: server.routing_model || 'VirtualHost',
+        listen_port: server.allocated_port || 25565,
+        auto_wake: true,
+      });
+
+      if (this.k8sService) {
+        try {
+          await this.k8sService.startServer(server);
+          this.logger.log(`Pod for server [${server.subdomain}] started successfully via K8s.`);
+        } catch (err: any) {
+          this.logger.error(`Failed to start pod for server [${server.subdomain}]: ${err.message}`);
+        }
+      }
+    } else {
+      this.logger.debug(`Server [${server.subdomain}] is already in state ${server.state}, ignoring wake request.`);
+    }
   }
 
   /**

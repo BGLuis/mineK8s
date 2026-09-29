@@ -12,10 +12,12 @@ use crate::identity::{
     validate_minecraft_nickname, AccessDecision, AccessDecisionEngine, NicknameDecision,
     TailscaleLocalWhoIs,
 };
+use std::time::Duration;
+use tokio::sync::mpsc;
 use minecraft_protocol::error::ProtocolError;
 use crate::limiter::ConnectionRateLimiter;
 use crate::motd::{handle_status_ping, StatusCache};
-use crate::routing::{RouteTable, RoutingModel};
+use crate::routing::{HoldError, RouteTable, RoutingModel, ServerInstanceStatus};
 use crate::session::{handle_login_proxy, SessionManager};
 use crate::telemetry::GatewayMetrics;
 
@@ -27,6 +29,7 @@ pub struct GatewayServer {
     session_manager: SessionManager,
     metrics: Arc<GatewayMetrics>,
     whois: Option<TailscaleLocalWhoIs>,
+    wake_sender: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl GatewayServer {
@@ -40,11 +43,17 @@ impl GatewayServer {
             session_manager: SessionManager::default(),
             metrics: Arc::new(GatewayMetrics::new()),
             whois: None,
+            wake_sender: None,
         }
     }
 
     pub fn with_whois(mut self, whois: TailscaleLocalWhoIs) -> Self {
         self.whois = Some(whois);
+        self
+    }
+
+    pub fn with_wake_sender(mut self, wake_sender: mpsc::UnboundedSender<String>) -> Self {
+        self.wake_sender = Some(wake_sender);
         self
     }
 
@@ -105,6 +114,7 @@ impl GatewayServer {
                             let session_manager = self.session_manager.clone();
                             let metrics = Arc::clone(&self.metrics);
                             let whois = self.whois.clone();
+                            let wake_sender = self.wake_sender.clone();
 
                             // RF-GW-01: Runtime Tokio multi-thread, uma task leve por conexão
                             tokio::spawn(async move {
@@ -118,6 +128,7 @@ impl GatewayServer {
                                     session_manager,
                                     metrics,
                                     whois,
+                                    wake_sender,
                                 ).await {
                                     debug!(peer = %peer_addr, error = %err, "Conexão encerrada com erro");
                                 }
@@ -150,6 +161,7 @@ impl GatewayServer {
         session_manager: SessionManager,
         metrics: Arc<GatewayMetrics>,
         whois: Option<TailscaleLocalWhoIs>,
+        wake_sender: Option<mpsc::UnboundedSender<String>>,
     ) -> Result<()> {
         let start_time = Instant::now();
 
@@ -325,8 +337,73 @@ impl GatewayServer {
                     }
                 }
 
-                let server_id = route.server_id.clone();
-                let subdomain = route.subdomain.clone();
+                // RF-GW-10: Tratamento de Auto-Wake e Retenção de Conexão (Hold Connection até 25s)
+                let active_route = if route.status != ServerInstanceStatus::Ready {
+                    if route.status == ServerInstanceStatus::Stopped {
+                        if !route.auto_wake {
+                            warn!(
+                                server = %route.name,
+                                "Login rejeitado: servidor parado e auto-wake desativado"
+                            );
+                            return Self::send_login_disconnect(conn, "§cServidor desligado e Auto-Wake desativado.").await;
+                        }
+
+                        info!(
+                            server = %route.name,
+                            "Servidor em hibernação (STOPPED). Disparando TriggerServerWake (RF-GW-10)..."
+                        );
+                        if let Some(ref tx) = wake_sender {
+                            let _ = tx.send(route.server_id.clone());
+                        }
+                    } else if route.status == ServerInstanceStatus::Crashed || route.status == ServerInstanceStatus::Failed {
+                        warn!(
+                            server = %route.name,
+                            status = ?route.status,
+                            "Login rejeitado: servidor em estado de falha terminal"
+                        );
+                        return Self::send_login_disconnect(conn, "§cServidor indisponível (estado de falha).").await;
+                    }
+
+                    info!(
+                        server = %route.name,
+                        status = ?route.status,
+                        "Iniciando retenção de conexão (Hold Connection até 25s, RF-GW-10)"
+                    );
+
+                    match route_table.wait_for_ready(&route.server_id, Duration::from_secs(25)).await {
+                        Ok(ready_route) => {
+                            info!(
+                                server = %ready_route.name,
+                                "Servidor atingiu READY dentro da janela de retenção! Prosseguindo com conexão."
+                            );
+                            ready_route
+                        }
+                        Err(HoldError::Timeout) => {
+                            warn!(
+                                server = %route.name,
+                                "Timeout de 25s de hold connection expirado. Enviando mensagem de boot em segundo plano."
+                            );
+                            let friendly_msg = r#"{"text":"🚀 §e§lMineKubernetes — Servidor em Inicialização!\n\n§fEste servidor estava hibernando para economizar recursos e §afoi acordado agora§f.\n§7A inicialização continua sendo processada em segundo plano no cluster.\n\n§6Por favor, aguarde cerca de 30 a 60 segundos e tente reconectar!","color":"gold"}"#;
+                            return Self::send_login_disconnect(conn, friendly_msg).await;
+                        }
+                        Err(HoldError::Failed(status)) => {
+                            warn!(
+                                server = %route.name,
+                                ?status,
+                                "Servidor encerrou com falha durante a inicialização na janela de retenção."
+                            );
+                            return Self::send_login_disconnect(conn, "§cO servidor encerrou com falha durante a inicialização.").await;
+                        }
+                        Err(HoldError::NotFound) => {
+                            return Self::send_login_disconnect(conn, "§cServidor não encontrado.").await;
+                        }
+                    }
+                } else {
+                    route
+                };
+
+                let server_id = active_route.server_id.clone();
+                let subdomain = active_route.subdomain.clone();
 
                 metrics
                     .connections_total
@@ -340,14 +417,14 @@ impl GatewayServer {
                 info!(
                     user = %login_start.username,
                     server = %handshake.server_address,
-                    route = %route.server_id,
+                    route = %active_route.server_id,
                     client_ip = %client_ip,
                     "Iniciando proxy duplex e replay upstream para Login"
                 );
                 // RF-GW-11: Replay de Handshake + Login Start, PROXY v2 opcional e proxy duplex
                 let proxy_res = handle_login_proxy(
                     conn,
-                    Some(route),
+                    Some(active_route),
                     handshake,
                     login_start,
                     original_handshake,
@@ -374,7 +451,11 @@ impl GatewayServer {
         use minecraft_protocol::packets::disconnect::DisconnectPacket;
         use tokio::io::AsyncWriteExt;
 
-        let packet = DisconnectPacket::from_plain_text(reason);
+        let packet = if reason.trim_start().starts_with('{') {
+            DisconnectPacket::from_json(reason)
+        } else {
+            DisconnectPacket::from_plain_text(reason)
+        };
         let mut payload = BytesMut::new();
         packet.encode(&mut payload);
 

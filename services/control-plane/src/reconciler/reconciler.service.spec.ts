@@ -340,4 +340,112 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
       expect(mockServerRepo.save).toHaveBeenCalledWith(server);
     });
   });
+
+  describe('RF-ARQ-07: Inactivity Hibernation (scale-to-zero)', () => {
+    it('should hibernate server to STOPPED and scale-to-zero when idle with 0 players exceeds sleep_timeout_minutes', async () => {
+      const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000);
+      const server: Server = {
+        id: 'srv-idle-1',
+        name: 'Idle Server',
+        subdomain: 'idle',
+        state: 'READY',
+        sleep_timeout_minutes: 15,
+        last_player_active_at: sixteenMinutesAgo,
+        auto_wake: true,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      clusterDeployments.set('mc-idle', {
+        name: 'mc-idle',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'Paper 1.20.4',
+        playersOnline: 0,
+        maxPlayers: 20,
+      });
+
+      await reconciler.reconcile();
+
+      expect(server.state).toBe('STOPPED');
+      expect(server.last_player_active_at).toBeNull();
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-idle-1',
+          status: 'STOPPED',
+          auto_wake: true,
+        }),
+      );
+    });
+
+    it('should update last_player_active_at when players are online and not hibernate', async () => {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const server: Server = {
+        id: 'srv-active-1',
+        name: 'Active Server',
+        subdomain: 'active',
+        state: 'READY',
+        sleep_timeout_minutes: 15,
+        last_player_active_at: tenMinutesAgo,
+        auto_wake: true,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      clusterDeployments.set('mc-active', {
+        name: 'mc-active',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'Paper 1.20.4',
+        playersOnline: 2,
+        maxPlayers: 20,
+      });
+
+      const beforeReconcile = Date.now();
+      await reconciler.reconcile();
+
+      expect(server.state).toBe('READY');
+      expect(server.last_player_active_at!.getTime()).toBeGreaterThanOrEqual(beforeReconcile);
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+    });
+
+    it('should never hibernate servers configured with sleep_timeout_minutes: 0 (Always-On)', async () => {
+      const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000);
+      const server: Server = {
+        id: 'srv-alwayson-1',
+        name: 'Always On Server',
+        subdomain: 'alwayson',
+        state: 'READY',
+        sleep_timeout_minutes: 0,
+        last_player_active_at: twoHoursAgo,
+        auto_wake: true,
+      } as Server;
+      serversDb.set(server.id, server);
+
+      clusterDeployments.set('mc-alwayson', {
+        name: 'mc-alwayson',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'Paper 1.20.4',
+        playersOnline: 0,
+        maxPlayers: 20,
+      });
+
+      await reconciler.reconcile();
+
+      expect(server.state).toBe('READY');
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -232,6 +232,9 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
                 await this.serverRepo.save(server);
               }
             }
+
+            // 5. Inactivity Sleep / Hibernation Check (RF-ARQ-07)
+            await this.checkInactivityHibernation(server, probeResult.playersOnline, stateTransitions);
           } else {
             const now = Date.now();
             let tracker = this.livenessFailures.get(server.id);
@@ -336,6 +339,53 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
     }
   }
 
+  /**
+   * Evaluates player inactivity and triggers hibernation scale-to-zero (RF-ARQ-07).
+   */
+  async checkInactivityHibernation(
+    server: Server,
+    playersOnline: number | undefined,
+    stateTransitions?: string[],
+  ): Promise<void> {
+    const online = playersOnline ?? 0;
+
+    if (online > 0) {
+      server.last_player_active_at = new Date();
+      await this.serverRepo.save(server);
+      return;
+    }
+
+    const timeoutMinutes = server.sleep_timeout_minutes;
+    // sleep_timeout_minutes <= 0 or null indicates 'never' / Always-On
+    if (!timeoutMinutes || timeoutMinutes <= 0) {
+      return;
+    }
+
+    const now = new Date();
+    if (!server.last_player_active_at) {
+      server.last_player_active_at = server.updated_at || now;
+      await this.serverRepo.save(server);
+      return;
+    }
+
+    const idleMs = now.getTime() - server.last_player_active_at.getTime();
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+
+    if (idleMs >= timeoutMs) {
+      this.logger.log(
+        `Server [${server.subdomain}] idle with 0 players for ${Math.round(idleMs / 60000)}m (timeout: ${timeoutMinutes}m). Initiating hibernation scale-to-zero (RF-ARQ-07)...`,
+      );
+      server.state = 'STOPPED';
+      server.last_player_active_at = null;
+      await this.serverRepo.save(server);
+      await this.k8sService.stopServer(server);
+      this.notifyGateway(server, 'STOPPED');
+      if (stateTransitions) {
+        stateTransitions.push(`${server.subdomain}: READY -> STOPPED (idle hibernation)`);
+      }
+    }
+  }
+
   private notifyGateway(server: Server, status: ServerState): void {
     if (!this.gatewayIpcService) {
       return;
@@ -355,6 +405,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
         game_type: server.game_type || 'MINECRAFT',
         routing_model: server.routing_model || 'VirtualHost',
         listen_port: server.allocated_port || 25565,
+        auto_wake: server.auto_wake !== false,
       });
     } catch (err: any) {
       this.logger.warn(

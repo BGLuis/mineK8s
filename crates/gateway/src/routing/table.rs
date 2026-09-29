@@ -1,10 +1,19 @@
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use dashmap::DashMap;
+use tokio::sync::broadcast;
 
-use crate::routing::route::{CachedServerRoute, RouteKey, RoutingModel};
+use crate::routing::route::{CachedServerRoute, RouteKey, RoutingModel, ServerInstanceStatus};
 
-/// Tabela de rotas concorrente em memória gerenciada via DashMap (RF-GW-07, RF-MG-03).
-#[derive(Clone, Default)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum HoldError {
+    Timeout,
+    Failed(ServerInstanceStatus),
+    NotFound,
+}
+
+/// Tabela de rotas concorrente em memória gerenciada via DashMap com broadcast reativo (RF-GW-07, RF-GW-10).
+#[derive(Clone)]
 pub struct RouteTable {
     /// Mapeamento concorrente de RouteKey -> CachedServerRoute
     routes: Arc<DashMap<RouteKey, CachedServerRoute>>,
@@ -12,14 +21,28 @@ pub struct RouteTable {
     server_index: Arc<DashMap<String, RouteKey>>,
     /// Identificador do servidor padrão de fallback (Lobby/Default)
     default_server_id: Arc<RwLock<Option<String>>>,
+    /// Canal de notificação reativa de mutações de status de rota (RF-GW-10)
+    status_broadcaster: broadcast::Sender<(String, ServerInstanceStatus)>,
+}
+
+impl Default for RouteTable {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RouteTable {
     pub fn new() -> Self {
-        Self::default()
+        let (status_broadcaster, _) = broadcast::channel(256);
+        Self {
+            routes: Arc::new(DashMap::new()),
+            server_index: Arc::new(DashMap::new()),
+            default_server_id: Arc::new(RwLock::new(None)),
+            status_broadcaster,
+        }
     }
 
-    /// Insere ou atualiza uma rota na tabela.
+    /// Insere ou atualiza uma rota na tabela e notifica ouvintes do novo status (RF-GW-10).
     pub fn insert(&self, route: CachedServerRoute) {
         let key = match route.routing_model {
             RoutingModel::DedicatedPort => RouteKey::dedicated_port(route.listener_port),
@@ -27,8 +50,11 @@ impl RouteTable {
                 RouteKey::virtual_host(route.listener_port, &route.subdomain)
             }
         };
-        self.server_index.insert(route.server_id.clone(), key.clone());
+        let server_id = route.server_id.clone();
+        let status = route.status;
+        self.server_index.insert(server_id.clone(), key.clone());
         self.routes.insert(key, route);
+        let _ = self.status_broadcaster.send((server_id, status));
     }
 
     /// Remove uma rota associada ao server_id.
@@ -78,6 +104,83 @@ impl RouteTable {
         None
     }
 
+    /// Atualiza o status de um servidor existente e notifica os waiters reativamente.
+    pub fn update_status(&self, server_id: &str, new_status: ServerInstanceStatus) -> bool {
+        if let Some(key) = self.server_index.get(server_id) {
+            if let Some(mut route) = self.routes.get_mut(key.value()) {
+                route.status = new_status;
+                let _ = self.status_broadcaster.send((server_id.to_string(), new_status));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Subscreve ao canal de broadcast de mutações de status.
+    pub fn subscribe_status(&self) -> broadcast::Receiver<(String, ServerInstanceStatus)> {
+        self.status_broadcaster.subscribe()
+    }
+
+    /// Aguarda reativamente até que o servidor com server_id atinja o estado Ready (RF-GW-10).
+    /// Se a rota já estiver Ready, retorna imediatamente.
+    /// Retorna Err(HoldError::Timeout) se o tempo limite expirar.
+    pub async fn wait_for_ready(
+        &self,
+        server_id: &str,
+        timeout_dur: Duration,
+    ) -> Result<CachedServerRoute, HoldError> {
+        // 1. Verificação imediata se a rota já está Ready
+        if let Some(route) = self.get_by_server_id(server_id) {
+            if route.status == ServerInstanceStatus::Ready {
+                return Ok(route);
+            }
+            if route.status == ServerInstanceStatus::Crashed || route.status == ServerInstanceStatus::Failed {
+                return Err(HoldError::Failed(route.status));
+            }
+        } else {
+            return Err(HoldError::NotFound);
+        }
+
+        // 2. Subscrição reativa para aguardar mutação de status
+        let mut rx = self.subscribe_status();
+        let deadline = tokio::time::Instant::now() + timeout_dur;
+
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(HoldError::Timeout);
+            }
+
+            match tokio::time::timeout(remaining, rx.recv()).await {
+                Ok(Ok((id, status))) => {
+                    if id == server_id {
+                        if status == ServerInstanceStatus::Ready {
+                            if let Some(ready_route) = self.get_by_server_id(server_id) {
+                                return Ok(ready_route);
+                            }
+                        } else if status == ServerInstanceStatus::Crashed || status == ServerInstanceStatus::Failed {
+                            return Err(HoldError::Failed(status));
+                        }
+                    }
+                }
+                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                    // Em caso de lag no canal, valida o estado atual direto na tabela
+                    if let Some(route) = self.get_by_server_id(server_id) {
+                        if route.status == ServerInstanceStatus::Ready {
+                            return Ok(route);
+                        }
+                    }
+                }
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
+                    return Err(HoldError::NotFound);
+                }
+                Err(_) => {
+                    return Err(HoldError::Timeout);
+                }
+            }
+        }
+    }
+
     /// Reconstrói a tabela de rotas inteira a partir de um snapshot recebido via IPC (RF-GW-16).
     pub fn rebuild_from_snapshot(&self, routes: Vec<CachedServerRoute>) {
         self.routes.clear();
@@ -109,4 +212,3 @@ impl RouteTable {
         self.routes.is_empty()
     }
 }
-

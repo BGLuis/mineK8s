@@ -73,6 +73,9 @@ export class Server {
   @Column({ type: 'timestamptz', nullable: true })
   last_restart_at: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  last_player_active_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

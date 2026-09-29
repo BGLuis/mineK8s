@@ -130,6 +130,7 @@ mod tests {
             allowed_group_ids: vec!["grp-modpack-b".into()],
             allowed_user_ids: vec!["usr-alice".into()],
             game_type: "MINECRAFT".into(),
+            auto_wake: true,
         }
     }
 
