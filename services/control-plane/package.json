@@ -78,7 +78,9 @@
     ],
     "moduleNameMapper": {
       "^@nestjs/common$": "<rootDir>/../test/mocks/nestjs-common.mock.ts",
+      "^@nestjs/core$": "<rootDir>/../test/mocks/nestjs-core.mock.ts",
       "^@nestjs/config$": "<rootDir>/../test/mocks/nestjs-config.mock.ts",
+      "^@nestjs/typeorm$": "<rootDir>/../test/mocks/nestjs-typeorm.mock.ts",
       "^@/(.*)$": "<rootDir>/$1",
       "^@config/(.*)$": "<rootDir>/config/$1",
       "^@logging/(.*)$": "<rootDir>/logging/$1",
