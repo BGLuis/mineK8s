@@ -311,4 +311,131 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(fs.existsSync(result.storagePath)).toBe(true);
     });
   });
+
+  describe('RF-STO-04 & D-05 (Restauração Transacional com Staging e Rollback)', () => {
+    let validBackupPath: string;
+    let corruptedBackupPath: string;
+    let invalidStructureBackupPath: string;
+
+    beforeEach(async () => {
+      const { execFile } = require('node:child_process');
+      const { promisify } = require('node:util');
+      const execAsync = promisify(execFile);
+
+      // 1. Cria um backup íntegro de teste em tempBackupsRoot
+      const validSourceDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'valid-backup-src-'));
+      await fs.promises.mkdir(path.join(validSourceDir, 'world'), { recursive: true });
+      await fs.promises.mkdir(path.join(validSourceDir, '.fabric'), { recursive: true });
+      await fs.promises.writeFile(path.join(validSourceDir, 'world', 'level.dat'), 'seed=restored-world');
+      await fs.promises.writeFile(path.join(validSourceDir, 'server.properties'), 'motd=RestoredServer');
+      await fs.promises.writeFile(path.join(validSourceDir, '.fabric', 'loader.json'), '{"loader":"fabric"}');
+
+      validBackupPath = path.join(tempBackupsRoot, 'valid-backup.tar.gz');
+      await execAsync('tar', ['-czf', validBackupPath, '-C', validSourceDir, '.']);
+      await fs.promises.rm(validSourceDir, { recursive: true, force: true });
+
+      // 2. Cria um backup corrompido (bytes inválidos)
+      corruptedBackupPath = path.join(tempBackupsRoot, 'corrupted-backup.tar.gz');
+      await fs.promises.writeFile(corruptedBackupPath, Buffer.from('NOT_A_VALID_GZIP_OR_TAR_DATA'));
+
+      // 3. Cria um backup estruturalmente inválido (falta level.dat)
+      const invalidSourceDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'invalid-backup-src-'));
+      await fs.promises.writeFile(path.join(invalidSourceDir, 'server.properties'), 'motd=NoWorld');
+      invalidStructureBackupPath = path.join(tempBackupsRoot, 'invalid-structure-backup.tar.gz');
+      await execAsync('tar', ['-czf', invalidStructureBackupPath, '-C', invalidSourceDir, '.']);
+      await fs.promises.rm(invalidSourceDir, { recursive: true, force: true });
+    });
+
+    it('deve restaurar com sucesso um backup íntegro gerando PRE_RESTORE prévio (RF-STO-04, D-05)', async () => {
+      const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
+
+      const result = await service.restoreBackup(sampleServer, 'valid-backup.tar.gz');
+
+      expect(result).toBeDefined();
+      expect(result.serverId).toBe(sampleServer.id);
+      expect(result.preRestoreBackupPath).toBeDefined();
+      expect(fs.existsSync(result.preRestoreBackupPath!)).toBe(true);
+
+      // Conteúdo restaurado
+      const restoredLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+      expect(restoredLevelDat).toBe('seed=restored-world');
+
+      const restoredProperties = await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8');
+      expect(restoredProperties).toBe('motd=RestoredServer');
+
+      const restoredDotfile = await fs.promises.readFile(path.join(serverDir, '.fabric', 'loader.json'), 'utf-8');
+      expect(restoredDotfile).toBe('{"loader":"fabric"}');
+
+      // Staging de segurança deve ser purgado após commit
+      expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
+    });
+
+    it('Critério de Aceite (D-05): Backup corrompido deixa /data 100% idêntico ao estado anterior (Rollback completo)', async () => {
+      const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
+
+      // Simula diretório de sistema lost+found e dotfiles originais em /data
+      await fs.promises.mkdir(path.join(serverDir, 'lost+found'), { recursive: true });
+      await fs.promises.mkdir(path.join(serverDir, '.hidden_config'), { recursive: true });
+      await fs.promises.writeFile(path.join(serverDir, '.hidden_config', 'cfg.json'), '{"original":true}');
+
+      // Salva snapshot do conteúdo original antes do restore
+      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+      const origProperties = await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8');
+      const origMod = await fs.promises.readFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'utf-8');
+      const origDotfile = await fs.promises.readFile(path.join(serverDir, '.hidden_config', 'cfg.json'), 'utf-8');
+
+      // Tenta restaurar com arquivo corrompido
+      await expect(service.restoreBackup(sampleServer, 'corrupted-backup.tar.gz')).rejects.toThrow(HttpException);
+
+      // Validação pós-rollback: tudo deve permanecer idêntico ao estado anterior (D-05)
+      expect(fs.existsSync(path.join(serverDir, 'lost+found'))).toBe(true);
+      expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
+
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
+      expect(await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8')).toBe(origProperties);
+      expect(await fs.promises.readFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'utf-8')).toBe(origMod);
+      expect(await fs.promises.readFile(path.join(serverDir, '.hidden_config', 'cfg.json'), 'utf-8')).toBe(origDotfile);
+    });
+
+    it('deve disparar rollback quando validação de estrutura (RF-MG-07) reprovar o mundo restaurado', async () => {
+      const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
+      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+
+      // Backup válido como tar mas sem level.dat (sanidade falha)
+      await expect(service.restoreBackup(sampleServer, 'invalid-structure-backup.tar.gz')).rejects.toThrow(HttpException);
+
+      // Estado original preservado intacto
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
+      expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
+    });
+
+    it('deve abortar na Fase 1 sem tocar em /data se o checksum SHA-256 for divergente', async () => {
+      const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
+      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+
+      await expect(
+        service.restoreBackup(sampleServer, 'valid-backup.tar.gz', {
+          expectedSha256: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        }),
+      ).rejects.toThrow(/Checksum SHA-256 divergente/);
+
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
+      expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
+    });
+
+    it('deve rejeitar restauração com HTTP 409 Conflict se o servidor não estiver STOPPED', async () => {
+      readyServer.state = 'READY';
+      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(ConflictException);
+      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(/estado STOPPED/);
+    });
+
+    it('deve rejeitar restauração com HTTP 409 Conflict se o servidor já estiver ocupado', async () => {
+      (service as any).activeBackupLocks.add(sampleServer.id);
+      await expect(service.restoreBackup(sampleServer, 'valid-backup.tar.gz')).rejects.toThrow(ConflictException);
+    });
+
+    it('deve rejeitar restauração com HTTP 404 se o arquivo de backup não for encontrado', async () => {
+      await expect(service.restoreBackup(sampleServer, 'non-existent-backup.tar.gz')).rejects.toThrow(HttpException);
+    });
+  });
 });

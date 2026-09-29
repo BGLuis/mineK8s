@@ -383,4 +383,158 @@ echo "Cold backup concluido com sucesso."
       },
     };
   }
+
+  public static buildRestoreJob(
+    server: Server,
+    backupFilename: string,
+    expectedSha256: string | undefined,
+    timestamp: number,
+    configService: AppConfigService,
+  ) {
+    const namespace = configService.kubernetes.namespace;
+    const affinity = configService.kubernetes.nodeAffinityKey
+      ? {
+          nodeAffinity: {
+            requiredDuringSchedulingIgnoredDuringExecution: {
+              nodeSelectorTerms: [
+                {
+                  matchExpressions: [
+                    {
+                      key: configService.kubernetes.nodeAffinityKey,
+                      operator: 'In',
+                      values: [configService.kubernetes.nodeAffinityValue],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        }
+      : undefined;
+
+    const restoreScript = `set -e
+BACKUP_TAR="/backups/${backupFilename}"
+EXPECTED_SHA="${expectedSha256 || ''}"
+
+echo "[Fase 1/5] Validando integridade criptográfica e estrutural do arquivo de backup..."
+if [ -n "$EXPECTED_SHA" ]; then
+  ACTUAL_SHA=$(sha256sum "$BACKUP_TAR" | awk '{print $1}')
+  if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+    echo "[ERRO CRITICO] Checksum SHA-256 divergente! Esperado: $EXPECTED_SHA, Obtido: $ACTUAL_SHA" >&2
+    exit 1
+  fi
+fi
+
+if ! tar -tzf "$BACKUP_TAR" > /dev/null 2>&1; then
+  echo "[ERRO CRITICO] Arquivo tar.gz invalido ou corrompido!" >&2
+  exit 1
+fi
+
+echo "[Fase 2/5] Isolando arquivos atuais em staging de seguranca..."
+mkdir -p /data/.staging_safety
+find /data -mindepth 1 -maxdepth 1 -not -name '.staging_safety' -not -name 'lost+found' -exec mv {} /data/.staging_safety/ \\;
+
+echo "[Fase 3/5] Extraindo conteudo do backup para /data..."
+RESTORE_FAILED=0
+if ! tar -xzf "$BACKUP_TAR" -C /data; then
+  echo "[ERRO] Falha durante descompactacao do tar!" >&2
+  RESTORE_FAILED=1
+fi
+
+echo "[Fase 4/5] Validando sanidade e integridade dos arquivos restaurados..."
+if [ $RESTORE_FAILED -eq 0 ]; then
+  if [ ! -f /data/world/level.dat ] && [ ! -f /data/level.dat ]; then
+    echo "[ERRO] level.dat ausente apos descompactacao!" >&2
+    RESTORE_FAILED=1
+  fi
+  if [ ! -f /data/server.properties ]; then
+    echo "[ERRO] server.properties ausente apos descompactacao!" >&2
+    RESTORE_FAILED=1
+  fi
+fi
+
+echo "[Fase 5/5] Executando Commit ou Rollback..."
+if [ $RESTORE_FAILED -ne 0 ]; then
+  echo "[ROLLBACK DISPARADO] Restaurando estado anterior a partir de .staging_safety..."
+  find /data -mindepth 1 -maxdepth 1 -not -name '.staging_safety' -not -name 'lost+found' -exec rm -rf {} +
+  find /data/.staging_safety -mindepth 1 -maxdepth 1 -exec mv {} /data/ \\;
+  rm -rf /data/.staging_safety
+  echo "[ROLLBACK CONCLUIDO] Estado original restaurado 100% intacto."
+  exit 1
+else
+  rm -rf /data/.staging_safety
+  echo "[COMMIT CONCLUIDO] Restauracao transacional finalizada com 100% de integridade."
+fi
+`;
+
+    return {
+      apiVersion: 'batch/v1',
+      kind: 'Job',
+      metadata: {
+        name: `restore-${server.subdomain}-${timestamp}`,
+        namespace,
+        labels: {
+          'app.kubernetes.io/name': `restore-${server.subdomain}`,
+          'app.kubernetes.io/part-of': 'minekubernetes',
+          'app.kubernetes.io/component': 'restore-worker',
+          'minekubernetes.io/server-id': server.id,
+        },
+      },
+      spec: {
+        ttlSecondsAfterFinished: 600,
+        backoffLimit: 0,
+        template: {
+          metadata: {
+            labels: {
+              'app.kubernetes.io/name': `restore-${server.subdomain}`,
+              'app.kubernetes.io/part-of': 'minekubernetes',
+              'app.kubernetes.io/component': 'restore-worker',
+              'job-name': `restore-${server.subdomain}-${timestamp}`,
+            },
+          },
+          spec: {
+            restartPolicy: 'Never',
+            affinity,
+            securityContext: {
+              runAsUser: 1000,
+              runAsGroup: 1000,
+              fsGroup: 1000,
+            },
+            containers: [
+              {
+                name: 'restore-worker',
+                image: 'alpine:3.20',
+                command: ['/bin/sh', '-c'],
+                args: [restoreScript],
+                volumeMounts: [
+                  {
+                    name: 'data-volume',
+                    mountPath: '/data',
+                  },
+                  {
+                    name: 'backup-volume',
+                    mountPath: '/backups',
+                  },
+                ],
+              },
+            ],
+            volumes: [
+              {
+                name: 'data-volume',
+                persistentVolumeClaim: {
+                  claimName: `data-${server.subdomain}`,
+                },
+              },
+              {
+                name: 'backup-volume',
+                persistentVolumeClaim: {
+                  claimName: 'backup-storage',
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
 }

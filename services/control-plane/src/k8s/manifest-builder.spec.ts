@@ -206,4 +206,64 @@ describe('ManifestBuilder', () => {
       expect(script).not.toContain('.snapshot_worker_ready');
     });
   });
+
+  describe('buildRestoreJob (RF-STO-04, D-05)', () => {
+    it('should generate valid Job batch/v1 for transactional restore with staging and rollback script', () => {
+      const timestamp = 1700000000;
+      const expectedSha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+      const backupFilename = 'smp_hot_1699999999.tar.gz';
+      const job = ManifestBuilder.buildRestoreJob(
+        sampleServer,
+        backupFilename,
+        expectedSha256,
+        timestamp,
+        mockConfigService,
+      );
+
+      expect(job.apiVersion).toBe('batch/v1');
+      expect(job.kind).toBe('Job');
+      expect(job.metadata.name).toBe('restore-smp-1700000000');
+      expect(job.metadata.namespace).toBe('minekubernetes');
+      expect(job.metadata.labels['app.kubernetes.io/component']).toBe('restore-worker');
+
+      const podSpec = job.spec.template.spec;
+      expect(podSpec.restartPolicy).toBe('Never');
+      expect(podSpec.securityContext.runAsUser).toBe(1000);
+      expect(podSpec.securityContext.fsGroup).toBe(1000);
+
+      // Volume mounts
+      expect(podSpec.volumes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'data-volume',
+            persistentVolumeClaim: { claimName: 'data-smp' },
+          }),
+          expect.objectContaining({
+            name: 'backup-volume',
+            persistentVolumeClaim: { claimName: 'backup-storage' },
+          }),
+        ]),
+      );
+
+      // Affinity check (D-05)
+      expect(podSpec.affinity).toBeDefined();
+
+      const script = podSpec.containers[0].args[0];
+      // Phase 1: Cryptographic check
+      expect(script).toContain('sha256sum');
+      expect(script).toContain(expectedSha256);
+      expect(script).toContain('tar -tzf');
+      // Phase 2: Staging with dotfile and lost+found protection (D-05)
+      expect(script).toContain('.staging_safety');
+      expect(script).toContain("-not -name 'lost+found'");
+      // Phase 3: Extraction
+      expect(script).toContain('tar -xzf');
+      // Phase 4: Sanity check
+      expect(script).toContain('level.dat');
+      expect(script).toContain('server.properties');
+      // Phase 5: Rollback
+      expect(script).toContain('ROLLBACK DISPARADO');
+      expect(script).toContain('COMMIT CONCLUIDO');
+    });
+  });
 });
