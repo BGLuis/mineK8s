@@ -100,7 +100,7 @@ mod tests {
 
         for (expected_val, expected_bytes) in test_cases {
             // Teste de decodificação
-            let mut cursor = &expected_bytes[..];
+            let mut cursor = expected_bytes;
             let decoded = VarInt::decode(&mut cursor).expect("Failed to decode valid VarInt");
             assert_eq!(decoded.0, expected_val);
             assert_eq!(cursor.len(), 0, "All bytes must be consumed");

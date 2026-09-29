@@ -104,7 +104,7 @@ mod tests {
         ];
 
         for (expected_val, expected_bytes) in test_cases {
-            let mut cursor = &expected_bytes[..];
+            let mut cursor = expected_bytes;
             let decoded = VarLong::decode(&mut cursor).expect("Failed to decode valid VarLong");
             assert_eq!(decoded.0, expected_val);
             assert_eq!(cursor.len(), 0);
