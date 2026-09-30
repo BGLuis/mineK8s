@@ -63,4 +63,10 @@ export const appConfigSchema = Joi.object({
   METRICS_ENABLED: Joi.boolean().default(true),
   METRICS_PORT: Joi.number().port().default(9090),
   METRICS_PATH: Joi.string().default('/metrics'),
+
+  // Health Bot E2E (RF-ARQ-30, Milestone F9)
+  HEALTH_BOT_ENABLED: Joi.boolean().default(true),
+  HEALTH_BOT_INTERVAL_MS: Joi.number().min(1000).default(300000),
+  HEALTH_BOT_TIMEOUT_MS: Joi.number().min(1000).default(5000),
 }).unknown(true);
+

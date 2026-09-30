@@ -73,3 +73,12 @@ export class CloudflareConfig {
     public readonly rootDomain: string = 'minek8s.net',
   ) {}
 }
+
+export class HealthBotConfig {
+  constructor(
+    public readonly enabled: boolean = true,
+    public readonly intervalMs: number = 300000,
+    public readonly timeoutMs: number = 5000,
+  ) {}
+}
+

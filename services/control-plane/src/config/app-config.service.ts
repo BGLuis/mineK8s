@@ -10,6 +10,7 @@ import {
   StorageConfig,
   TailscaleConfig,
   CloudflareConfig,
+  HealthBotConfig,
 } from './app-config.values';
 
 @Injectable()
@@ -139,4 +140,13 @@ export class AppConfigService {
       this.config.get<string>('CLOUDFLARE_ROOT_DOMAIN', 'minek8s.net'),
     );
   }
+
+  get healthBot(): HealthBotConfig {
+    return new HealthBotConfig(
+      this.config.get<boolean>('HEALTH_BOT_ENABLED', true),
+      this.config.get<number>('HEALTH_BOT_INTERVAL_MS', 300000),
+      this.config.get<number>('HEALTH_BOT_TIMEOUT_MS', 5000),
+    );
+  }
 }
+
