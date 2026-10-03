@@ -105,6 +105,20 @@ flowchart LR
 
 ---
 
+### 5.1 Integração com o Control Plane (gRPC)
+
+O binário só fala com o Control Plane quando `CONTROL_PLANE_GRPC_URL` está definida (ex.: `http://control-plane:50051`); sem ela roda isolado, com a tabela de rotas vazia. Com ela:
+
+| Fluxo | RPC | Comportamento |
+|---|---|---|
+| Rotas | `GetInitialRoutingSnapshot` + `StreamRouteUpdates` | Snapshot ao conectar e a cada reconexão; depois `UPSERT`/`DELETE`/`STATUS_CHANGE`. Mudança de política, manutenção e auto-wake só chega por `UPSERT`. |
+| Sessões | `StreamSessionEvents` | `CONNECTED`/`DISCONNECTED` por sessão. A cada (re)conexão o backlog é descartado e as sessões abertas são reanunciadas como `CONNECTED`, porque o Control Plane esquece tudo quando o stream cai. |
+| Auto-wake | `StreamSessionEvents` | Login em rota `STOPPED` com `auto_wake` publica `WAKE_REQUESTED`; o Control Plane sobe o pod. |
+
+Chamadas simples têm prazo de 10 s por requisição; os streams não têm prazo e usam keepalive HTTP/2 (30 s). Um timeout no canal cancelaria os streams a cada 10 s.
+
+---
+
 ## 6. Cache de Identidade & Regex de Nickname (Resolução [#21], [#22])
 
 ### 6.1 Cache de WhoIs (Resolução [#22] / C-07)

@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { concatMap, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 import { ServersApi } from '../../core/api/servers.api';
 import { ToastService } from '../../ui';
@@ -33,7 +33,6 @@ export function errorReason(error: unknown): string {
 
 /**
  * Start, stop and restart with a per-server busy flag and toast feedback.
- * There is no restart endpoint (design report 2.6), so restart is stop followed by start.
  */
 @Injectable({ providedIn: 'root' })
 export class ServerLifecycle {
@@ -55,7 +54,7 @@ export class ServerLifecycle {
           ? this.api.start(server.id)
           : action === 'stop'
             ? this.api.stop(server.id)
-            : this.api.stop(server.id).pipe(concatMap(() => this.api.start(server.id)));
+            : this.api.restart(server.id);
       await firstValueFrom(request);
       this.toast.success(`${MESSAGES[action].progress} "${server.name}"…`);
       return true;

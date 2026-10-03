@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { AdminApi, TailscaleApi, TailscaleDevice } from '../../core/api';
+import { AccessibleServer, AdminApi, TailscaleApi, TailscaleDevice } from '../../core/api';
 import {
   DialogService,
   McBanner,
@@ -114,9 +114,9 @@ const INACTIVE_DAYS = 30;
           Desconecta <strong class="text-text-primary">{{ nick(target) }}</strong> do servidor
           escolhido. A VPN continua ativa e a pessoa pode voltar a entrar.
         </p>
-        @if (!kickOptions().viaGroups) {
+        @if (!kickOptions().exact) {
           <p class="t-caption mb-3 text-status-warning">
-            Nenhum grupo liga essa pessoa a um servidor, então todos os servidores aparecem.
+            Não foi possível consultar os servidores dessa pessoa, então todos aparecem.
           </p>
         }
         <fieldset class="mb-3 min-w-0 border-0 p-0">
@@ -140,7 +140,9 @@ const INACTIVE_DAYS = 30;
                 <mc-status-chip [state]="server.state" />
               </label>
             } @empty {
-              <p class="text-text-muted">Nenhum servidor criado ainda.</p>
+              <p class="text-text-muted">
+                {{ kickLoading() ? 'Carregando servidores…' : 'Essa pessoa não tem acesso a nenhum servidor.' }}
+              </p>
             }
           </div>
           @if (kickOptions().servers.length > 0 && !hasKickable()) {
@@ -200,15 +202,18 @@ export class DevicesPanel {
   protected readonly kickTarget = signal<TailscaleDevice | null>(null);
   protected readonly kickServerId = signal('');
   protected readonly kickReason = signal('');
+  /** null until the request answers; 'error' when it failed. */
+  private readonly kickAccessible = signal<AccessibleServer[] | 'error' | null>(null);
+  protected readonly kickLoading = computed(() => this.kickAccessible() === null);
   protected readonly kickOptions = computed(() => {
-    const target = this.kickTarget();
-    return target
-      ? kickCandidates(
-          target.user_id,
-          this.store.groups.value() ?? [],
-          this.store.servers.value() ?? [],
-        )
-      : { servers: [], viaGroups: true };
+    const accessible = this.kickAccessible();
+    if (accessible === null) {
+      return { servers: [], exact: true };
+    }
+    return kickCandidates(
+      accessible === 'error' ? null : accessible,
+      this.store.servers.value() ?? [],
+    );
   });
   protected readonly hasKickable = computed(() => this.kickOptions().servers.some(isKickable));
 
@@ -251,7 +256,12 @@ export class DevicesPanel {
     this.kickTarget.set(device);
     this.kickServerId.set('');
     this.kickReason.set('');
+    this.kickAccessible.set(null);
     this.kickOpen.set(true);
+    this.admin.listAccessibleServers(device.user_id).subscribe({
+      next: (servers) => this.kickAccessible.set(servers),
+      error: () => this.kickAccessible.set('error'),
+    });
   }
 
   protected confirmKick(): void {

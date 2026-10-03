@@ -7,7 +7,6 @@ import {
   McBanner,
   McButton,
   McDialog,
-  McNoApiTag,
   McTextField,
   ToastService,
 } from '../../ui';
@@ -33,7 +32,7 @@ export function groupSummary(group: Group, serverNames: ReadonlyMap<string, stri
 @Component({
   selector: 'mc-groups-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McBanner, McButton, McDialog, McNoApiTag, McTextField, ToggleGroup],
+  imports: [FormsModule, McBanner, McButton, McDialog, McTextField, ToggleGroup],
   template: `
     <section aria-labelledby="groups-title">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -128,16 +127,13 @@ export function groupSummary(group: Group, serverNames: ReadonlyMap<string, stri
           <mc-banner tone="warning" title="Remover alguém desconecta">
             Tirar uma pessoa do grupo expulsa ela dos servidores ligados que ela deixa de acessar.
           </mc-banner>
-          <div>
-            <mc-toggle-group
-              label="Pessoas"
-              emptyText="Nenhum usuário encontrado."
-              [options]="userOptions()"
-              [selected]="memberIds(group)"
-              (toggled)="toggleUser(group, $event)"
-            />
-            <div class="mt-1"><mc-no-api-tag detail="lista de usuários" /></div>
-          </div>
+          <mc-toggle-group
+            label="Pessoas"
+            emptyText="Nenhum usuário encontrado."
+            [options]="userOptions()"
+            [selected]="memberIds(group)"
+            (toggled)="toggleUser(group, $event)"
+          />
           <mc-toggle-group
             label="Servidores"
             emptyText="Nenhum servidor criado ainda."
@@ -184,7 +180,7 @@ export class GroupsPanel {
     (this.store.servers.value() ?? []).map((server) => ({ id: server.id, label: server.name })),
   );
   protected readonly userOptions = computed<ToggleOption[]>(() =>
-    (this.store.users.value() ?? []).map((user) => ({ id: user.id, label: user.minecraft_nick })),
+    (this.store.users.value() ?? []).map((user) => ({ id: user.id, label: user.minecraftNick })),
   );
 
   protected errorText(): string {

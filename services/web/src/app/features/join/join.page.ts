@@ -47,6 +47,13 @@ type JoinState =
 })
 export class LinkButton {}
 
+/** "A", "A e B", "A, B e C". */
+function joinNames(names: readonly string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`;
+}
+
 @Component({
   selector: 'mc-join-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,8 +104,7 @@ export class LinkButton {}
                 >
                   <h1 class="t-title-md" tabindex="-1">Você foi convidado!</h1>
                   <p class="t-body-lg text-text-muted">
-                    Um administrador chamou você para jogar nos servidores dele. Preencha abaixo e
-                    siga 3 passos rápidos.
+                    {{ invitation(current) }} Preencha abaixo e siga 3 passos rápidos.
                   </p>
                   <div class="border-l-4 border-status-success bg-bg-sunken p-3">
                     <p class="t-label-md break-words text-status-success">{{ current.name }}</p>
@@ -353,6 +359,14 @@ export class JoinPage {
 
   protected retry(): void {
     this.reloads.update((count) => count + 1);
+  }
+
+  protected invitation(invite: InviteSummary): string {
+    const who = invite.createdBy ? invite.createdBy : 'Um administrador';
+    const names = invite.serverNames ?? [];
+    return names.length > 0
+      ? `${who} chamou você para jogar em ${joinNames(names)}.`
+      : `${who} chamou você para jogar nos servidores dele.`;
   }
 
   protected inviteSummary(invite: InviteSummary): string {

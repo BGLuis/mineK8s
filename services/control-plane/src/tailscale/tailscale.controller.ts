@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -78,8 +79,8 @@ export class TailscaleController {
     summary: 'Criar um convite com cotas e permissões pré-vinculadas (RF-TS-03, RF-TS-11, RF-ARQ-19)',
   })
   @ApiResponse({ status: 201, type: InviteSummaryDto })
-  async createInvite(@Body() dto: CreateInviteDto): Promise<InviteSummaryDto> {
-    return this.invitesService.createInvite(dto);
+  async createInvite(@Body() dto: CreateInviteDto, @Req() req: any): Promise<InviteSummaryDto> {
+    return this.invitesService.createInvite(dto, req.user?.minecraft_nick);
   }
 
   @Get('invites')

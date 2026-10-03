@@ -13,11 +13,13 @@ import { Server } from '../database/entities/server.entity';
 import { UserGroup } from '../database/entities/user-group.entity';
 import { ServerGroup } from '../database/entities/server-group.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
+import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
+import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 
 @Injectable()
 export class AdminService {
@@ -47,7 +49,7 @@ export class AdminService {
   async createGroup(dto: CreateGroupDto): Promise<Group> {
     const existing = await this.groupRepo.findOne({ where: { name: dto.name } });
     if (existing) {
-      throw new ConflictException(`Grupo com nome "${dto.name}" já existe`);
+      throw new ConflictException(`Group named "${dto.name}" already exists`);
     }
 
     const group = this.groupRepo.create({
@@ -55,6 +57,70 @@ export class AdminService {
       description: dto.description,
     });
     return this.groupRepo.save(group);
+  }
+
+  /**
+   * Lista os usuários com papel, dispositivos e grupos para o editor de grupos da SPA.
+   */
+  async listUsers(): Promise<UserSummaryDto[]> {
+    const users = await this.userRepo.find({
+      relations: ['devices', 'user_groups'],
+      order: { minecraft_nick: 'ASC' },
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      minecraftNick: user.minecraft_nick,
+      realName: user.real_name,
+      role: user.role,
+      devices: (user.devices || []).map((device) => ({
+        id: device.id,
+        deviceName: device.device_name,
+        status: device.status,
+        lastSeenAt: device.last_seen_at,
+      })),
+      groupIds: (user.user_groups || []).map((ug) => ug.group_id),
+    }));
+  }
+
+  /**
+   * Servidores em que o usuário pode estar conectado, pelas mesmas regras de acesso que o gateway aplica.
+   */
+  async listAccessibleServers(userId: string): Promise<AccessibleServerDto[]> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const [servers, serverGroups, userGroups, userAccesses] = await Promise.all([
+      this.serverRepo.find({ order: { name: 'ASC' } }),
+      this.serverGroupRepo.find(),
+      this.userGroupRepo.find({ where: { user_id: userId } }),
+      this.userServerAccessRepo.find({ where: { user_id: userId } }),
+    ]);
+
+    const groupIds = userGroups.map((ug) => ug.group_id);
+    const directServerIds = new Set(userAccesses.map((ua) => ua.server_id));
+
+    return servers
+      .filter(
+        (server) =>
+          this.accessDecisionEngine.evaluateAccess(
+            { userId: user.id, role: user.role, groupIds, isActive: true },
+            {
+              serverId: server.id,
+              policy: effectiveAccessPolicy(server),
+              allowedGroupIds: serverGroups.filter((sg) => sg.server_id === server.id).map((sg) => sg.group_id),
+              allowedUserIds: directServerIds.has(server.id) ? [user.id] : [],
+            },
+          ).allowed,
+      )
+      .map((server) => ({
+        id: server.id,
+        name: server.name,
+        subdomain: server.subdomain,
+        state: server.state,
+      }));
   }
 
   /**
@@ -73,7 +139,7 @@ export class AdminService {
   async deleteGroup(id: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id } });
     if (!group) {
-      throw new NotFoundException(`Grupo com ID "${id}" não encontrado`);
+      throw new NotFoundException(`Group with ID "${id}" not found`);
     }
     await this.groupRepo.delete({ id });
   }
@@ -83,10 +149,10 @@ export class AdminService {
    */
   async addUserToGroup(groupId: string, userId: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) throw new NotFoundException('Grupo não encontrado');
+    if (!group) throw new NotFoundException('Group not found');
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('Usuário não encontrado');
+    if (!user) throw new NotFoundException('User not found');
 
     const existing = await this.userGroupRepo.findOne({
       where: { group_id: groupId, user_id: userId },
@@ -204,10 +270,10 @@ export class AdminService {
    */
   async addServerToGroup(groupId: string, serverId: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) throw new NotFoundException('Grupo não encontrado');
+    if (!group) throw new NotFoundException('Group not found');
 
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
-    if (!server) throw new NotFoundException('Servidor não encontrado');
+    if (!server) throw new NotFoundException('Server not found');
 
     const existing = await this.serverGroupRepo.findOne({
       where: { group_id: groupId, server_id: serverId },
@@ -236,7 +302,7 @@ export class AdminService {
     });
 
     if (!server) {
-      throw new NotFoundException(`Servidor com ID "${dto.serverId}" não encontrado`);
+      throw new NotFoundException(`Server with ID "${dto.serverId}" not found`);
     }
 
     const reason = dto.reason || 'Desconectado pelo administrador.';

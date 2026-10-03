@@ -108,7 +108,7 @@ export class ServersFilesService {
     const normalizedRelPath = relPath.replace(/\\/g, '/').toLowerCase();
     if (normalizedRelPath.endsWith('session.lock')) {
       throw new BadRequestException(
-        'Proibição de segurança: o arquivo session.lock não pode ser manipulado manualmente (RF-STO-09 / RF-ARQ-16)',
+        'Security restriction: the session.lock file cannot be modified manually (RF-STO-09 / RF-ARQ-16)',
       );
     }
 
@@ -131,7 +131,7 @@ export class ServersFilesService {
     await fs.promises.writeFile(tempPath, content ?? '', 'utf-8');
     await fs.promises.rename(tempPath, safePath);
 
-    return { message: 'Salvo com sucesso' };
+    return { message: 'Saved successfully' };
   }
 
   async deleteFile(id: string, relPath: string): Promise<{ message: string }> {
@@ -142,7 +142,7 @@ export class ServersFilesService {
     const normalizedRelPath = relPath.replace(/\\/g, '/').toLowerCase();
     if (normalizedRelPath.endsWith('session.lock')) {
       throw new BadRequestException(
-        'Proibição de segurança: o arquivo session.lock nunca deve ser deletado manualmente (RF-STO-09 / RF-ARQ-16)',
+        'Security restriction: the session.lock file must never be deleted manually (RF-STO-09 / RF-ARQ-16)',
       );
     }
 
@@ -166,7 +166,7 @@ export class ServersFilesService {
     }
 
     await fs.promises.rm(safePath, { recursive: true, force: true });
-    return { message: 'Removido com sucesso' };
+    return { message: 'Removed successfully' };
   }
 
   async uploadWorld(
@@ -208,7 +208,7 @@ export class ServersFilesService {
     );
 
     return {
-      message: 'Extração concluída com sucesso',
+      message: 'Extraction completed successfully',
       extractedCount: extracted.length,
     };
   }

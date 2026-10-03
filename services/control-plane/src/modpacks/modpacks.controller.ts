@@ -121,7 +121,7 @@ export class ModpacksController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Instalar ou atualizar modpack em uma instância de servidor (RF-STO-11, RF-STO-12)' })
   @ApiResponse({ status: 202, description: 'Instalação iniciada em segundo plano' })
-  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Servidor em execução (requer estado STOPPED)' })
   async installModpack(
     @Param('id') id: string,

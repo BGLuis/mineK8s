@@ -1,3 +1,4 @@
+import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -13,6 +14,7 @@ describe('ServersService', () => {
   let mockBackupService: any;
   let mockGatewayIpcService: any;
   let mockSlpProbeService: any;
+  let playerSessions: PlayerSessionsService;
 
   let serversDb: Map<string, Server>;
   let settingsDb: Map<string, MinecraftServerSettings>;
@@ -65,6 +67,7 @@ describe('ServersService', () => {
       provisionServer: jest.fn().mockResolvedValue(undefined),
       startServer: jest.fn().mockResolvedValue(undefined),
       stopServer: jest.fn().mockResolvedValue(undefined),
+      restartServer: jest.fn().mockResolvedValue(undefined),
       deprovisionServer: jest.fn().mockResolvedValue(undefined),
       getServerDeployment: jest.fn().mockResolvedValue({
         replicas: 1,
@@ -110,6 +113,7 @@ describe('ServersService', () => {
 
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
+      publishRoute: jest.fn().mockResolvedValue(undefined),
     };
 
     mockSlpProbeService = {
@@ -122,6 +126,8 @@ describe('ServersService', () => {
       getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
     };
 
+    playerSessions = new PlayerSessionsService();
+
     service = new ServersService(
       mockServerRepo as any,
       mockSettingsRepo as any,
@@ -133,6 +139,7 @@ describe('ServersService', () => {
       mockGatewayIpcService as any,
       mockSlpProbeService as any,
       mockDnsDriver as any,
+      playerSessions,
     );
   });
 
@@ -181,7 +188,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.start('srv-1');
-      expect(res.message).toBe('Instância iniciando');
+      expect(res.message).toBe('Instance starting');
       expect(mockK8sService.startServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STARTING');
     });
@@ -196,9 +203,124 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.stop('srv-1');
-      expect(res.message).toBe('Instância parando');
+      expect(res.message).toBe('Instance stopping');
       expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STOPPED');
+    });
+  });
+
+  describe('jogadores online', () => {
+    const connect = (sessionId: string, nick: string) =>
+      playerSessions.connected({
+        event_type: 0,
+        session_id: sessionId,
+        server_id: 'srv-1',
+        client_ip: '100.64.0.2',
+        minecraft_nick: nick,
+        timestamp_epoch_ms: Date.parse('2026-10-03T12:00:00Z'),
+        reason: '',
+      });
+
+    beforeEach(() => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'READY',
+        minecraft_settings: { max_players: 10 },
+      } as any);
+    });
+
+    it('getPlayers devolve nick, IP e início da sessão, com o limite de vagas do servidor', async () => {
+      connect('s1', 'Steve');
+
+      await expect(service.getPlayers('srv-1')).resolves.toEqual({
+        online: 1,
+        max: 10,
+        players: [{ nick: 'Steve', ip: '100.64.0.2', connectedAt: new Date('2026-10-03T12:00:00Z') }],
+      });
+    });
+
+    it('getPlayers responde 404 para servidor inexistente', async () => {
+      await expect(service.getPlayers('nope')).rejects.toThrow(/not found/);
+    });
+
+    it('findOne e findAll trazem players_online', async () => {
+      connect('s1', 'Steve');
+      connect('s2', 'Alex');
+
+      expect((await service.findOne('srv-1')).players_online).toBe(2);
+      expect((await service.findAll()).find((s) => s.id === 'srv-1')?.players_online).toBe(2);
+    });
+  });
+
+  describe('restart', () => {
+    it('reinicia servidor READY com shutdown gracioso e termina em STARTING', async () => {
+      const server: Server = { id: 'srv-1', name: 'Hub', subdomain: 'hub', state: 'READY' } as any;
+      serversDb.set('srv-1', server);
+
+      const res = await service.restart('srv-1');
+
+      expect(res.message).toBe('Instance restarting');
+      expect(mockK8sService.restartServer).toHaveBeenCalledWith(server);
+      expect(server.state).toBe('STARTING');
+    });
+
+    it('recusa reiniciar servidor parado, que deveria ser iniciado', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub', state: 'STOPPED' } as any);
+
+      await expect(service.restart('srv-1')).rejects.toThrow(/Only a running server can be restarted/);
+      expect(mockK8sService.restartServer).not.toHaveBeenCalled();
+    });
+
+    it('responde 404 para servidor inexistente', async () => {
+      await expect(service.restart('nope')).rejects.toThrow(/not found/);
+    });
+  });
+
+  describe('update (PATCH /api/servers/:id)', () => {
+    const seed = (overrides: Partial<Server> = {}) => {
+      const server = {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+        auto_wake: true,
+        sleep_timeout_minutes: 15,
+        ...overrides,
+      } as any;
+      serversDb.set('srv-1', server);
+      return server;
+    };
+
+    it('grava os campos enviados, preserva os demais e republica a rota no Gateway', async () => {
+      const server = seed();
+
+      await service.update('srv-1', { is_maintenance: true, sleep_timeout_minutes: 30 });
+
+      expect(server).toMatchObject({ is_maintenance: true, sleep_timeout_minutes: 30, auto_wake: true });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('não derruba o PATCH se o Gateway estiver indisponível', async () => {
+      seed();
+      mockGatewayIpcService.publishRoute.mockRejectedValue(new Error('stream fechado'));
+
+      await expect(service.update('srv-1', { auto_wake: false })).resolves.toBeDefined();
+    });
+
+    it('recusa corpo vazio', async () => {
+      seed();
+
+      await expect(service.update('srv-1', {})).rejects.toThrow(/at least one field/);
+    });
+
+    it('recusa mudar a política de um servidor publicado na internet', async () => {
+      seed({ access_policy: 'INTERNET' });
+
+      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/unpublish it/);
     });
   });
 
@@ -213,7 +335,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.delete('srv-1');
-      expect(res.message).toBe('Instância removida');
+      expect(res.message).toBe('Instance removed');
       expect(mockK8sService.deprovisionServer).toHaveBeenCalledWith(server);
       expect(mockServerRepo.remove).toHaveBeenCalledWith(server);
     });
@@ -229,7 +351,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.updateDomain('srv-1', 'lobby-new');
-      expect(res.message).toBe('Domínio atualizado');
+      expect(res.message).toBe('Domain updated');
       expect(server.subdomain).toBe('lobby-new');
     });
 
@@ -398,12 +520,7 @@ describe('ServersService', () => {
       expect(result.srv_record).toContain('_minecraft._tcp.survival-pub.minek8s.net');
       expect(settings.online_mode).toBe(true);
       expect(server.access_policy).toBe('INTERNET');
-      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          access_policy: 'INTERNET',
-          subdomain: 'survival-pub',
-        }),
-      );
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
     });
 
     it('deve despublicar servidor (unpublishServer), removendo SRV e restaurando access_policy para GROUP', async () => {
@@ -420,12 +537,7 @@ describe('ServersService', () => {
 
       expect(result.access_policy).toBe('GROUP');
       expect(server.access_policy).toBe('GROUP');
-      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          access_policy: 'GROUP',
-          subdomain: 'survival-pub2',
-        }),
-      );
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
     });
   });
 });

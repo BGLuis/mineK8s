@@ -58,7 +58,7 @@ export class ModpackInstallerService {
     dto: InstallModpackDto,
   ): Promise<{ taskId: string; status: string; message: string }> {
     if (!this.serverRepo) {
-      throw new Error('Server repository não configurado');
+      throw new Error('Server repository not configured');
     }
 
     const server = await this.serverRepo.findOne({
@@ -67,13 +67,13 @@ export class ModpackInstallerService {
     });
 
     if (!server) {
-      throw new NotFoundException(`Servidor com ID "${serverId}" não encontrado.`);
+      throw new NotFoundException(`Server with ID "${serverId}" not found.`);
     }
 
     // Instalação de modpack requer que o servidor esteja STOPPED
     if (server.state === 'READY' || server.state === 'STARTING') {
       throw new ConflictException(
-        `O servidor [${server.subdomain}] deve estar no estado STOPPED para instalação de modpacks. Estado atual: [${server.state}]`,
+        `Server [${server.subdomain}] must be in STOPPED state to install modpacks. Current state: [${server.state}]`,
       );
     }
 
@@ -85,7 +85,7 @@ export class ModpackInstallerService {
     task.versionId = dto.versionId;
     task.status = ModpackTaskStatus.QUEUED;
     task.progressPercent = 0;
-    task.currentStep = 'Aguardando escalonamento da instalação...';
+    task.currentStep = 'Waiting for the installation to be scheduled...';
     task.downloadedFiles = 0;
     task.totalFiles = 0;
 
@@ -112,7 +112,7 @@ export class ModpackInstallerService {
     return {
       taskId: task.id,
       status: task.status,
-      message: 'Instalação de modpack iniciada em segundo plano',
+      message: 'Modpack installation started in the background',
     };
   }
 
@@ -153,7 +153,7 @@ export class ModpackInstallerService {
       await this.updateTaskProgress(task, {
         status: ModpackTaskStatus.RESOLVING,
         progressPercent: 10,
-        currentStep: `Resolvendo manifesto do modpack [${dto.projectId}] (${dto.source})...`,
+        currentStep: `Resolving modpack manifest [${dto.projectId}] (${dto.source})...`,
       });
 
       let resolvedFiles: Array<{ name: string; url?: string; hashes?: any; buffer?: Buffer }> = [];
@@ -179,7 +179,7 @@ export class ModpackInstallerService {
       await this.updateTaskProgress(task, {
         progressPercent: 20,
         totalFiles: resolvedFiles.length,
-        currentStep: `Manifesto resolvido: ${resolvedFiles.length} mods elegíveis para instalação.`,
+        currentStep: `Manifest resolved: ${resolvedFiles.length} mods eligible for installation.`,
       });
 
       // Fase 2: DOWNLOADING com Cache CAS (20 -> 80%)
@@ -201,7 +201,7 @@ export class ModpackInstallerService {
           await this.updateTaskProgress(task, {
             downloadedFiles: count,
             progressPercent: 20 + Math.floor((count / resolvedFiles.length) * 60),
-            currentStep: `Instalando: ${f.name} (via Cache CAS)`,
+            currentStep: `Installing: ${f.name} (via CAS cache)`,
           });
         } else {
           // Cache Miss: gera ou obtém buffer, grava no CAS e depois copia para mods
@@ -215,7 +215,7 @@ export class ModpackInstallerService {
           await this.updateTaskProgress(task, {
             downloadedFiles: count,
             progressPercent: 20 + Math.floor((count / resolvedFiles.length) * 60),
-            currentStep: `Baixado e indexado no CAS: ${f.name}`,
+            currentStep: `Downloaded and indexed in CAS: ${f.name}`,
           });
         }
       }
@@ -224,7 +224,7 @@ export class ModpackInstallerService {
       await this.updateTaskProgress(task, {
         status: ModpackTaskStatus.APPLYING_OVERRIDES,
         progressPercent: 85,
-        currentStep: 'Aplicando diretório de configurações personalizadas e overrides...',
+        currentStep: 'Applying custom configuration directory and overrides...',
       });
 
       // Fase 4: Matriz de Configuração e Finalização (95 -> 100%)
@@ -243,7 +243,7 @@ export class ModpackInstallerService {
       await this.updateTaskProgress(task, {
         status: ModpackTaskStatus.COMPLETED,
         progressPercent: 100,
-        currentStep: 'Instalação do modpack concluída com sucesso!',
+        currentStep: 'Modpack installation completed successfully!',
       });
 
       this.logger.log(`[RF-STO-11, RF-STO-12] Modpack [${dto.projectId}] instalado em [${server.subdomain}].`);
@@ -252,7 +252,7 @@ export class ModpackInstallerService {
       await this.updateTaskProgress(task, {
         status: ModpackTaskStatus.FAILED,
         errorMessage: err.message,
-        currentStep: `Erro na instalação: ${err.message}`,
+        currentStep: `Installation error: ${err.message}`,
       });
     }
   }

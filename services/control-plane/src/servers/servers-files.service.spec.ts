@@ -202,7 +202,7 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
         buffer: zipBuf,
       });
 
-      expect(res.message).toBe('Extração concluída com sucesso');
+      expect(res.message).toBe('Extraction completed successfully');
       expect(res.extractedCount).toBe(2);
 
       const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);

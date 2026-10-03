@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AuthService } from '../auth/auth.service';
+import { authenticateSocket } from '../common/ws-auth';
 import { JwtService } from '../auth/jwt.service';
 import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
@@ -32,6 +33,9 @@ export interface SendCommandDto {
   serverId: string;
   command: string;
 }
+
+const MAX_COMMANDS_PER_WINDOW = 5;
+const COMMAND_WINDOW_MS = 1000;
 
 @WebSocketGateway({
   namespace: '/terminal',
@@ -71,8 +75,8 @@ export class TerminalGateway
     try {
       const user = await this.authenticateClient(client);
       if (!user) {
-        this.logger.warn(`Conexão WebSocket rejeitada: Credenciais ausentes ou inválidas`);
-        client.emit('unauthorized', { message: 'Credenciais ausentes ou inválidas' });
+        this.logger.warn(`Conexão WebSocket rejeitada: Missing or invalid credentials`);
+        client.emit('unauthorized', { message: 'Missing or invalid credentials' });
         client.disconnect?.();
         return;
       }
@@ -109,12 +113,12 @@ export class TerminalGateway
 
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
     if (!server) {
-      throw new WsException(`Servidor ${serverId} não encontrado`);
+      throw new WsException(`Server ${serverId} not found`);
     }
 
     const hasAccess = await this.checkUserAccess(user, serverId);
     if (!hasAccess) {
-      client.emit('error', { message: 'Acesso não autorizado ao terminal deste servidor' });
+      client.emit('error', { message: 'Unauthorized access to the terminal of this server' });
       return;
     }
 
@@ -152,17 +156,25 @@ export class TerminalGateway
     const { serverId, command } = data;
     const user: User | undefined = client.data?.user;
 
+    if (!this.tryConsumeCommandSlot(client)) {
+      client.emit('error', {
+        code: 'RATE_LIMITED',
+        message: `Limit of ${MAX_COMMANDS_PER_WINDOW} commands per second exceeded. Wait a moment.`,
+      });
+      return;
+    }
+
     const server = await this.serverRepo.findOne({
       where: { id: serverId },
       relations: ['minecraft_settings'],
     });
     if (!server) {
-      throw new WsException(`Servidor ${serverId} não encontrado`);
+      throw new WsException(`Server ${serverId} not found`);
     }
 
     const hasAccess = await this.checkUserAccess(user, serverId);
     if (!hasAccess) {
-      client.emit('error', { message: 'Acesso não autorizado a despachar comandos neste servidor' });
+      client.emit('error', { message: 'Unauthorized to send commands to this server' });
       return;
     }
 
@@ -202,6 +214,22 @@ export class TerminalGateway
       event: 'command_output',
       data: responseData,
     };
+  }
+
+  /** Janela deslizante por socket (SRS 03): comandos recusados não ocupam vaga. */
+  private tryConsumeCommandSlot(client: any): boolean {
+    client.data = client.data || {};
+    const now = Date.now();
+    const recent: number[] = (client.data.commandTimestamps || []).filter(
+      (timestamp: number) => now - timestamp < COMMAND_WINDOW_MS,
+    );
+    if (recent.length >= MAX_COMMANDS_PER_WINDOW) {
+      client.data.commandTimestamps = recent;
+      return false;
+    }
+    recent.push(now);
+    client.data.commandTimestamps = recent;
+    return true;
   }
 
   private async checkUserAccess(
@@ -245,33 +273,7 @@ export class TerminalGateway
     });
   }
 
-  private async authenticateClient(client: any): Promise<User | null> {
-    const handshake = client.handshake || {};
-    const headers = handshake.headers || {};
-    const auth = handshake.auth || {};
-    const query = handshake.query || {};
-
-    // 1. Bearer JWT em auth.token, headers.authorization ou query.token
-    const rawToken =
-      auth.token ||
-      (headers['authorization']?.startsWith('Bearer ')
-        ? headers['authorization'].substring(7).trim()
-        : null) ||
-      query.token;
-
-    if (rawToken) {
-      const payload = this.jwtService.verify(rawToken);
-      if (payload?.sub) {
-        return this.authService.validateUserById(payload.sub);
-      }
-    }
-
-    // 2. Tailscale Zero-Trust header
-    const tailscaleHeader = headers['x-tailscale-user'];
-    if (tailscaleHeader) {
-      return this.authService.validateTailscaleUser(String(tailscaleHeader));
-    }
-
-    return null;
+  private authenticateClient(client: any): Promise<User | null> {
+    return authenticateSocket(client, this.authService, this.jwtService);
   }
 }

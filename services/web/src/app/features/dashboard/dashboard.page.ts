@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, catchError, exhaustMap, forkJoin, map, merge, of, switchMap } from 'rxjs';
 
 import { MockApi } from '../../core/api/mock-api';
+import { ServersSocket } from '../../core/realtime/servers-socket';
 import { ServerSummary } from '../../core/api/models';
 import { TailscaleApi } from '../../core/api/tailscale.api';
 import { ServersApi } from '../../core/api/servers.api';
@@ -24,7 +25,7 @@ import {
   tailscaleQuota,
 } from './dashboard.logic';
 import { ServerLifecycle } from './server-lifecycle';
-import { visiblePoll } from './visible-poll';
+import { liveRefresh } from './live-refresh';
 
 const POLL_MS = 10_000;
 const SKELETON_CARDS = [0, 1, 2];
@@ -93,7 +94,6 @@ interface Snapshot {
     <section aria-labelledby="servers-heading">
       <div class="mb-4 hidden items-center justify-between gap-4 md:flex">
         <h2 id="servers-heading" class="t-title-sm">Servidores</h2>
-        <mc-no-api-tag detail="jogadores online" />
       </div>
 
       @if (error() && servers() !== null) {
@@ -169,6 +169,7 @@ export class DashboardPage {
   private readonly serversApi = inject(ServersApi);
   private readonly tailscale = inject(TailscaleApi);
   private readonly mock = inject(MockApi);
+  private readonly serversSocket = inject(ServersSocket);
   private readonly router = inject(Router);
   protected readonly lifecycle = inject(ServerLifecycle);
 
@@ -207,7 +208,7 @@ export class DashboardPage {
   private readonly refresh$ = new Subject<void>();
 
   constructor() {
-    merge(visiblePoll(POLL_MS), this.refresh$)
+    merge(liveRefresh(this.serversSocket.signals(), POLL_MS), this.refresh$)
       .pipe(
         exhaustMap(() => this.load()),
         takeUntilDestroyed(),
@@ -245,8 +246,8 @@ export class DashboardPage {
         const counts = online.length
           ? forkJoin(
               online.map((server) =>
-                this.mock
-                  .serverPlayers(server.id)
+                this.serversApi
+                  .players(server.id)
                   .pipe(
                     map((p): [string, ServerPlayerCount] => [
                       server.id,

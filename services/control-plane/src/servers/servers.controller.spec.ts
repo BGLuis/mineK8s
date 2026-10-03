@@ -23,6 +23,9 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       findOne: jest.fn(),
       start: jest.fn(),
       stop: jest.fn(),
+      restart: jest.fn(),
+      getPlayers: jest.fn(),
+      update: jest.fn(),
       updateVersion: jest.fn(),
       delete: jest.fn(),
       updateDomain: jest.fn(),
@@ -68,12 +71,12 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
         },
       ]),
       deleteBackup: jest.fn().mockResolvedValue({
-        message: 'Backup removido com sucesso',
+        message: 'Backup removed successfully',
         backupId: 'backup-123',
       }),
       restoreBackupById: jest.fn().mockResolvedValue({
         taskId: 'restore-task-456',
-        message: 'Restauração transacional concluída com sucesso',
+        message: 'Transactional restore completed successfully',
       }),
       getBackup: jest.fn(),
     };
@@ -112,7 +115,7 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     const result = await controller.deleteBackup('srv-1', 'backup-123', 'true');
 
     expect(mockBackupService.deleteBackup).toHaveBeenCalledWith('srv-1', 'backup-123', true);
-    expect(result.message).toContain('removido com sucesso');
+    expect(result.message).toContain('removed successfully');
   });
 
   it('POST :id/backups/:backupId/restore deve disparar restauração transacional (RF-STO-17)', async () => {
@@ -120,7 +123,7 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
 
     expect(mockBackupService.restoreBackupById).toHaveBeenCalledWith('srv-1', 'backup-123');
     expect(result.taskId).toBe('restore-task-456');
-    expect(result.message).toContain('Restauração transacional');
+    expect(result.message).toContain('Transactional restore');
   });
 
   it('GET :id/backups/:backupId/download deve realizar streaming binário com headers corretos (RF-STO-17)', async () => {
@@ -173,6 +176,31 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     await expect(controller.downloadBackup('srv-1', 'backup-missing', res)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('Jogadores online', () => {
+    it('GET :id/players delega para o serviço', async () => {
+      mockServersService.getPlayers.mockResolvedValue({ online: 0, max: 20, players: [] });
+
+      await expect(controller.players('srv-1')).resolves.toEqual({ online: 0, max: 20, players: [] });
+      expect(mockServersService.getPlayers).toHaveBeenCalledWith('srv-1');
+    });
+  });
+
+  describe('Configurações e restart', () => {
+    it('PATCH :id delega o DTO para o serviço', async () => {
+      mockServersService.update.mockResolvedValue({ id: 'srv-1' });
+
+      await controller.update('srv-1', { is_maintenance: true });
+
+      expect(mockServersService.update).toHaveBeenCalledWith('srv-1', { is_maintenance: true });
+    });
+
+    it('POST :id/restart delega para o serviço', async () => {
+      mockServersService.restart.mockResolvedValue({ message: 'Instance restarting' });
+
+      await expect(controller.restart('srv-1')).resolves.toEqual({ message: 'Instance restarting' });
+    });
   });
 
   describe('Cloudflare Public Exposure Endpoints (RF-CF-07)', () => {

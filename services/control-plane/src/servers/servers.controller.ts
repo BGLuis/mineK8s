@@ -29,6 +29,7 @@ import { ServersFilesService } from './servers-files.service';
 import { ServersBackupService } from './servers-backup.service';
 import { CreateServerDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
+import { UpdateServerDto } from './dto/update-server.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
@@ -78,6 +79,14 @@ export class ServersController {
     return this.serversService.findOne(id);
   }
 
+  @Get(':id/players')
+  @ApiOperation({ summary: 'List players currently connected through the gateway, with session start' })
+  @ApiResponse({ status: 200, description: 'Online count, slot limit and sessions' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async players(@Param('id') id: string) {
+    return this.serversService.getPlayers(id);
+  }
+
   @Post(':id/start')
   @ApiOperation({ summary: 'Start a server (scale Kubernetes deployment replicas to 1)' })
   @ApiResponse({ status: 200, description: 'Server start initiated' })
@@ -92,6 +101,26 @@ export class ServersController {
   @ApiResponse({ status: 404, description: 'Server not found' })
   async stop(@Param('id') id: string) {
     return this.serversService.stop(id);
+  }
+
+  @Post(':id/restart')
+  @ApiOperation({ summary: 'Restart a running server with graceful shutdown (save-all, stop, start)' })
+  @ApiResponse({ status: 200, description: 'Server restart initiated' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is not running' })
+  async restart(@Param('id') id: string) {
+    return this.serversService.restart(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Update quick settings (sleep timeout, auto-wake, maintenance, access policy) and sync the Gateway',
+  })
+  @ApiResponse({ status: 200, description: 'Server updated' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is published on the internet' })
+  async update(@Param('id') id: string, @Body() dto: UpdateServerDto) {
+    return this.serversService.update(id, dto);
   }
 
   @Post(':id/update-version')
@@ -200,7 +229,7 @@ export class ServersController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Criar backup do servidor (HOT ou COLD) (RF-STO-17)' })
   @ApiResponse({ status: 202, description: 'Backup iniciado ou concluído com sucesso' })
-  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Conflito de estado ou tarefa em andamento' })
   async createBackup(
     @Param('id') id: string,
@@ -218,7 +247,7 @@ export class ServersController {
 
   @Delete(':id/backups/:backupId')
   @ApiOperation({ summary: 'Remover backup físico e registro do banco (RF-STO-15, RF-STO-17)' })
-  @ApiResponse({ status: 200, description: 'Backup removido com sucesso' })
+  @ApiResponse({ status: 200, description: 'Backup removed successfully' })
   @ApiResponse({ status: 403, description: 'Tentativa de remover backup protegido sem force=true' })
   @ApiResponse({ status: 400, description: 'Tentativa de remover backup pre-restore dentro de 48h' })
   @ApiResponse({ status: 404, description: 'Backup não encontrado' })
@@ -254,7 +283,7 @@ export class ServersController {
   ) {
     const backup = await this.backupService.getBackup(id, backupId);
     if (!fs.existsSync(backup.storagePath)) {
-      throw new NotFoundException(`Arquivo físico do backup não encontrado no pool de armazenamento`);
+      throw new NotFoundException(`Backup file not found in the storage pool`);
     }
 
     res.setHeader('Content-Type', 'application/gzip');
@@ -269,7 +298,7 @@ export class ServersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Publicar servidor publicamente na internet via Cloudflare SRV (RF-CF-07)' })
   @ApiResponse({ status: 200, description: 'Servidor publicado com política INTERNET e online-mode=true' })
-  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
   async publish(@Param('id') id: string) {
     return this.serversService.publishServer(id);
   }
@@ -278,7 +307,7 @@ export class ServersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Despublicar servidor da internet e reverter registro Cloudflare (RF-CF-07)' })
   @ApiResponse({ status: 200, description: 'Servidor despublicado e retornado à política padrão' })
-  @ApiResponse({ status: 404, description: 'Servidor não encontrado' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
   async unpublish(@Param('id') id: string) {
     return this.serversService.unpublishServer(id);
   }

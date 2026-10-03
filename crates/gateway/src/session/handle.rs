@@ -11,5 +11,7 @@ pub struct ActiveSessionHandle {
     pub server_id: String,
     pub minecraft_nick: String,
     pub connected_at: Instant,
+    /// Início da sessão em epoch ms, para reanunciá-la ao Control Plane após uma reconexão.
+    pub connected_at_epoch_ms: i64,
     pub abort_tx: Option<oneshot::Sender<()>>,
 }

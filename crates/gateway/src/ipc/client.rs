@@ -1,5 +1,6 @@
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::client::Grpc;
 use tonic::codec::ProstCodec;
 use tonic::codegen::http::uri::PathAndQuery;
@@ -10,8 +11,14 @@ use tracing::{error, info, warn};
 use crate::ipc::protocol::{
     Empty, ResolvePlayerRequest, ResolvePlayerResponse, RevokeSessionRequest,
     RevokeSessionResponse, RouteAction, RouteUpdateEvent, RoutingSnapshotResponse,
+    SessionEventType, SessionLifecycleEvent,
 };
 use crate::routing::{CachedServerRoute, RouteTable, ServerInstanceStatus};
+use crate::session::SessionManager;
+
+/// Prazo das chamadas simples. Não pode ser um timeout do canal: ele também valeria para os
+/// streams de rotas e de sessões, que ficam abertos por horas e seriam cancelados a cada 10 s.
+const UNARY_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Cliente gRPC de baixo nível para comunicação com o GatewayControlService do Control Plane.
 #[derive(Clone)]
@@ -28,8 +35,9 @@ impl GatewayControlServiceClient {
 
     pub async fn get_initial_routing_snapshot(
         &mut self,
-        request: Request<Empty>,
+        mut request: Request<Empty>,
     ) -> Result<tonic::Response<RoutingSnapshotResponse>, Status> {
+        request.set_timeout(UNARY_TIMEOUT);
         self.inner.ready().await.map_err(|e| {
             Status::unknown(format!("GatewayControlService indisponível: {}", e))
         })?;
@@ -54,10 +62,27 @@ impl GatewayControlServiceClient {
         self.inner.server_streaming(request, path, codec).await
     }
 
+    /// Abre a chamada `StreamSessionEvents` (stream de eventos -> Empty). A resposta só chega quando o
+    /// fluxo de entrada termina, então esta futura fica pendente enquanto a conexão estiver saudável.
+    pub async fn stream_session_events(
+        &mut self,
+        events: ReceiverStream<SessionLifecycleEvent>,
+    ) -> Result<tonic::Response<Empty>, Status> {
+        self.inner.ready().await.map_err(|e| {
+            Status::unknown(format!("GatewayControlService indisponível: {}", e))
+        })?;
+        let codec = ProstCodec::default();
+        let path = PathAndQuery::from_static(
+            "/minekubernetes.gateway.v1.GatewayControlService/StreamSessionEvents",
+        );
+        self.inner.client_streaming(Request::new(events), path, codec).await
+    }
+
     pub async fn revoke_player_session(
         &mut self,
-        request: Request<RevokeSessionRequest>,
+        mut request: Request<RevokeSessionRequest>,
     ) -> Result<tonic::Response<RevokeSessionResponse>, Status> {
+        request.set_timeout(UNARY_TIMEOUT);
         self.inner.ready().await.map_err(|e| {
             Status::unknown(format!("GatewayControlService indisponível: {}", e))
         })?;
@@ -70,8 +95,9 @@ impl GatewayControlServiceClient {
 
     pub async fn resolve_player_identity(
         &mut self,
-        request: Request<ResolvePlayerRequest>,
+        mut request: Request<ResolvePlayerRequest>,
     ) -> Result<tonic::Response<ResolvePlayerResponse>, Status> {
+        request.set_timeout(UNARY_TIMEOUT);
         self.inner.ready().await.map_err(|e| {
             Status::unknown(format!("GatewayControlService indisponível: {}", e))
         })?;
@@ -96,7 +122,9 @@ impl GatewayIpcClient {
         let endpoint_str = endpoint.into();
         let channel = Endpoint::from_shared(endpoint_str.clone())?
             .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(10))
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
+            .keep_alive_while_idle(true)
             .connect()
             .await?;
 
@@ -163,6 +191,71 @@ impl GatewayIpcClient {
         } else {
             Ok(None)
         }
+    }
+
+    /// Publica no Control Plane os eventos de sessão, reconectando sozinho.
+    ///
+    /// A cada (re)conexão o estado conhecido pelo Control Plane é tratado como perdido: o backlog
+    /// acumulado é descartado e as sessões realmente abertas são reanunciadas como CONNECTED.
+    /// Pedidos de wake pendentes são preservados, pois ainda há jogadores esperando por eles.
+    pub async fn run_session_events_loop(
+        self,
+        sessions: SessionManager,
+        mut events_rx: mpsc::UnboundedReceiver<SessionLifecycleEvent>,
+        mut shutdown_rx: watch::Receiver<bool>,
+    ) {
+        info!("Iniciando publicação de eventos de sessão para o Control Plane...");
+        let mut client = self.client.clone();
+
+        while !*shutdown_rx.borrow() {
+            let mut pending_wakes = Vec::new();
+            while let Ok(event) = events_rx.try_recv() {
+                if event.event_type == SessionEventType::WakeRequested as i32 {
+                    pending_wakes.push(event);
+                }
+            }
+
+            let (tx, rx) = mpsc::channel::<SessionLifecycleEvent>(256);
+            for event in sessions.connected_events().into_iter().chain(pending_wakes) {
+                let _ = tx.send(event).await;
+            }
+
+            {
+                let mut call = Box::pin(client.stream_session_events(ReceiverStream::new(rx)));
+                info!("Stream de eventos de sessão aberto com o Control Plane.");
+                loop {
+                    tokio::select! {
+                        result = &mut call => {
+                            match result {
+                                Ok(_) => warn!("Control Plane encerrou o stream de eventos de sessão."),
+                                Err(e) => warn!(error = %e, "Stream de eventos de sessão interrompido."),
+                            }
+                            break;
+                        }
+                        event = events_rx.recv() => match event {
+                            Some(event) => {
+                                if tx.send(event).await.is_err() {
+                                    break;
+                                }
+                            }
+                            None => return,
+                        },
+                        _ = shutdown_rx.changed() => {
+                            if *shutdown_rx.borrow() {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(3)) => {},
+                _ = shutdown_rx.changed() => break,
+            }
+        }
+
+        info!("Publicação de eventos de sessão finalizada ordenadamente.");
     }
 
     /// Loop resiliente de sincronização de rotas com reconexão automática e reconstrução de snapshot.

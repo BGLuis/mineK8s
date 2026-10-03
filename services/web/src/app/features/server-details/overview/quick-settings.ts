@@ -1,4 +1,4 @@
-import { ServerSettingsPatch } from '../../../core/api/models';
+import { ServerSettingsPatch, UpdateServerRequest } from '../../../core/api/models';
 
 export const MAX_SLEEP_MINUTES = 1440;
 
@@ -34,20 +34,20 @@ export interface QuickSettings {
   autoWake: boolean;
 }
 
-/** `auto_wake` is editable on this screen but absent from ServerSettingsPatch (mock contract). */
-export type SettingsPatch = ServerSettingsPatch & { auto_wake?: boolean };
-
 export interface SettingsChanges {
   /** Goes to the real PATCH /api/servers/:id/domain. */
   domain: string | null;
-  /** Goes to MockApi: the backend has no PATCH for these. */
-  patch: SettingsPatch;
+  /** Goes to the real PATCH /api/servers/:id. */
+  patch: UpdateServerRequest;
+  /** Goes to MockApi: the backend cannot change memory after creation yet. */
+  memory: ServerSettingsPatch;
 }
 
 export function diffSettings(initial: QuickSettings, current: QuickSettings): SettingsChanges {
-  const patch: SettingsPatch = {};
+  const patch: UpdateServerRequest = {};
+  const memory: ServerSettingsPatch = {};
   if (current.memoryMb !== initial.memoryMb) {
-    patch.allocated_memory_mb = current.memoryMb;
+    memory.allocated_memory_mb = current.memoryMb;
   }
   if (current.sleepMinutes.trim() !== initial.sleepMinutes.trim()) {
     patch.sleep_timeout_minutes = Number(current.sleepMinutes);
@@ -61,11 +61,12 @@ export function diffSettings(initial: QuickSettings, current: QuickSettings): Se
   return {
     domain: current.subdomain !== initial.subdomain ? current.subdomain : null,
     patch,
+    memory,
   };
 }
 
-export function hasChanges({ domain, patch }: SettingsChanges): boolean {
-  return domain !== null || Object.keys(patch).length > 0;
+export function hasChanges({ domain, patch, memory }: SettingsChanges): boolean {
+  return domain !== null || Object.keys(patch).length > 0 || Object.keys(memory).length > 0;
 }
 
 const POLICY_LABELS: Record<string, string> = {

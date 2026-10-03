@@ -71,6 +71,14 @@ server.addService(gatewayService, {
       callback(null, { found: false });
     }
   },
+  StreamSessionEvents: (call, callback) => {
+    // Cada evento recebido vira uma linha em stdout para os testes do Gateway conferirem.
+    call.on('data', (event) => {
+      console.log(`SESSION_EVENT:${event.event_type}:${event.server_id}:${event.minecraft_nick}:${event.client_ip}`);
+    });
+    call.on('end', () => callback(null, {}));
+    call.on('error', () => {});
+  },
   RevokePlayerSession: (call, callback) => {
     callback(null, { session_found: true, terminated_connections_count: 1 });
   },

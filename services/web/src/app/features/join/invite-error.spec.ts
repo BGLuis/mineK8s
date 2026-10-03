@@ -2,26 +2,26 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 import { inviteErrorView } from './invite-error';
 
-function failure(status: number, message?: string): HttpErrorResponse {
-  return new HttpErrorResponse({ status, error: message ? { message } : null });
+function failure(status: number, code?: string, message = 'backend text'): HttpErrorResponse {
+  return new HttpErrorResponse({ status, error: code ? { code, message } : null });
 }
 
 describe('inviteErrorView', () => {
   it('explains a depleted invite (409)', () => {
-    expect(inviteErrorView(failure(409, 'O limite de utilizações deste convite foi atingido')).title).toBe(
+    expect(inviteErrorView(failure(409, 'INVITE_DEPLETED')).title).toBe(
       'Este convite já foi usado',
     );
   });
 
   it('tells a revoked invite from an expired one even though both are 400', () => {
-    expect(inviteErrorView(failure(400, 'Este convite foi revogado pelo administrador')).title).toBe(
+    expect(inviteErrorView(failure(400, 'INVITE_REVOKED')).title).toBe(
       'Este convite foi cancelado',
     );
-    expect(inviteErrorView(failure(400, 'Este convite expirou')).title).toBe('Este convite expirou');
+    expect(inviteErrorView(failure(400, 'INVITE_EXPIRED')).title).toBe('Este convite expirou');
   });
 
   it('treats an unknown token (404) as not found', () => {
-    const view = inviteErrorView(failure(404, 'Convite não encontrado ou token inválido'));
+    const view = inviteErrorView(failure(404, 'INVITE_NOT_FOUND'));
     expect(view.title).toBe('Convite não encontrado');
     expect(view.retryable).toBe(false);
   });
@@ -33,7 +33,7 @@ describe('inviteErrorView', () => {
   });
 
   it('never renders the raw backend message', () => {
-    const view = inviteErrorView(failure(400, '<img src=x onerror=alert(1)> expirou'));
+    const view = inviteErrorView(failure(400, 'INVITE_EXPIRED', '<img src=x onerror=alert(1)>'));
     expect(view.text).not.toContain('<img');
   });
 });

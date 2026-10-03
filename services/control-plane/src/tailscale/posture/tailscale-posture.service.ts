@@ -130,7 +130,7 @@ export class TailscalePostureService implements OnModuleInit {
             findings.push({
               severity: 'CRITICAL',
               ruleIndex: idx,
-              description: 'Curinga universal amplo detectado: src ["*"] possui permissão irrestrita para dst ["*:*"].',
+              description: 'Broad universal wildcard detected: src ["*"] has unrestricted permission to dst ["*:*"].',
               rawRule: rule,
             });
             isVulnerable = true;
@@ -152,7 +152,7 @@ export class TailscalePostureService implements OnModuleInit {
             findings.push({
               severity: 'CRITICAL',
               ruleIndex: idx,
-              description: `VULNERABILIDADE CRÍTICA: Jogadores (${srcList.join(', ')}) possuem acesso irrestrito (*:*) à rede.`,
+              description: `CRITICAL VULNERABILITY: Players (${srcList.join(', ')}) have unrestricted access (*:*) to the network.`,
               rawRule: rule,
             });
           } else {
@@ -176,7 +176,7 @@ export class TailscalePostureService implements OnModuleInit {
               findings.push({
                 severity: 'HIGH',
                 ruleIndex: idx,
-                description: `Vulnerabilidade Zero-Trust (RF-TS-01): Jogadores têm acesso permitido à porta não-Minecraft (${port}) no destino ${dst}.`,
+                description: `Zero-Trust vulnerability (RF-TS-01): Players are allowed access to non-Minecraft port (${port}) on destination ${dst}.`,
                 rawRule: rule,
               });
             }
@@ -199,7 +199,7 @@ export class TailscalePostureService implements OnModuleInit {
       for (const failed of failedTests) {
         findings.push({
           severity: 'HIGH',
-          description: `Falha na asserção de teste de ACL (RF-TS-12): ${failed.src} -> ${failed.target} (esperado ${failed.expected}). Detalhe: ${failed.detail}`,
+          description: `ACL test assertion failed (RF-TS-12): ${failed.src} -> ${failed.target} (expected ${failed.expected}). Detail: ${failed.detail}`,
         });
       }
     }
@@ -241,8 +241,8 @@ export class TailscalePostureService implements OnModuleInit {
           expected: 'accept',
           passed: permitted,
           detail: permitted
-            ? 'Tráfego autorizado pela regra'
-            : 'Esperado aceitar conexão mas nenhuma regra compatível foi encontrada',
+            ? 'Traffic allowed by the rule'
+            : 'Expected the connection to be accepted but no matching rule was found',
         });
       }
 
@@ -255,8 +255,8 @@ export class TailscalePostureService implements OnModuleInit {
           expected: 'deny',
           passed: !permitted,
           detail: !permitted
-            ? 'Tráfego bloqueado com sucesso'
-            : 'FALHA DE SEGURANÇA: Tráfego proibido foi permitido pelas regras de ACL',
+            ? 'Traffic blocked successfully'
+            : 'SECURITY FAILURE: forbidden traffic was allowed by the ACL rules',
         });
       }
     }
