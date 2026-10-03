@@ -1,6 +1,6 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
-import { Observable } from 'rxjs';
+import { Observable, endWith, ignoreElements, tap } from 'rxjs';
 
 import {
   Empty,
@@ -43,22 +43,27 @@ export class GatewayIpcController {
   @GrpcStreamMethod('GatewayControlService', 'StreamSessionEvents')
   streamSessionEvents(messages: Observable<SessionLifecycleEvent>): Observable<Empty> {
     this.logger.log('Gateway L7 abriu stream de eventos de ciclo de vida de sessão (StreamSessionEvents)');
-    messages.subscribe({
-      next: (event) => void this.ipcService.handleSessionEvent(event),
-      error: (err) => {
-        this.logger.error(`Erro no stream de eventos de sessão: ${err?.message}`);
-        this.ipcService.handleSessionStreamClosed();
-      },
-      complete: () => {
-        this.logger.log('Stream de eventos de sessão finalizado pelo Gateway');
-        this.ipcService.handleSessionStreamClosed();
-      },
-    });
 
-    return new Observable((subscriber) => {
-      subscriber.next({});
-      subscriber.complete();
-    });
+    // O RPC é "stream -> Empty": a resposta única só pode sair quando o Gateway encerra o seu fluxo.
+    // Responder antes encerraria a chamada e descartaria todos os eventos seguintes.
+    return messages.pipe(
+      tap({
+        next: (event) =>
+          void this.ipcService
+            .handleSessionEvent(event)
+            .catch((err) => this.logger.error(`Falha ao processar evento de sessão: ${err?.message}`)),
+        error: (err) => {
+          this.logger.error(`Erro no stream de eventos de sessão: ${err?.message}`);
+          this.ipcService.handleSessionStreamClosed();
+        },
+        complete: () => {
+          this.logger.log('Stream de eventos de sessão finalizado pelo Gateway');
+          this.ipcService.handleSessionStreamClosed();
+        },
+      }),
+      ignoreElements(),
+      endWith({} as Empty),
+    );
   }
 
   /**
