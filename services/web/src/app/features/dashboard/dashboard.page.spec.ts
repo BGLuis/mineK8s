@@ -1,11 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { NEVER, of } from 'rxjs';
 
 import { MockApi } from '../../core/api/mock-api';
 import { ServerState, ServerSummary } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { TailscaleApi } from '../../core/api/tailscale.api';
+import { ServersSocket } from '../../core/realtime/servers-socket';
 import { DashboardPage } from './dashboard.page';
 
 const server = (id: string, name: string, state: ServerState): ServerSummary => ({
@@ -46,6 +47,7 @@ describe('DashboardPage', () => {
           },
         },
         { provide: TailscaleApi, useValue: { listDevices: () => of(devices) } },
+        { provide: ServersSocket, useValue: { signals: () => NEVER } },
         {
           provide: MockApi,
           useValue: {

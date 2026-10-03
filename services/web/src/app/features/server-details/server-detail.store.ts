@@ -6,8 +6,9 @@ import { EMPTY, Subject, catchError, exhaustMap, filter, merge, switchMap, tap }
 import { MockApi } from '../../core/api/mock-api';
 import { ServerAccessPolicy, ServerDetail, ServerRuntimeStats } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
+import { ServersSocket } from '../../core/realtime/servers-socket';
 import { LifecycleAction, ServerLifecycle } from '../dashboard/server-lifecycle';
-import { visiblePoll } from '../dashboard/visible-poll';
+import { liveRefresh } from '../dashboard/live-refresh';
 
 const POLL_MS = 5_000;
 
@@ -22,6 +23,7 @@ export class ServerDetailStore {
   private readonly api = inject(ServersApi);
   private readonly mock = inject(MockApi);
   private readonly lifecycle = inject(ServerLifecycle);
+  private readonly socket = inject(ServersSocket);
 
   private readonly id = signal<string | null>(null);
   private readonly refresh$ = new Subject<void>();
@@ -47,7 +49,10 @@ export class ServerDetailStore {
       .pipe(
         filter((id): id is string => id !== null),
         switchMap((id) =>
-          merge(visiblePoll(POLL_MS), this.refresh$).pipe(exhaustMap(() => this.fetch(id))),
+          merge(
+            liveRefresh(this.socket.signals(), POLL_MS, (event) => event.id === id),
+            this.refresh$,
+          ).pipe(exhaustMap(() => this.fetch(id))),
         ),
         takeUntilDestroyed(),
       )
