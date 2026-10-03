@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AuthService } from '../auth/auth.service';
+import { authenticateSocket } from '../common/ws-auth';
 import { JwtService } from '../auth/jwt.service';
 import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
@@ -272,33 +273,7 @@ export class TerminalGateway
     });
   }
 
-  private async authenticateClient(client: any): Promise<User | null> {
-    const handshake = client.handshake || {};
-    const headers = handshake.headers || {};
-    const auth = handshake.auth || {};
-    const query = handshake.query || {};
-
-    // 1. Bearer JWT em auth.token, headers.authorization ou query.token
-    const rawToken =
-      auth.token ||
-      (headers['authorization']?.startsWith('Bearer ')
-        ? headers['authorization'].substring(7).trim()
-        : null) ||
-      query.token;
-
-    if (rawToken) {
-      const payload = this.jwtService.verify(rawToken);
-      if (payload?.sub) {
-        return this.authService.validateUserById(payload.sub);
-      }
-    }
-
-    // 2. Tailscale Zero-Trust header
-    const tailscaleHeader = headers['x-tailscale-user'];
-    if (tailscaleHeader) {
-      return this.authService.validateTailscaleUser(String(tailscaleHeader));
-    }
-
-    return null;
+  private authenticateClient(client: any): Promise<User | null> {
+    return authenticateSocket(client, this.authService, this.jwtService);
   }
 }

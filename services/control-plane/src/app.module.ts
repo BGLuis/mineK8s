@@ -20,6 +20,7 @@ import { ProbesModule } from './probes/probes.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ModpacksModule } from './modpacks/modpacks.module';
 import { DnsModule } from './dns/dns.module';
+import { ServerEventsModule } from './server-events/server-events.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { DnsModule } from './dns/dns.module';
     TasksModule,
     ModpacksModule,
     DnsModule,
+    ServerEventsModule,
   ],
   controllers: [AppController],
   providers: [
