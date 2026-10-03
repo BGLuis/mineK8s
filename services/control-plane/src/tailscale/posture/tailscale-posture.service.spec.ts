@@ -117,7 +117,7 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       const report = service.evaluatePolicy(leakyPolicy);
 
       expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
-      expect(report.findings.some((f) => f.description.includes('porta não-Minecraft (22)'))).toBe(true);
+      expect(report.findings.some((f) => f.description.includes('non-Minecraft port (22)'))).toBe(true);
     });
 
     it('deve marcar VULNERABLE se os testes declarativos da policy falharem', () => {
