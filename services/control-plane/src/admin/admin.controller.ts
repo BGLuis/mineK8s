@@ -19,6 +19,7 @@ import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
+import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 
 @ApiTags('Admin & ACL Management')
 @ApiBearerAuth()
@@ -26,6 +27,21 @@ import { SmartKickDto } from './dto/smart-kick.dto';
 @Controller('api/admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Get('users')
+  @ApiOperation({ summary: 'Listar usuários com papel, dispositivos e grupos' })
+  @ApiResponse({ status: 200, type: [UserSummaryDto] })
+  async listUsers(): Promise<UserSummaryDto[]> {
+    return this.adminService.listUsers();
+  }
+
+  @Get('users/:id/servers')
+  @ApiOperation({ summary: 'Listar os servidores que o usuário pode acessar (base do diálogo de Expulsar)' })
+  @ApiResponse({ status: 200, type: [AccessibleServerDto] })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
+  async listAccessibleServers(@Param('id') id: string): Promise<AccessibleServerDto[]> {
+    return this.adminService.listAccessibleServers(id);
+  }
 
   @Post('groups')
   @ApiOperation({ summary: 'Criar novo grupo de acesso de jogadores (RF-ARQ-20)' })

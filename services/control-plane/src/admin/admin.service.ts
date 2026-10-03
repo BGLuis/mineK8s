@@ -18,6 +18,7 @@ import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
+import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 
 @Injectable()
 export class AdminService {
@@ -55,6 +56,70 @@ export class AdminService {
       description: dto.description,
     });
     return this.groupRepo.save(group);
+  }
+
+  /**
+   * Lista os usuários com papel, dispositivos e grupos para o editor de grupos da SPA.
+   */
+  async listUsers(): Promise<UserSummaryDto[]> {
+    const users = await this.userRepo.find({
+      relations: ['devices', 'user_groups'],
+      order: { minecraft_nick: 'ASC' },
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      minecraftNick: user.minecraft_nick,
+      realName: user.real_name,
+      role: user.role,
+      devices: (user.devices || []).map((device) => ({
+        id: device.id,
+        deviceName: device.device_name,
+        status: device.status,
+        lastSeenAt: device.last_seen_at,
+      })),
+      groupIds: (user.user_groups || []).map((ug) => ug.group_id),
+    }));
+  }
+
+  /**
+   * Servidores em que o usuário pode estar conectado, pelas mesmas regras de acesso que o gateway aplica.
+   */
+  async listAccessibleServers(userId: string): Promise<AccessibleServerDto[]> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    const [servers, serverGroups, userGroups, userAccesses] = await Promise.all([
+      this.serverRepo.find({ order: { name: 'ASC' } }),
+      this.serverGroupRepo.find(),
+      this.userGroupRepo.find({ where: { user_id: userId } }),
+      this.userServerAccessRepo.find({ where: { user_id: userId } }),
+    ]);
+
+    const groupIds = userGroups.map((ug) => ug.group_id);
+    const directServerIds = new Set(userAccesses.map((ua) => ua.server_id));
+
+    return servers
+      .filter(
+        (server) =>
+          this.accessDecisionEngine.evaluateAccess(
+            { userId: user.id, role: user.role, groupIds, isActive: true },
+            {
+              serverId: server.id,
+              policy: server.access_policy,
+              allowedGroupIds: serverGroups.filter((sg) => sg.server_id === server.id).map((sg) => sg.group_id),
+              allowedUserIds: directServerIds.has(server.id) ? [user.id] : [],
+            },
+          ).allowed,
+      )
+      .map((server) => ({
+        id: server.id,
+        name: server.name,
+        subdomain: server.subdomain,
+        state: server.state,
+      }));
   }
 
   /**

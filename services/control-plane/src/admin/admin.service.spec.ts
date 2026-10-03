@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
 
 describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let service: AdminService;
@@ -24,6 +25,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     mockUserRepo = {
       findOne: jest.fn(async () => null),
+      find: jest.fn(async () => []),
     };
 
     mockServerRepo = {
@@ -33,6 +35,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     mockUserGroupRepo = {
       findOne: jest.fn(async () => null),
+      find: jest.fn(async () => []),
       create: jest.fn((dto) => dto),
       save: jest.fn(async (dto) => dto),
       delete: jest.fn(async () => ({ affected: 1 })),
@@ -231,6 +234,82 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         minecraft_nick: 'ToxicPlayer',
         reason_message: 'Comportamento inadequado',
       });
+    });
+  });
+
+  describe('Usuários e servidores acessíveis', () => {
+    const user = { id: 'user-1', minecraft_nick: 'LucasCraft', real_name: 'Lucas', role: 'PLAYER' };
+
+    beforeEach(() => {
+      service = new AdminService(
+        mockGroupRepo,
+        mockUserRepo,
+        mockServerRepo,
+        mockUserGroupRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        new AccessDecisionEngineService(),
+        mockGatewayIpcService,
+        mockConsoleDriver,
+      );
+    });
+
+    it('listUsers devolve nick, papel, dispositivos e ids de grupos', async () => {
+      mockUserRepo.find.mockResolvedValue([
+        {
+          ...user,
+          devices: [{ id: 'dev-1', device_name: 'PC', status: 'ACTIVE', last_seen_at: null, node_ip: '100.64.0.9' }],
+          user_groups: [{ user_id: 'user-1', group_id: 'grp-1' }],
+        },
+      ]);
+
+      const [summary] = await service.listUsers();
+
+      expect(summary).toEqual({
+        id: 'user-1',
+        minecraftNick: 'LucasCraft',
+        realName: 'Lucas',
+        role: 'PLAYER',
+        devices: [{ id: 'dev-1', deviceName: 'PC', status: 'ACTIVE', lastSeenAt: null }],
+        groupIds: ['grp-1'],
+      });
+    });
+
+    it('lista só os servidores que a política de acesso libera para o usuário', async () => {
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([
+        { id: 's-public', name: 'Público', subdomain: 'pub', state: 'READY', access_policy: 'PUBLIC' },
+        { id: 's-group-ok', name: 'Do grupo', subdomain: 'grp', state: 'READY', access_policy: 'GROUP' },
+        { id: 's-group-no', name: 'Outro grupo', subdomain: 'other', state: 'READY', access_policy: 'GROUP' },
+        { id: 's-indiv-ok', name: 'Individual com acesso', subdomain: 'ind', state: 'STOPPED', access_policy: 'INDIVIDUAL' },
+        { id: 's-indiv-no', name: 'Individual sem acesso', subdomain: 'ind2', state: 'READY', access_policy: 'INDIVIDUAL' },
+        { id: 's-maint', name: 'Manutenção', subdomain: 'maint', state: 'READY', access_policy: 'MAINTENANCE' },
+      ]);
+      mockServerGroupRepo.find.mockResolvedValue([
+        { server_id: 's-group-ok', group_id: 'grp-1' },
+        { server_id: 's-group-no', group_id: 'grp-2' },
+      ]);
+      mockUserGroupRepo.find.mockResolvedValue([{ user_id: 'user-1', group_id: 'grp-1' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([{ user_id: 'user-1', server_id: 's-indiv-ok' }]);
+
+      const servers = await service.listAccessibleServers('user-1');
+
+      expect(servers.map((s) => s.id)).toEqual(['s-public', 's-group-ok', 's-indiv-ok']);
+    });
+
+    it('administrador enxerga todos os servidores, até os em manutenção', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...user, role: 'ADMIN' });
+      mockServerRepo.find.mockResolvedValue([
+        { id: 's-maint', name: 'Manutenção', subdomain: 'maint', state: 'READY', access_policy: 'MAINTENANCE' },
+      ]);
+
+      const servers = await service.listAccessibleServers('user-1');
+
+      expect(servers.map((s) => s.id)).toEqual(['s-maint']);
+    });
+
+    it('responde 404 para usuário inexistente', async () => {
+      await expect(service.listAccessibleServers('nope')).rejects.toThrow(NotFoundException);
     });
   });
 });
