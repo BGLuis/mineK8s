@@ -121,9 +121,9 @@ describe('TailscaleController', () => {
   describe('Gestão de Convites (/api/tailscale/invites)', () => {
     it('deve delegar criação de convite para InvitesService', async () => {
       const dto = { name: 'Discord Amigos', maxUses: 3 };
-      const res = await controller.createInvite(dto as any);
+      const res = await controller.createInvite(dto as any, { user: { minecraft_nick: 'AdminSteve' } });
       expect(res.name).toBe('Discord Amigos');
-      expect(mockInvitesService.createInvite).toHaveBeenCalledWith(dto);
+      expect(mockInvitesService.createInvite).toHaveBeenCalledWith(dto, 'AdminSteve');
     });
 
     it('deve listar convites', async () => {

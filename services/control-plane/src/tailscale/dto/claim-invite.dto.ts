@@ -25,13 +25,13 @@ export class ClaimInviteDto {
   realName: string;
 
   @ApiProperty({
-    description: 'Nickname Vanilla do Minecraft (RF-ARQ-21, 2-16 alfanuméricos ou underline)',
-    pattern: '^[a-zA-Z0-9_]{2,16}$',
+    description: 'Nickname Vanilla do Minecraft (RF-ARQ-21, C-06: 3-16 alfanuméricos ou underline)',
+    pattern: '^[a-zA-Z0-9_]{3,16}$',
     example: 'LucasCraft',
   })
   @IsString()
-  @Matches(/^[a-zA-Z0-9_]{2,16}$/, {
-    message: 'O nickname deve conter de 2 a 16 caracteres alfanuméricos ou sublinhado',
+  @Matches(/^[a-zA-Z0-9_]{3,16}$/, {
+    message: 'O nickname deve conter de 3 a 16 caracteres alfanuméricos ou sublinhado',
   })
   minecraftNick: string;
 }

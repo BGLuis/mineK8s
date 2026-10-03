@@ -34,6 +34,9 @@ export class Invite {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  created_by: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

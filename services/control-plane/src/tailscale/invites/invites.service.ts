@@ -7,12 +7,13 @@ import {
   BadGatewayException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
 import { Invite } from '../../database/entities/invite.entity';
 import { InviteGroup } from '../../database/entities/invite-group.entity';
 import { InviteServer } from '../../database/entities/invite-server.entity';
+import { Server } from '../../database/entities/server.entity';
 import { User } from '../../database/entities/user.entity';
 import { UserGroup } from '../../database/entities/user-group.entity';
 import { UserServerAccess } from '../../database/entities/user-server-access.entity';
@@ -48,6 +49,8 @@ export class InvitesService {
     @InjectRepository(TailscaleDevice)
     private readonly deviceRepo: Repository<TailscaleDevice>,
     private readonly tailscaleCloudDriver: TailscaleCloudDriver,
+    @InjectRepository(Server)
+    private readonly serverRepo: Repository<Server>,
   ) {}
 
   public setBaseUrl(url: string): void {
@@ -57,7 +60,7 @@ export class InvitesService {
   /**
    * Emite um novo convite multi-uso com permissões pré-vinculadas (RF-TS-03, RF-TS-06).
    */
-  async createInvite(dto: CreateInviteDto): Promise<InviteSummaryDto> {
+  async createInvite(dto: CreateInviteDto, createdBy?: string): Promise<InviteSummaryDto> {
     const token = crypto.randomBytes(16).toString('hex');
     const maxUses = dto.maxUses ?? 1;
     const expiresInDays = dto.expiresInDays ?? 7;
@@ -70,6 +73,7 @@ export class InvitesService {
       used_count: 0,
       expires_at: expiresAt,
       is_active: true,
+      created_by: createdBy ?? null,
     });
 
     const savedInvite = await this.inviteRepo.save(invite);
@@ -184,11 +188,17 @@ export class InvitesService {
       throw new ConflictException('O limite de utilizações deste convite foi atingido');
     }
 
-    return this.toSummaryDto(
-      invite,
-      (invite.invite_groups || []).map((g) => g.group_id),
-      (invite.invite_servers || []).map((s) => s.server_id),
-    );
+    const serverIds = (invite.invite_servers || []).map((s) => s.server_id);
+    const servers = serverIds.length > 0 ? await this.serverRepo.find({ where: { id: In(serverIds) } }) : [];
+
+    return {
+      ...this.toSummaryDto(
+        invite,
+        (invite.invite_groups || []).map((g) => g.group_id),
+        serverIds,
+      ),
+      serverNames: servers.map((s) => s.name),
+    };
   }
 
   /**
@@ -364,6 +374,7 @@ export class InvitesService {
       joinUrl: `${this.baseUrl}/join?token=${invite.token}`,
       groupIds,
       serverIds,
+      createdBy: invite.created_by,
       createdAt: invite.created_at,
     };
   }
