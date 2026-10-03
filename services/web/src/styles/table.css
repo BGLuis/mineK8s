@@ -1,0 +1,38 @@
+@layer components {
+  .mc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-text-primary);
+  }
+
+  .mc-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-bottom: 2px solid var(--color-border-strong);
+  }
+
+  .mc-table td {
+    padding: 12px;
+    min-height: 40px;
+    border-bottom: 2px solid var(--color-border-strong);
+    vertical-align: middle;
+  }
+
+  .mc-table tbody tr:hover {
+    background-color: var(--color-surface-hover);
+  }
+
+  .mc-table .mc-cell-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
