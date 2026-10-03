@@ -28,6 +28,7 @@ import { K8sLogStreamerService } from '@logging/k8s-log-streamer.service';
 import { LogEntry } from '@logging/circular-log-buffer';
 import { MinecraftSlpProbeService } from '../probes/minecraft-slp-probe.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
+import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
 
@@ -60,6 +61,8 @@ export class ServersService {
     private readonly slpProbeService?: MinecraftSlpProbeService,
     @Optional()
     private readonly dnsDriver?: CloudflareDnsDriver,
+    @Optional()
+    private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
   async create(dto: CreateServerDto): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
@@ -172,6 +175,7 @@ export class ServersService {
         updated_at: s.updated_at,
         replicas: dep?.replicas ?? 0,
         ready_replicas: dep?.status?.readyReplicas ?? 0,
+        players_online: this.playerSessions?.count(s.id) ?? 0,
       };
     });
   }
@@ -211,7 +215,29 @@ export class ServersService {
       updated_at: server.updated_at,
       replicas: dep?.replicas ?? 0,
       ready_replicas: dep?.status?.readyReplicas ?? 0,
+      players_online: this.playerSessions?.count(server.id) ?? 0,
       settings: server.minecraft_settings,
+    };
+  }
+
+  async getPlayers(id: string): Promise<{
+    online: number;
+    max: number;
+    players: { nick: string; ip: string; connectedAt: Date }[];
+  }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    const sessions = this.playerSessions?.list(id) ?? [];
+    return {
+      online: sessions.length,
+      max: server.minecraft_settings?.max_players ?? 20,
+      players: sessions.map(({ nick, ip, connectedAt }) => ({ nick, ip, connectedAt })),
     };
   }
 

@@ -79,6 +79,14 @@ export class ServersController {
     return this.serversService.findOne(id);
   }
 
+  @Get(':id/players')
+  @ApiOperation({ summary: 'List players currently connected through the gateway, with session start' })
+  @ApiResponse({ status: 200, description: 'Online count, slot limit and sessions' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async players(@Param('id') id: string) {
+    return this.serversService.getPlayers(id);
+  }
+
   @Post(':id/start')
   @ApiOperation({ summary: 'Start a server (scale Kubernetes deployment replicas to 1)' })
   @ApiResponse({ status: 200, description: 'Server start initiated' })

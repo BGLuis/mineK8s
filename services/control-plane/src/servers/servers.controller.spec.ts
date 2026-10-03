@@ -24,6 +24,7 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       start: jest.fn(),
       stop: jest.fn(),
       restart: jest.fn(),
+      getPlayers: jest.fn(),
       update: jest.fn(),
       updateVersion: jest.fn(),
       delete: jest.fn(),
@@ -175,6 +176,15 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     await expect(controller.downloadBackup('srv-1', 'backup-missing', res)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('Jogadores online', () => {
+    it('GET :id/players delega para o serviço', async () => {
+      mockServersService.getPlayers.mockResolvedValue({ online: 0, max: 20, players: [] });
+
+      await expect(controller.players('srv-1')).resolves.toEqual({ online: 0, max: 20, players: [] });
+      expect(mockServersService.getPlayers).toHaveBeenCalledWith('srv-1');
+    });
   });
 
   describe('Configurações e restart', () => {

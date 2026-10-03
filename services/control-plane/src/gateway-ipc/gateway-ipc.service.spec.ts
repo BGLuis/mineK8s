@@ -2,6 +2,7 @@ import { firstValueFrom, take } from 'rxjs';
 
 import { RouteAction, RouteUpdateEvent, SessionEventType } from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
+import { PlayerSessionsService } from './player-sessions.service';
 
 describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let service: GatewayIpcService;
@@ -11,6 +12,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let mockUserServerAccessRepo: any;
   let mockUserGroupRepo: any;
   let mockK8sService: any;
+  let playerSessions: PlayerSessionsService;
 
   beforeEach(() => {
     mockServerRepo = {
@@ -89,6 +91,8 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       stopServer: jest.fn().mockResolvedValue(undefined),
     };
 
+    playerSessions = new PlayerSessionsService();
+
     service = new GatewayIpcService(
       mockServerRepo,
       mockUserRepo,
@@ -97,6 +101,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       mockUserGroupRepo,
       undefined,
       mockK8sService,
+      playerSessions,
     );
   });
 
@@ -169,6 +174,42 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       await service.publishRoute('nope');
 
       expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Sessões de jogadores a partir dos eventos do Gateway', () => {
+    const sessionEvent = (type: SessionEventType, sessionId: string, nick: string) => ({
+      event_type: type,
+      session_id: sessionId,
+      server_id: 'server-uuid-1',
+      client_ip: '100.64.0.2',
+      minecraft_nick: nick,
+      timestamp_epoch_ms: Date.now(),
+      reason: '',
+    });
+
+    it('CONNECTED aumenta a contagem e DISCONNECTED diminui', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's1', 'Steve'));
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's2', 'Alex'));
+      expect(playerSessions.count('server-uuid-1')).toBe(2);
+
+      await service.handleSessionEvent(sessionEvent(SessionEventType.DISCONNECTED, 's1', 'Steve'));
+
+      expect(playerSessions.count('server-uuid-1')).toBe(1);
+    });
+
+    it('ACCESS_DENIED não vira sessão ativa', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.ACCESS_DENIED, 's1', 'Intruso'));
+
+      expect(playerSessions.count('server-uuid-1')).toBe(0);
+    });
+
+    it('descarta as sessões quando o stream do Gateway fecha, para o Gateway reenviá-las ao reconectar', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's1', 'Steve'));
+
+      service.handleSessionStreamClosed();
+
+      expect(playerSessions.count('server-uuid-1')).toBe(0);
     });
   });
 

@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 
 import { RouteAction, RouteUpdateEvent } from './gateway-ipc.interfaces';
 import { GatewayIpcController } from './gateway-ipc.controller';
@@ -37,6 +37,7 @@ describe('GatewayIpcController', () => {
         }),
       ),
       handleSessionEvent: jest.fn(),
+      handleSessionStreamClosed: jest.fn(),
       revokePlayerSession: jest.fn(async () => ({
         session_found: true,
         terminated_connections_count: 1,
@@ -87,6 +88,19 @@ describe('GatewayIpcController', () => {
         done();
       },
     });
+  });
+
+  it('descarta as sessões conhecidas quando o stream de eventos do Gateway termina ou falha', () => {
+    const closing$ = new Subject<any>();
+    controller.streamSessionEvents(closing$).subscribe();
+
+    closing$.complete();
+    expect(mockIpcService.handleSessionStreamClosed).toHaveBeenCalledTimes(1);
+
+    const failing$ = new Subject<any>();
+    controller.streamSessionEvents(failing$).subscribe();
+    failing$.error(new Error('conexão perdida'));
+    expect(mockIpcService.handleSessionStreamClosed).toHaveBeenCalledTimes(2);
   });
 
   it('deve delegar revokePlayerSession', async () => {

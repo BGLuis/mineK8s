@@ -11,6 +11,7 @@ import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
+import { PlayerSessionsService } from './player-sessions.service';
 import {
   Empty,
   ResolvePlayerRequest,
@@ -45,6 +46,8 @@ export class GatewayIpcService {
     private readonly identityProvider?: NetworkIdentityProvider,
     @Optional()
     private readonly k8sService?: KubernetesService,
+    @Optional()
+    private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
   /**
@@ -209,9 +212,22 @@ export class GatewayIpcService {
       `Evento de sessão recebido do Gateway: [${event.event_type}] user=${event.minecraft_nick} server=${event.server_id} ip=${event.client_ip}`,
     );
 
-    if (event.event_type === SessionEventType.WAKE_REQUESTED) {
-      await this.handleWakeRequest(event.server_id);
+    switch (event.event_type) {
+      case SessionEventType.WAKE_REQUESTED:
+        await this.handleWakeRequest(event.server_id);
+        break;
+      case SessionEventType.CONNECTED:
+        this.playerSessions?.connected(event);
+        break;
+      case SessionEventType.DISCONNECTED:
+        this.playerSessions?.disconnected(event);
+        break;
     }
+  }
+
+  /** Com o stream fechado o Gateway não reporta mais nada; descarta o estado até ele reenviar as sessões abertas. */
+  handleSessionStreamClosed(): void {
+    this.playerSessions?.clearAll();
   }
 
   /**

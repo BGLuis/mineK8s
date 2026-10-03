@@ -1,3 +1,4 @@
+import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -13,6 +14,7 @@ describe('ServersService', () => {
   let mockBackupService: any;
   let mockGatewayIpcService: any;
   let mockSlpProbeService: any;
+  let playerSessions: PlayerSessionsService;
 
   let serversDb: Map<string, Server>;
   let settingsDb: Map<string, MinecraftServerSettings>;
@@ -124,6 +126,8 @@ describe('ServersService', () => {
       getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
     };
 
+    playerSessions = new PlayerSessionsService();
+
     service = new ServersService(
       mockServerRepo as any,
       mockSettingsRepo as any,
@@ -135,6 +139,7 @@ describe('ServersService', () => {
       mockGatewayIpcService as any,
       mockSlpProbeService as any,
       mockDnsDriver as any,
+      playerSessions,
     );
   });
 
@@ -201,6 +206,51 @@ describe('ServersService', () => {
       expect(res.message).toBe('Instance stopping');
       expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STOPPED');
+    });
+  });
+
+  describe('jogadores online', () => {
+    const connect = (sessionId: string, nick: string) =>
+      playerSessions.connected({
+        event_type: 0,
+        session_id: sessionId,
+        server_id: 'srv-1',
+        client_ip: '100.64.0.2',
+        minecraft_nick: nick,
+        timestamp_epoch_ms: Date.parse('2026-10-03T12:00:00Z'),
+        reason: '',
+      });
+
+    beforeEach(() => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'READY',
+        minecraft_settings: { max_players: 10 },
+      } as any);
+    });
+
+    it('getPlayers devolve nick, IP e início da sessão, com o limite de vagas do servidor', async () => {
+      connect('s1', 'Steve');
+
+      await expect(service.getPlayers('srv-1')).resolves.toEqual({
+        online: 1,
+        max: 10,
+        players: [{ nick: 'Steve', ip: '100.64.0.2', connectedAt: new Date('2026-10-03T12:00:00Z') }],
+      });
+    });
+
+    it('getPlayers responde 404 para servidor inexistente', async () => {
+      await expect(service.getPlayers('nope')).rejects.toThrow(/not found/);
+    });
+
+    it('findOne e findAll trazem players_online', async () => {
+      connect('s1', 'Steve');
+      connect('s2', 'Alex');
+
+      expect((await service.findOne('srv-1')).players_online).toBe(2);
+      expect((await service.findAll()).find((s) => s.id === 'srv-1')?.players_online).toBe(2);
     });
   });
 
