@@ -30,8 +30,10 @@ export class GatewayIpcController {
 
   /**
    * Streaming contínuo: Control Plane envia mutações de rotas e políticas para o Gateway.
+   * Requisição simples com resposta em stream é `@GrpcMethod`; `@GrpcStreamMethod` seria para stream de entrada
+   * e deixaria o Gateway recebendo UNIMPLEMENTED.
    */
-  @GrpcStreamMethod('GatewayControlService', 'StreamRouteUpdates')
+  @GrpcMethod('GatewayControlService', 'StreamRouteUpdates')
   streamRouteUpdates(_empty: Empty): Observable<RouteUpdateEvent> {
     this.logger.log('Gateway L7 conectou ao stream contínuo de atualizações de rotas (StreamRouteUpdates)');
     return this.ipcService.getRouteUpdatesStream();
