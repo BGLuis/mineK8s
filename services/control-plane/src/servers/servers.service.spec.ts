@@ -470,12 +470,7 @@ describe('ServersService', () => {
       expect(result.srv_record).toContain('_minecraft._tcp.survival-pub.minek8s.net');
       expect(settings.online_mode).toBe(true);
       expect(server.access_policy).toBe('INTERNET');
-      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          access_policy: 'INTERNET',
-          subdomain: 'survival-pub',
-        }),
-      );
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
     });
 
     it('deve despublicar servidor (unpublishServer), removendo SRV e restaurando access_policy para GROUP', async () => {
@@ -492,12 +487,7 @@ describe('ServersService', () => {
 
       expect(result.access_policy).toBe('GROUP');
       expect(server.access_policy).toBe('GROUP');
-      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          access_policy: 'GROUP',
-          subdomain: 'survival-pub2',
-        }),
-      );
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
     });
   });
 });

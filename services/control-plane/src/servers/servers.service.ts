@@ -288,12 +288,7 @@ export class ServersService {
     Object.assign(server, Object.fromEntries(changes));
     await this.serverRepo.save(server);
 
-    // O Gateway só enxerga mudanças de política, manutenção e auto-wake por um UPSERT de rota.
-    try {
-      await this.gatewayIpcService?.publishRoute(server.id);
-    } catch (err: any) {
-      this.logger.warn(`Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`);
-    }
+    await this.republishRoute(server);
 
     return this.findOne(id);
   }
@@ -643,7 +638,7 @@ export class ServersService {
     }
 
     // Notificar Gateway L7 sobre a política INTERNET
-    this.notifyGateway(updatedServer, updatedServer.state);
+    await this.republishRoute(updatedServer);
 
     // Auditoria
     await this.auditRepo.save(
@@ -694,7 +689,7 @@ export class ServersService {
     const updatedServer = await this.serverRepo.save(server);
 
     // Notificar Gateway L7
-    this.notifyGateway(updatedServer, updatedServer.state);
+    await this.republishRoute(updatedServer);
 
     // Auditoria
     await this.auditRepo.save(
@@ -711,6 +706,15 @@ export class ServersService {
       subdomain: updatedServer.subdomain,
       access_policy: updatedServer.access_policy,
     };
+  }
+
+  /** O Gateway só enxerga mudanças de política, manutenção e auto-wake por um UPSERT de rota; STATUS_CHANGE não basta. */
+  private async republishRoute(server: Server): Promise<void> {
+    try {
+      await this.gatewayIpcService?.publishRoute(server.id);
+    } catch (err: any) {
+      this.logger.warn(`Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`);
+    }
   }
 
   private notifyGateway(server: Server, status: ServerState): void {

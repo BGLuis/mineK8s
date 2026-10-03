@@ -4,7 +4,7 @@ export class AddServerAccessPolicy1710000000003 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "servers"
-      ADD COLUMN "access_policy" VARCHAR(20) NOT NULL DEFAULT 'GROUP';
+      ADD COLUMN IF NOT EXISTS "access_policy" VARCHAR(20) NOT NULL DEFAULT 'GROUP';
     `);
   }
 

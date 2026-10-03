@@ -4,7 +4,7 @@ export class AddInviteCreatedBy1710000000004 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "invites"
-      ADD COLUMN "created_by" VARCHAR(16);
+      ADD COLUMN IF NOT EXISTS "created_by" VARCHAR(16);
     `);
   }
 

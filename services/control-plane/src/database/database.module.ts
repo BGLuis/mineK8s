@@ -20,7 +20,7 @@ import {
   ModpackTaskEntity,
   CasObjectEntity,
 } from './entities';
-import { InitialSchema1710000000000 } from './migrations/1710000000000-InitialSchema';
+import { migrations } from './migrations';
 
 const entities = [
   Server,
@@ -56,7 +56,7 @@ const entities = [
         synchronize: config.database.synchronize,
         logging: config.database.logging,
         entities,
-        migrations: [InitialSchema1710000000000],
+        migrations,
         migrationsRun: !config.isProduction, // In non-production, auto-run migrations on boot
         extra: {
           max: config.database.poolSize,
