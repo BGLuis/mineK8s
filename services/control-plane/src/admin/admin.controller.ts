@@ -38,7 +38,7 @@ export class AdminController {
   @Get('users/:id/servers')
   @ApiOperation({ summary: 'Listar os servidores que o usuário pode acessar (base do diálogo de Expulsar)' })
   @ApiResponse({ status: 200, type: [AccessibleServerDto] })
-  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async listAccessibleServers(@Param('id') id: string): Promise<AccessibleServerDto[]> {
     return this.adminService.listAccessibleServers(id);
   }

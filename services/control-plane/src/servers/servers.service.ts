@@ -222,14 +222,14 @@ export class ServersService {
     }
 
     if (server.state === 'READY' || server.state === 'STARTING') {
-      return { message: 'Instância já está em execução ou iniciando' };
+      return { message: 'Instance is already running or starting' };
     }
 
     server.state = 'STARTING';
     await this.serverRepo.save(server);
     await this.k8sService.startServer(server);
 
-    return { message: 'Instância iniciando' };
+    return { message: 'Instance starting' };
   }
 
   async stop(id: string): Promise<{ message: string }> {
@@ -242,7 +242,7 @@ export class ServersService {
     await this.serverRepo.save(server);
     await this.k8sService.stopServer(server);
 
-    return { message: 'Instância parando' };
+    return { message: 'Instance stopping' };
   }
 
   async restart(id: string): Promise<{ message: string }> {
@@ -253,7 +253,7 @@ export class ServersService {
 
     if (server.state !== 'READY' && server.state !== 'CRASHED') {
       throw new ConflictException(
-        `Só é possível reiniciar um servidor em execução (estado atual: ${server.state})`,
+        `Only a running server can be restarted (current state: ${server.state})`,
       );
     }
 
@@ -263,7 +263,7 @@ export class ServersService {
     server.state = 'STARTING';
     await this.serverRepo.save(server);
 
-    return { message: 'Instância reiniciando' };
+    return { message: 'Instance restarting' };
   }
 
   async update(id: string, dto: UpdateServerDto) {
@@ -277,11 +277,11 @@ export class ServersService {
 
     const changes = Object.entries(dto).filter(([, value]) => value !== undefined);
     if (changes.length === 0) {
-      throw new BadRequestException('Informe ao menos um campo para atualizar');
+      throw new BadRequestException('Provide at least one field to update');
     }
     if (server.access_policy === 'INTERNET' && dto.access_policy) {
       throw new ConflictException(
-        'Servidor publicado na internet: despublique em DELETE /api/servers/:id/publish antes de mudar a política',
+        'Server is published on the internet: unpublish it with DELETE /api/servers/:id/publish before changing the policy',
       );
     }
 
@@ -307,7 +307,7 @@ export class ServersService {
     await this.k8sService.deprovisionServer(server);
     await this.serverRepo.remove(server);
 
-    return { message: 'Instância removida' };
+    return { message: 'Instance removed' };
   }
 
   async updateDomain(id: string, domain: string): Promise<{ message: string }> {
@@ -324,7 +324,7 @@ export class ServersService {
     server.subdomain = domain;
     await this.serverRepo.save(server);
 
-    return { message: 'Domínio atualizado' };
+    return { message: 'Domain updated' };
   }
 
   async getLogs(
@@ -463,7 +463,7 @@ export class ServersService {
         server.state = previousState;
         await this.serverRepo.save(server);
         this.notifyGateway(server, previousState);
-        throw new BadRequestException(`Falha ao gerar backup pre-update obrigatório: ${err.message}`);
+        throw new BadRequestException(`Failed to create the mandatory pre-update backup: ${err.message}`);
       }
     } else {
       backupPath = '/dummy/backup';
@@ -506,7 +506,7 @@ export class ServersService {
         this.notifyGateway(server, 'READY');
 
         return {
-          message: 'Atualização de versão concluída com sucesso',
+          message: 'Version update completed successfully',
           version: server.game_version,
           rolledBack: false,
         };
@@ -587,7 +587,7 @@ export class ServersService {
       );
 
       return {
-        message: 'Falha na nova versão. Rollback automático executado com sucesso.',
+        message: 'New version failed. Automatic rollback completed successfully.',
         version: previousVersion,
         rolledBack: true,
       };
@@ -598,7 +598,7 @@ export class ServersService {
       server.state = 'FAILED';
       await this.serverRepo.save(server);
       this.notifyGateway(server, 'FAILED');
-      throw new Error(`Falha durante rollback de versão: ${rollbackErr.message}`);
+      throw new Error(`Failure during version rollback: ${rollbackErr.message}`);
     }
   }
 
@@ -614,7 +614,7 @@ export class ServersService {
       relations: ['minecraft_settings'],
     });
     if (!server) {
-      throw new NotFoundException(`Servidor com ID ${id} não encontrado`);
+      throw new NotFoundException(`Server with ID ${id} not found`);
     }
 
     // RF-CF-02: Mundo INTERNET obriga online-mode=true
@@ -638,7 +638,7 @@ export class ServersService {
         await this.dnsDriver.upsertSrvRecord(srvName, srvTarget, publicPort);
       } catch (err: any) {
         this.logger.error(`Erro ao criar registro SRV para ${srvName}: ${err.message}`, err.stack);
-        throw new Error(`Erro ao criar registro SRV na Cloudflare: ${err.message}`);
+        throw new Error(`Error creating SRV record on Cloudflare: ${err.message}`);
       }
     }
 
@@ -651,7 +651,7 @@ export class ServersService {
         server_id: server.id,
         command: 'PUBLISH_SERVER',
         execution_source: 'REST_API',
-        response: `Servidor ${server.subdomain} publicado na internet (online-mode=true, SRV: ${srvName})`,
+        response: `Server ${server.subdomain} published on the internet (online-mode=true, SRV: ${srvName})`,
       }),
     );
 
@@ -674,7 +674,7 @@ export class ServersService {
       relations: ['minecraft_settings'],
     });
     if (!server) {
-      throw new NotFoundException(`Servidor com ID ${id} não encontrado`);
+      throw new NotFoundException(`Server with ID ${id} not found`);
     }
 
     const rootDomain = this.dnsDriver?.getRootDomain() || 'minek8s.net';
@@ -702,7 +702,7 @@ export class ServersService {
         server_id: server.id,
         command: 'UNPUBLISH_SERVER',
         execution_source: 'REST_API',
-        response: `Servidor ${server.subdomain} despublicado da internet (access_policy=GROUP)`,
+        response: `Server ${server.subdomain} unpublished from the internet (access_policy=GROUP)`,
       }),
     );
 

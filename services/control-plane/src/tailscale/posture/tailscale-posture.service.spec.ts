@@ -81,7 +81,7 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
       expect(report.testedRulesSummary.wildcardPlayerFound).toBe(true);
       expect(report.findings.some((f) => f.severity === 'CRITICAL')).toBe(true);
-      expect(report.findings[0].description).toContain('VULNERABILIDADE CRÍTICA');
+      expect(report.findings[0].description).toContain('CRITICAL VULNERABILITY');
     });
 
     it('deve marcar VULNERABLE se existir regra universal com src [*] e dst [*:*]', () => {
@@ -99,7 +99,7 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       const report = service.evaluatePolicy(openPolicy);
 
       expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
-      expect(report.findings.some((f) => f.description.includes('Curinga universal amplo'))).toBe(true);
+      expect(report.findings.some((f) => f.description.includes('Broad universal wildcard'))).toBe(true);
     });
 
     it('deve marcar VULNERABLE se tag:mc-player tiver acesso a porta administrativa (ex: 22 ou 3000)', () => {

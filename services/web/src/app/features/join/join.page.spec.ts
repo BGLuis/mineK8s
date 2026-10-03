@@ -65,7 +65,7 @@ describe('JoinPage', () => {
 
     http
       .expectOne('/api/tailscale/invites/validate/tok')
-      .flush({ message: 'Este convite expirou' }, { status: 400, statusText: 'Bad Request' });
+      .flush({ code: 'INVITE_EXPIRED', message: 'This invite has expired' }, { status: 400, statusText: 'Bad Request' });
     await fixture.whenStable();
 
     expect(el.querySelector('h1')?.textContent).toContain('Este convite expirou');

@@ -92,7 +92,7 @@ export class CloudflareDnsDriver implements IDnsDriver {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Erro na API Cloudflare (${response.status}) em ${endpoint}: ${errorText}`);
+        throw new Error(`Cloudflare API error (${response.status}) em ${endpoint}: ${errorText}`);
       }
 
       const data = (await response.json()) as CloudflareApiResponse<T>;
@@ -104,7 +104,7 @@ export class CloudflareDnsDriver implements IDnsDriver {
       return data;
     }
 
-    throw new Error(`Falha após ${retries} tentativas na API Cloudflare: ${endpoint}`);
+    throw new Error(`Failed after ${retries} attempts on the Cloudflare API: ${endpoint}`);
   }
 
   /**

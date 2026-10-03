@@ -240,19 +240,19 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       (service as any).activeBackupLocks.add(readyServer.id);
 
       await expect(service.createBackup(readyServer, 'HOT')).rejects.toThrow(ConflictException);
-      await expect(service.createBackup(readyServer, 'HOT')).rejects.toThrow(/em andamento/);
+      await expect(service.createBackup(readyServer, 'HOT')).rejects.toThrow(/in progress/);
     });
 
     it('deve rejeitar HOT backup com HTTP 409 se o servidor não estiver no estado READY', async () => {
       sampleServer.state = 'STOPPED';
       await expect(service.createBackup(sampleServer, 'HOT')).rejects.toThrow(ConflictException);
-      await expect(service.createBackup(sampleServer, 'HOT')).rejects.toThrow(/estado READY/);
+      await expect(service.createBackup(sampleServer, 'HOT')).rejects.toThrow(/READY state/);
     });
 
     it('deve rejeitar COLD backup com HTTP 409 se o servidor não estiver no estado STOPPED', async () => {
       readyServer.state = 'READY';
       await expect(service.createBackup(readyServer, 'COLD')).rejects.toThrow(ConflictException);
-      await expect(service.createBackup(readyServer, 'COLD')).rejects.toThrow(/estado STOPPED/);
+      await expect(service.createBackup(readyServer, 'COLD')).rejects.toThrow(/STOPPED state/);
     });
 
     it('deve garantir execução do save-on mesmo se ocorrer falha inesperada durante o freeze', async () => {
@@ -417,7 +417,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         service.restoreBackup(sampleServer, 'valid-backup.tar.gz', {
           expectedSha256: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         }),
-      ).rejects.toThrow(/Checksum SHA-256 divergente/);
+      ).rejects.toThrow(/SHA-256 checksum mismatch/);
 
       expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
       expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
@@ -426,7 +426,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     it('deve rejeitar restauração com HTTP 409 Conflict se o servidor não estiver STOPPED', async () => {
       readyServer.state = 'READY';
       await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(ConflictException);
-      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(/estado STOPPED/);
+      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(/STOPPED state/);
     });
 
     it('deve rejeitar restauração com HTTP 409 Conflict se o servidor já estiver ocupado', async () => {
@@ -600,12 +600,12 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // Tentar deletar sem force deve lançar HTTP 400
       await expect(service.deleteBackup(serverId, preRestore!.id, false)).rejects.toThrow(
-        /sob retenção obrigatória de 48h/,
+        /under mandatory 48h retention/,
       );
 
       // Com force=true deve remover com sucesso
       const res = await service.deleteBackup(serverId, preRestore!.id, true);
-      expect(res.message).toContain('removido com sucesso');
+      expect(res.message).toContain('removed successfully');
       expect(fs.existsSync(preRestorePath)).toBe(false);
       expect(inMemoryBackups).toHaveLength(0);
     });
@@ -634,7 +634,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // Com force -> sucesso
       const res = await service.deleteBackup(serverId, prot!.id, true);
-      expect(res.message).toContain('removido com sucesso');
+      expect(res.message).toContain('removed successfully');
       expect(fs.existsSync(protPath)).toBe(false);
     });
 
@@ -684,7 +684,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       });
 
       await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(ConflictException);
-      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(/estado STOPPED/);
+      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(/STOPPED state/);
     });
   });
 });

@@ -92,7 +92,7 @@ Para neutralizar vetores de travessia de diretório (*Directory Traversal*) e at
 Toda resposta de erro HTTP (4xx/5xx) segue o corpo abaixo, emitido pelo `ApiExceptionFilter` (`services/control-plane/src/common/filters/api-exception.filter.ts`). A SPA mapeia por `code` e exibe `message` sem inspecionar texto.
 
 ```json
-{ "statusCode": 400, "code": "VALIDATION_ERROR", "message": "texto em pt-BR", "details": ["opcional, uma entrada por campo inválido"] }
+{ "statusCode": 400, "code": "VALIDATION_ERROR", "message": "English text", "details": ["optional, one entry per invalid field"] }
 ```
 
 | `code` | Quando |
@@ -100,6 +100,9 @@ Toda resposta de erro HTTP (4xx/5xx) segue o corpo abaixo, emitido pelo `ApiExce
 | `VALIDATION_ERROR` | Falha do `ValidationPipe`; `message` junta os `details` |
 | `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `TOO_MANY_REQUESTS` | Status HTTP correspondente |
 | `INTERNAL_ERROR` | Erro inesperado; a mensagem é genérica e o detalhe fica só no log |
+| Código específico do serviço | Serviços podem fixar `code` lançando a exceção com `{ code, message }`, ex.: `INVITE_NOT_FOUND`, `INVITE_REVOKED`, `INVITE_EXPIRED`, `INVITE_DEPLETED` em `/api/tailscale/invites/validate/:token` |
+
+Todas as mensagens da API (erros, validação e respostas de confirmação) são emitidas em inglês; a SPA traduz para o usuário a partir do `code` e do status HTTP, nunca do texto da mensagem.
 
 ---
 

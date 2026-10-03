@@ -1,6 +1,9 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 
-/** Corpo único de erro da API HTTP: a SPA lê `code` e `message` sem heurística. */
+/**
+ * Corpo único de erro da API HTTP: a SPA lê `code` e `message` sem heurística.
+ * Um serviço pode fixar `code` lançando a exceção com `{ code, message }`.
+ */
 export interface ApiErrorBody {
   statusCode: number;
   code: string;
@@ -19,16 +22,16 @@ const CODE_BY_STATUS: Record<number, string> = {
 };
 
 const MESSAGE_BY_STATUS: Record<number, string> = {
-  400: 'Requisição inválida',
-  401: 'Autenticação necessária',
-  403: 'Você não tem permissão para esta ação',
-  404: 'Recurso não encontrado',
-  409: 'Conflito com o estado atual do recurso',
-  413: 'Arquivo ou corpo da requisição grande demais',
-  429: 'Muitas requisições, tente novamente em instantes',
+  400: 'Invalid request',
+  401: 'Authentication required',
+  403: 'You do not have permission to perform this action',
+  404: 'Resource not found',
+  409: 'Conflict with the current state of the resource',
+  413: 'File or request body too large',
+  429: 'Too many requests, try again shortly',
 };
 
-/** Textos em inglês que o Nest emite por padrão quando nenhum código passa mensagem própria. */
+/** Textos genéricos que o Nest emite quando nenhum código passa mensagem própria; trocados por mensagens da API. */
 const NEST_DEFAULT_MESSAGES = new Set([
   'Bad Request',
   'Unauthorized',
@@ -43,7 +46,7 @@ const NEST_DEFAULT_MESSAGES = new Set([
 const INTERNAL_ERROR: ApiErrorBody = {
   statusCode: 500,
   code: 'INTERNAL_ERROR',
-  message: 'Erro interno do servidor',
+  message: 'Internal server error',
 };
 
 export function toApiError(exception: unknown): ApiErrorBody {
@@ -53,14 +56,18 @@ export function toApiError(exception: unknown): ApiErrorBody {
 
   const statusCode = exception.getStatus();
   const response = exception.getResponse();
-  const raw = typeof response === 'string' ? response : (response as { message?: unknown })?.message;
+  const body = typeof response === 'string' ? {} : (response as { message?: unknown; code?: unknown });
+  const raw = typeof response === 'string' ? response : body.message;
 
   if (Array.isArray(raw)) {
     const details = raw.filter((item): item is string => typeof item === 'string');
     return { statusCode, code: 'VALIDATION_ERROR', message: details.join('. '), details };
   }
 
-  const code = CODE_BY_STATUS[statusCode] ?? (statusCode >= 500 ? 'INTERNAL_ERROR' : 'ERROR');
+  const code =
+    typeof body.code === 'string'
+      ? body.code
+      : (CODE_BY_STATUS[statusCode] ?? (statusCode >= 500 ? 'INTERNAL_ERROR' : 'ERROR'));
   const message =
     typeof raw !== 'string' || !raw.trim() || NEST_DEFAULT_MESSAGES.has(raw) || raw.startsWith('Cannot ')
       ? (MESSAGE_BY_STATUS[statusCode] ?? INTERNAL_ERROR.message)

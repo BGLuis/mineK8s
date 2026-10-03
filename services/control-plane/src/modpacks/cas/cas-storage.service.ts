@@ -133,7 +133,7 @@ export class CasStorageService {
   public async copyOrLinkTo(hash: string, destinationFilePath: string): Promise<'linked' | 'copied'> {
     const casObj = await this.getByHash(hash);
     if (!casObj) {
-      throw new NotFoundException(`Objeto CAS não encontrado para o hash: ${hash}`);
+      throw new NotFoundException(`CAS object not found for hash: ${hash}`);
     }
 
     const destDir = path.dirname(destinationFilePath);

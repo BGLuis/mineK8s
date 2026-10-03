@@ -10,7 +10,7 @@ describe('ModpacksController (RF-ARQ-18)', () => {
       installModpack: jest.fn().mockResolvedValue({
         taskId: 'task-modpack-123',
         status: 'QUEUED',
-        message: 'Instalação de modpack iniciada em segundo plano',
+        message: 'Modpack installation started in the background',
       }),
     };
 

@@ -55,11 +55,11 @@ export class CurseForgeResolverService {
     const data = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
 
     if (!data || data.manifestType !== 'minecraftModpack') {
-      throw new BadRequestException('Manifesto CurseForge inválido: manifestType != "minecraftModpack"');
+      throw new BadRequestException('Invalid CurseForge manifest: manifestType != "minecraftModpack"');
     }
 
     if (!Array.isArray(data.files)) {
-      throw new BadRequestException('Manifesto CurseForge inválido: campo "files" ausente');
+      throw new BadRequestException('Invalid CurseForge manifest: "files" field missing');
     }
 
     return data as CurseForgeManifest;

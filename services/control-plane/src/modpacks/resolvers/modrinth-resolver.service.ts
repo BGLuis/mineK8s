@@ -56,11 +56,11 @@ export class ModrinthResolverService {
     const data = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
 
     if (!data || data.game !== 'minecraft') {
-      throw new BadRequestException('Manifesto Modrinth inválido ou jogo incompatível (game != "minecraft")');
+      throw new BadRequestException('Invalid Modrinth manifest or incompatible game (game != "minecraft")');
     }
 
     if (!Array.isArray(data.files)) {
-      throw new BadRequestException('Manifesto Modrinth inválido: campo "files" ausente ou inválido');
+      throw new BadRequestException('Invalid Modrinth manifest: "files" field missing or invalid');
     }
 
     return data as ModrinthIndex;
@@ -129,7 +129,7 @@ export class ModrinthResolverService {
     return new Promise((resolve, reject) => {
       yauzl.fromBuffer(mrpackBuffer, { lazyEntries: true }, (err, zipfile) => {
         if (err || !zipfile) {
-          return reject(new BadRequestException(`Falha ao abrir .mrpack: ${err?.message}`));
+          return reject(new BadRequestException(`Failed to open .mrpack: ${err?.message}`));
         }
 
         let indexFound = false;
@@ -141,7 +141,7 @@ export class ModrinthResolverService {
             zipfile.openReadStream(entry, (streamErr, readStream) => {
               if (streamErr || !readStream) {
                 zipfile.close();
-                return reject(new BadRequestException(`Falha ao ler modrinth.index.json: ${streamErr?.message}`));
+                return reject(new BadRequestException(`Failed to read modrinth.index.json: ${streamErr?.message}`));
               }
 
               const chunks: Buffer[] = [];
@@ -169,7 +169,7 @@ export class ModrinthResolverService {
 
         zipfile.on('end', () => {
           if (!indexFound) {
-            reject(new BadRequestException('Arquivo modrinth.index.json não encontrado dentro do .mrpack'));
+            reject(new BadRequestException('modrinth.index.json not found inside the .mrpack'));
           }
         });
       });
@@ -183,7 +183,7 @@ export class ModrinthResolverService {
     return new Promise((resolve, reject) => {
       yauzl.fromBuffer(mrpackBuffer, { lazyEntries: true }, (err, zipfile) => {
         if (err || !zipfile) {
-          return reject(new BadRequestException(`Falha ao abrir .mrpack para overrides: ${err?.message}`));
+          return reject(new BadRequestException(`Failed to open .mrpack for overrides: ${err?.message}`));
         }
 
         const extractedPaths: string[] = [];

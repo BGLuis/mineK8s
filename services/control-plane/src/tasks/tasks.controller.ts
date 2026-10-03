@@ -35,7 +35,7 @@ export class TasksController {
     // Evita que o Postgres rejeite um id fora do formato uuid com erro 500.
     const task = UUID_PATTERN.test(id) ? await this.taskRepo.findOne({ where: { id } }) : null;
     if (!task) {
-      throw new NotFoundException(`Tarefa "${id}" não encontrada`);
+      throw new NotFoundException(`Task "${id}" not found`);
     }
 
     return {

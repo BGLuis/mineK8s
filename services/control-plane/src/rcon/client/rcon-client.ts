@@ -129,7 +129,7 @@ export class RconClient {
    */
   public sendCommand(command: string, timeoutMs?: number): Promise<string> {
     if (this.isDestroyed) {
-      return Promise.reject(new Error('RconClient foi destruído'));
+      return Promise.reject(new Error('RconClient was destroyed'));
     }
 
     return new Promise<string>((resolve, reject) => {
@@ -193,9 +193,9 @@ export class RconClient {
     return new Promise((resolve, reject) => {
       const authTimeout = setTimeout(() => {
         this.forceResetSocket(
-          new RconTimeoutException('Timeout durante autenticação RCON'),
+          new RconTimeoutException('Timeout during RCON authentication'),
         );
-        reject(new RconTimeoutException('Timeout durante autenticação RCON'));
+        reject(new RconTimeoutException('Timeout during RCON authentication'));
       }, this.options.defaultTimeoutMs);
 
       const checkAuth = (packet: RconPacket) => {
@@ -340,7 +340,7 @@ export class RconClient {
   private handleDisconnect(): void {
     const wasAuthFailed = this.state === RconConnectionState.AUTH_FAILED;
     this.state = RconConnectionState.DISCONNECTED;
-    this.failPendingCommands(new Error('Conexão RCON encerrada'));
+    this.failPendingCommands(new Error('RCON connection closed'));
 
     if (
       !this.isDestroyed &&

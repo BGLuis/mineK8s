@@ -22,8 +22,8 @@ export class CreateInviteDto {
     example: 'Galera do Discord',
   })
   @IsString()
-  @MinLength(3, { message: 'O nome do convite deve ter no mínimo 3 caracteres' })
-  @MaxLength(100, { message: 'O nome do convite deve ter no máximo 100 caracteres' })
+  @MinLength(3, { message: 'Invite name must have at least 3 characters' })
+  @MaxLength(100, { message: 'Invite name must have at most 100 characters' })
   name: string;
 
   @ApiProperty({
@@ -36,8 +36,8 @@ export class CreateInviteDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1, { message: 'O número de usos deve ser pelo menos 1' })
-  @Max(500, { message: 'O número de usos não pode exceder 500' })
+  @Min(1, { message: 'The number of uses must be at least 1' })
+  @Max(500, { message: 'The number of uses cannot exceed 500' })
   maxUses?: number = 1;
 
   @ApiProperty({
@@ -50,8 +50,8 @@ export class CreateInviteDto {
   })
   @IsOptional()
   @IsInt()
-  @Min(1, { message: 'A validade mínima é de 1 dia' })
-  @Max(90, { message: 'A validade máxima é de 90 dias' })
+  @Min(1, { message: 'The minimum validity is 1 day' })
+  @Max(90, { message: 'The maximum validity is 90 days' })
   expiresInDays?: number = 7;
 
   @ApiProperty({
@@ -62,7 +62,7 @@ export class CreateInviteDto {
   })
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true, message: 'Cada grupoId deve ser um UUID v4 válido' })
+  @IsUUID('4', { each: true, message: 'Each groupId must be a valid UUID v4' })
   groupIds?: string[];
 
   @ApiProperty({
@@ -73,6 +73,6 @@ export class CreateInviteDto {
   })
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true, message: 'Cada serverId deve ser um UUID v4 válido' })
+  @IsUUID('4', { each: true, message: 'Each serverId must be a valid UUID v4' })
   serverIds?: string[];
 }

@@ -72,14 +72,14 @@ export class AuthService implements OnModuleInit {
 
   async bootstrapAdmin(dto: BootstrapAdminDTO) {
     if (!this.activeBootstrapToken || this.activeBootstrapToken !== dto.bootstrap_token) {
-      throw new UnauthorizedException('Token de bootstrap inválido ou expirado');
+      throw new UnauthorizedException('Invalid or expired bootstrap token');
     }
 
     const existingNick = await this.userRepository.findOne({
       where: { minecraft_nick: dto.minecraft_nick },
     });
     if (existingNick) {
-      throw new ConflictException('Nickname de Minecraft já cadastrado');
+      throw new ConflictException('Minecraft nickname is already registered');
     }
 
     const admin = this.userRepository.create({
@@ -113,7 +113,7 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Credenciais inválidas: usuário não encontrado');
+      throw new UnauthorizedException('Invalid credentials: user not found');
     }
 
     const token = this.jwtService.sign({

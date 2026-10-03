@@ -48,7 +48,7 @@ export class AdminService {
   async createGroup(dto: CreateGroupDto): Promise<Group> {
     const existing = await this.groupRepo.findOne({ where: { name: dto.name } });
     if (existing) {
-      throw new ConflictException(`Grupo com nome "${dto.name}" já existe`);
+      throw new ConflictException(`Group named "${dto.name}" already exists`);
     }
 
     const group = this.groupRepo.create({
@@ -88,7 +88,7 @@ export class AdminService {
   async listAccessibleServers(userId: string): Promise<AccessibleServerDto[]> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+      throw new NotFoundException('User not found');
     }
 
     const [servers, serverGroups, userGroups, userAccesses] = await Promise.all([
@@ -138,7 +138,7 @@ export class AdminService {
   async deleteGroup(id: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id } });
     if (!group) {
-      throw new NotFoundException(`Grupo com ID "${id}" não encontrado`);
+      throw new NotFoundException(`Group with ID "${id}" not found`);
     }
     await this.groupRepo.delete({ id });
   }
@@ -148,10 +148,10 @@ export class AdminService {
    */
   async addUserToGroup(groupId: string, userId: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) throw new NotFoundException('Grupo não encontrado');
+    if (!group) throw new NotFoundException('Group not found');
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('Usuário não encontrado');
+    if (!user) throw new NotFoundException('User not found');
 
     const existing = await this.userGroupRepo.findOne({
       where: { group_id: groupId, user_id: userId },
@@ -269,10 +269,10 @@ export class AdminService {
    */
   async addServerToGroup(groupId: string, serverId: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) throw new NotFoundException('Grupo não encontrado');
+    if (!group) throw new NotFoundException('Group not found');
 
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
-    if (!server) throw new NotFoundException('Servidor não encontrado');
+    if (!server) throw new NotFoundException('Server not found');
 
     const existing = await this.serverGroupRepo.findOne({
       where: { group_id: groupId, server_id: serverId },
@@ -301,7 +301,7 @@ export class AdminService {
     });
 
     if (!server) {
-      throw new NotFoundException(`Servidor com ID "${dto.serverId}" não encontrado`);
+      throw new NotFoundException(`Server with ID "${dto.serverId}" not found`);
     }
 
     const reason = dto.reason || 'Desconectado pelo administrador.';

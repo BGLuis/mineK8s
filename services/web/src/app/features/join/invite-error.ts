@@ -13,7 +13,7 @@ const ASK_FOR_NEW_LINK = 'Peça um link novo para quem convidou você.';
 
 /**
  * Maps the failure of GET /api/tailscale/invites/validate/:token to a friendly card.
- * The backend distinguishes revoked and expired only by message (both are 400).
+ * Both revoked and expired are 400, so the backend error `code` tells them apart.
  */
 export function inviteErrorView(error: unknown): InviteErrorView {
   const http = asHttpError(error);
@@ -32,15 +32,15 @@ export function inviteErrorView(error: unknown): InviteErrorView {
     };
   }
   if (http.status === 400) {
-    const message = messageOf(http).toLowerCase();
-    if (message.includes('revogado')) {
+    const code = codeOf(http);
+    if (code === 'INVITE_REVOKED') {
       return {
         title: 'Este convite foi cancelado',
         text: `Quem convidou você desativou este link. ${ASK_FOR_NEW_LINK}`,
         retryable: false,
       };
     }
-    if (message.includes('expirou')) {
+    if (code === 'INVITE_EXPIRED') {
       return {
         title: 'Este convite expirou',
         text: `O prazo deste link acabou. ${ASK_FOR_NEW_LINK}`,
@@ -61,7 +61,7 @@ export const MISSING_TOKEN_VIEW: InviteErrorView = {
   retryable: false,
 };
 
-function messageOf(error: HttpErrorResponse): string {
-  const message = (error.error as { message?: unknown } | null)?.message;
-  return typeof message === 'string' ? message : '';
+function codeOf(error: HttpErrorResponse): string {
+  const code = (error.error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : '';
 }

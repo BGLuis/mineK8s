@@ -18,7 +18,7 @@ export class UpdateServerDto {
 
   @IsOptional()
   @IsIn(['PUBLIC', 'GROUP', 'INDIVIDUAL', 'MAINTENANCE'], {
-    message: 'A política de acesso deve ser PUBLIC, GROUP, INDIVIDUAL ou MAINTENANCE',
+    message: 'Access policy must be PUBLIC, GROUP, INDIVIDUAL or MAINTENANCE',
   })
   access_policy?: 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE';
 }

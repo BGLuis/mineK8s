@@ -45,7 +45,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new NotFoundException(`Dispositivo com ID "${id}" não encontrado`);
+      throw new NotFoundException(`Device with ID "${id}" not found`);
     }
 
     return device;
@@ -61,7 +61,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new NotFoundException(`Dispositivo com ID "${deviceId}" não encontrado`);
+      throw new NotFoundException(`Device with ID "${deviceId}" not found`);
     }
 
     this.logger.warn(
@@ -117,7 +117,7 @@ export class DevicesService {
     }
 
     return {
-      message: 'Dispositivo revogado com sucesso e removido da Tailnet',
+      message: 'Device revoked successfully and removed from the Tailnet',
       deviceId,
     };
   }

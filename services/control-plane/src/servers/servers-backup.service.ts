@@ -107,7 +107,7 @@ export class ServersBackupService {
     const freeBytes = this.getAvailableStorageBytes();
     if (freeBytes < minBytesRequired) {
       throw new HttpException(
-        `Espaço em disco insuficiente para execução de backup no pool /backups (disponível: ${freeBytes} bytes, mínimo: ${minBytesRequired} bytes) [RF-STO-19]`,
+        `Insufficient disk space to run a backup in the /backups pool (available: ${freeBytes} bytes, minimum: ${minBytesRequired} bytes) [RF-STO-19]`,
         HttpStatus.INSUFFICIENT_STORAGE,
       );
     }
@@ -131,20 +131,20 @@ export class ServersBackupService {
     // 1. Verificação de Concorrência (RF-STO-19)
     if (this.isServerBusy(server.id)) {
       throw new ConflictException(
-        `O servidor [${server.subdomain}] já possui uma tarefa de storage/backup em andamento (RF-STO-19).`,
+        `Server [${server.subdomain}] already has a storage/backup task in progress (RF-STO-19).`,
       );
     }
 
     // 2. Validação de Estado da Máquina de Estados (RF-STO-19)
     if (type === 'HOT' && server.state !== 'READY') {
       throw new ConflictException(
-        `Hot backup requer que o servidor esteja no estado READY. Estado atual: [${server.state}] (RF-STO-19).`,
+        `Hot backup requires the server to be in READY state. Current state: [${server.state}] (RF-STO-19).`,
       );
     }
 
     if (type === 'COLD' && server.state !== 'STOPPED') {
       throw new ConflictException(
-        `Cold backup requer que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-19).`,
+        `Cold backup requires the server to be in STOPPED state (replicas = 0). Current state: [${server.state}] (RF-STO-19).`,
       );
     }
 
@@ -391,14 +391,14 @@ export class ServersBackupService {
     // 1. Validação de Concorrência (RF-STO-19)
     if (this.isServerBusy(server.id)) {
       throw new ConflictException(
-        `O servidor [${server.subdomain}] já possui uma tarefa de storage/backup/restore em andamento (RF-STO-19).`,
+        `Server [${server.subdomain}] already has a storage/backup/restore task in progress (RF-STO-19).`,
       );
     }
 
     // 2. Validação de Estado da Máquina de Estados (RF-STO-04)
     if (server.state !== 'STOPPED') {
       throw new ConflictException(
-        `Restauração requer que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-04).`,
+        `Restore requires the server to be in STOPPED state (replicas = 0). Current state: [${server.state}] (RF-STO-04).`,
       );
     }
 
@@ -410,7 +410,7 @@ export class ServersBackupService {
 
     if (!fs.existsSync(backupPath)) {
       throw new HttpException(
-        `Arquivo de backup não encontrado no storage: ${backupPath}`,
+        `Backup file not found in storage: ${backupPath}`,
         HttpStatus.NOT_FOUND,
       );
     }
@@ -461,7 +461,7 @@ export class ServersBackupService {
 
         if (!jobSuccess) {
           throw new HttpException(
-            `Job de restauração no cluster K8s falhou. Rollback disparado no nó para restaurar /data intacto.`,
+            `Restore job on the K8s cluster failed. Rollback triggered on the node to restore /data intact.`,
             HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }
@@ -472,7 +472,7 @@ export class ServersBackupService {
 
       const durationMs = Date.now() - startTime;
       this.logger.log(
-        `Restauração transacional concluída com sucesso para [${server.subdomain}] em ${durationMs}ms.`,
+        `Transactional restore completed successfully para [${server.subdomain}] em ${durationMs}ms.`,
       );
 
       return {
@@ -501,7 +501,7 @@ export class ServersBackupService {
       const actualSha = await this.calculateSha256(backupPath);
       if (actualSha !== expectedSha) {
         throw new HttpException(
-          `[Fase 1] Checksum SHA-256 divergente do backup! Esperado: ${expectedSha}, Obtido: ${actualSha}`,
+          `[Phase 1] SHA-256 checksum mismatch for the backup! Expected: ${expectedSha}, Got: ${actualSha}`,
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
@@ -511,7 +511,7 @@ export class ServersBackupService {
       await execFileAsync('tar', ['-tzf', backupPath]);
     } catch {
       throw new HttpException(
-        `[Fase 1] Arquivo de backup corrompido ou formato gzip inválido.`,
+        `[Phase 1] Backup file is corrupted or has an invalid gzip format.`,
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -549,7 +549,7 @@ export class ServersBackupService {
       }
 
       if (!isStructureValid) {
-        throw new Error('Falha na validação de sanidade do mundo restaurado (arquivos essenciais ausentes).');
+        throw new Error('Sanity check of the restored world failed (essential files missing).');
       }
 
       extractionSucceeded = true;
@@ -573,7 +573,7 @@ export class ServersBackupService {
 
       await fs.promises.rm(stagingDir, { recursive: true, force: true });
       throw new HttpException(
-        `Falha na restauração: ${err.message}. Rollback executado com sucesso e estado original preservado.`,
+        `Restore failed: ${err.message}. Rollback completed successfully and the original state was preserved.`,
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -725,7 +725,7 @@ export class ServersBackupService {
     );
 
     if (!fs.existsSync(backupDir)) {
-      throw new Error(`Diretório de backup pre-update não encontrado: ${backupDir}`);
+      throw new Error(`Pre-update backup directory not found: ${backupDir}`);
     }
 
     // Remove arquivos atuais do servidor (exceto .backups)
@@ -920,14 +920,14 @@ export class ServersBackupService {
    */
   async getBackup(serverId: string, backupId: string): Promise<ServerBackupEntity> {
     if (!this.backupRepo) {
-      throw new NotFoundException(`Backup com ID "${backupId}" não encontrado.`);
+      throw new NotFoundException(`Backup with ID "${backupId}" not found.`);
     }
     const backup = await this.backupRepo.findOne({
       where: { id: backupId, serverId },
     });
     if (!backup) {
       throw new NotFoundException(
-        `Backup com ID "${backupId}" não encontrado para o servidor informado.`,
+        `Backup with ID "${backupId}" not found for the given server.`,
       );
     }
     return backup;
@@ -946,7 +946,7 @@ export class ServersBackupService {
     // Rejeita se isProtected=true (salvo override admin / force)
     if (backup.isProtected && !force) {
       throw new HttpException(
-        'Backup protegido (isProtected: true / PRE_UPDATE) não pode ser removido sem force=true (RF-STO-15)',
+        'Protected backup (isProtected: true / PRE_UPDATE) cannot be removed without force=true (RF-STO-15)',
         HttpStatus.FORBIDDEN,
       );
     }
@@ -959,7 +959,7 @@ export class ServersBackupService {
       !force
     ) {
       throw new HttpException(
-        'Backup PRE_RESTORE está sob retenção obrigatória de 48h e não pode ser removido sem force=true (RF-STO-15)',
+        'PRE_RESTORE backup is under mandatory 48h retention and cannot be removed without force=true (RF-STO-15)',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -981,7 +981,7 @@ export class ServersBackupService {
     }
 
     this.logger.log(`[RF-STO-17] Backup [${backup.filename}] (${backup.id}) removido.`);
-    return { message: 'Backup removido com sucesso', backupId: backup.id };
+    return { message: 'Backup removed successfully', backupId: backup.id };
   }
 
   /**
@@ -992,16 +992,16 @@ export class ServersBackupService {
     backupId: string,
   ): Promise<{ taskId: string; message: string }> {
     if (!this.serverRepo) {
-      throw new Error('Server repository não configurado');
+      throw new Error('Server repository not configured');
     }
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
     if (!server) {
-      throw new NotFoundException(`Servidor com ID "${serverId}" não encontrado.`);
+      throw new NotFoundException(`Server with ID "${serverId}" not found.`);
     }
 
     if (server.state !== 'STOPPED') {
       throw new ConflictException(
-        `Restauração exige que o servidor esteja no estado STOPPED (réplicas = 0). Estado atual: [${server.state}] (RF-STO-17)`,
+        `Restore requires the server to be in STOPPED state (replicas = 0). Current state: [${server.state}] (RF-STO-17)`,
       );
     }
 
@@ -1013,7 +1013,7 @@ export class ServersBackupService {
 
     return {
       taskId,
-      message: 'Restauração transacional concluída com sucesso',
+      message: 'Transactional restore completed successfully',
     };
   }
 
@@ -1025,11 +1025,11 @@ export class ServersBackupService {
     type: 'HOT' | 'COLD' = 'HOT',
   ): Promise<{ taskId: string; backupId: string; result: BackupResult }> {
     if (!this.serverRepo) {
-      throw new Error('Server repository não configurado');
+      throw new Error('Server repository not configured');
     }
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
     if (!server) {
-      throw new NotFoundException(`Servidor com ID "${serverId}" não encontrado.`);
+      throw new NotFoundException(`Server with ID "${serverId}" not found.`);
     }
 
     const taskId = `backup-task-${Date.now()}`;

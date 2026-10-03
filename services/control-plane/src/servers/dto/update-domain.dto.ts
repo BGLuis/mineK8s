@@ -6,7 +6,7 @@ export class UpdateDomainDto {
   @MinLength(2)
   @MaxLength(63)
   @Matches(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/, {
-    message: 'O domínio deve conter apenas letras minúsculas, números e hífens, sem hífen no início ou no fim',
+    message: 'Domain must contain only lowercase letters, numbers and hyphens, without a leading or trailing hyphen',
   })
   domain: string;
 }

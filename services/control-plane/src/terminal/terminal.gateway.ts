@@ -74,8 +74,8 @@ export class TerminalGateway
     try {
       const user = await this.authenticateClient(client);
       if (!user) {
-        this.logger.warn(`Conexão WebSocket rejeitada: Credenciais ausentes ou inválidas`);
-        client.emit('unauthorized', { message: 'Credenciais ausentes ou inválidas' });
+        this.logger.warn(`Conexão WebSocket rejeitada: Missing or invalid credentials`);
+        client.emit('unauthorized', { message: 'Missing or invalid credentials' });
         client.disconnect?.();
         return;
       }
@@ -112,12 +112,12 @@ export class TerminalGateway
 
     const server = await this.serverRepo.findOne({ where: { id: serverId } });
     if (!server) {
-      throw new WsException(`Servidor ${serverId} não encontrado`);
+      throw new WsException(`Server ${serverId} not found`);
     }
 
     const hasAccess = await this.checkUserAccess(user, serverId);
     if (!hasAccess) {
-      client.emit('error', { message: 'Acesso não autorizado ao terminal deste servidor' });
+      client.emit('error', { message: 'Unauthorized access to the terminal of this server' });
       return;
     }
 
@@ -158,7 +158,7 @@ export class TerminalGateway
     if (!this.tryConsumeCommandSlot(client)) {
       client.emit('error', {
         code: 'RATE_LIMITED',
-        message: `Limite de ${MAX_COMMANDS_PER_WINDOW} comandos por segundo excedido. Aguarde um instante.`,
+        message: `Limit of ${MAX_COMMANDS_PER_WINDOW} commands per second exceeded. Wait a moment.`,
       });
       return;
     }
@@ -168,12 +168,12 @@ export class TerminalGateway
       relations: ['minecraft_settings'],
     });
     if (!server) {
-      throw new WsException(`Servidor ${serverId} não encontrado`);
+      throw new WsException(`Server ${serverId} not found`);
     }
 
     const hasAccess = await this.checkUserAccess(user, serverId);
     if (!hasAccess) {
-      client.emit('error', { message: 'Acesso não autorizado a despachar comandos neste servidor' });
+      client.emit('error', { message: 'Unauthorized to send commands to this server' });
       return;
     }
 

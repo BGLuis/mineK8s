@@ -183,7 +183,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.start('srv-1');
-      expect(res.message).toBe('Instância iniciando');
+      expect(res.message).toBe('Instance starting');
       expect(mockK8sService.startServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STARTING');
     });
@@ -198,7 +198,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.stop('srv-1');
-      expect(res.message).toBe('Instância parando');
+      expect(res.message).toBe('Instance stopping');
       expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STOPPED');
     });
@@ -211,7 +211,7 @@ describe('ServersService', () => {
 
       const res = await service.restart('srv-1');
 
-      expect(res.message).toBe('Instância reiniciando');
+      expect(res.message).toBe('Instance restarting');
       expect(mockK8sService.restartServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STARTING');
     });
@@ -219,7 +219,7 @@ describe('ServersService', () => {
     it('recusa reiniciar servidor parado, que deveria ser iniciado', async () => {
       serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub', state: 'STOPPED' } as any);
 
-      await expect(service.restart('srv-1')).rejects.toThrow(/reiniciar um servidor em execução/);
+      await expect(service.restart('srv-1')).rejects.toThrow(/Only a running server can be restarted/);
       expect(mockK8sService.restartServer).not.toHaveBeenCalled();
     });
 
@@ -264,13 +264,13 @@ describe('ServersService', () => {
     it('recusa corpo vazio', async () => {
       seed();
 
-      await expect(service.update('srv-1', {})).rejects.toThrow(/ao menos um campo/);
+      await expect(service.update('srv-1', {})).rejects.toThrow(/at least one field/);
     });
 
     it('recusa mudar a política de um servidor publicado na internet', async () => {
       seed({ access_policy: 'INTERNET' });
 
-      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/despublique/);
+      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/unpublish it/);
     });
   });
 
@@ -285,7 +285,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.delete('srv-1');
-      expect(res.message).toBe('Instância removida');
+      expect(res.message).toBe('Instance removed');
       expect(mockK8sService.deprovisionServer).toHaveBeenCalledWith(server);
       expect(mockServerRepo.remove).toHaveBeenCalledWith(server);
     });
@@ -301,7 +301,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', server);
 
       const res = await service.updateDomain('srv-1', 'lobby-new');
-      expect(res.message).toBe('Domínio atualizado');
+      expect(res.message).toBe('Domain updated');
       expect(server.subdomain).toBe('lobby-new');
     });
 

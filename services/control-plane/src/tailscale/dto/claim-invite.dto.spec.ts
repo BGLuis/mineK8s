@@ -16,7 +16,7 @@ async function nickErrors(minecraftNick: string): Promise<string[]> {
 
 describe('ClaimInviteDto: nickname canônico C-06 (3 a 16)', () => {
   it('recusa nick de 2 caracteres, que o Minecraft aceita mas o projeto não', async () => {
-    expect(await nickErrors('ab')).toEqual([expect.stringContaining('3 a 16')]);
+    expect(await nickErrors('ab')).toEqual([expect.stringContaining('3 to 16')]);
   });
 
   it.each(['abc', 'Lucas_Craft', 'a'.repeat(16)])('aceita %s', async (nick) => {
