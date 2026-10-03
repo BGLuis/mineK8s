@@ -24,7 +24,7 @@ describe('CloudflareDnsDriver (RF-TS-16, RF-CF-06, PR-13)', () => {
     const unconfiguredDriver = new CloudflareDnsDriver();
     unconfiguredDriver.setConfig('', '');
     await expect(unconfiguredDriver.listRecords()).rejects.toThrow(
-      /CloudflareDnsDriver não configurado/,
+      /CloudflareDnsDriver is not configured/,
     );
   });
 

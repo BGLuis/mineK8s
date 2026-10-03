@@ -64,7 +64,7 @@ export class CloudflareDnsDriver implements IDnsDriver {
   ): Promise<CloudflareApiResponse<T>> {
     if (!this.apiToken || !this.zoneId) {
       throw new Error(
-        'CloudflareDnsDriver não configurado: CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ZONE_ID ausentes.',
+        'CloudflareDnsDriver is not configured: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID is missing.',
       );
     }
 

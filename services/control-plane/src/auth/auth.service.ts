@@ -101,7 +101,7 @@ export class AuthService implements OnModuleInit {
     });
 
     return {
-      message: 'Administrador configurado com sucesso',
+      message: 'Administrator configured successfully',
       user: saved,
       access_token: token,
     };
