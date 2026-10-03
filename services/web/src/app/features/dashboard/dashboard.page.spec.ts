@@ -39,6 +39,7 @@ describe('DashboardPage', () => {
           provide: ServersApi,
           useValue: {
             list: () => of(servers),
+            players: () => of({ online: 3, max: 20, players: [] }),
             start: (id: string) => (started.push(id), of({ message: 'ok' })),
             stop: (id: string) => (stopped.push(id), of({ message: 'ok' })),
             restart: (id: string) => (restarted.push(id), of({ message: 'ok' })),
@@ -59,7 +60,6 @@ describe('DashboardPage', () => {
                 tailnetDevices: { used: 0, limit: 50 },
               }),
             diskAlerts: () => of([{ level: 'warning', percent: 78 }]),
-            serverPlayers: () => of({ online: 3, max: 20, players: [] }),
           },
         },
       ],

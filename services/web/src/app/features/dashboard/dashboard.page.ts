@@ -93,7 +93,6 @@ interface Snapshot {
     <section aria-labelledby="servers-heading">
       <div class="mb-4 hidden items-center justify-between gap-4 md:flex">
         <h2 id="servers-heading" class="t-title-sm">Servidores</h2>
-        <mc-no-api-tag detail="jogadores online" />
       </div>
 
       @if (error() && servers() !== null) {
@@ -245,8 +244,8 @@ export class DashboardPage {
         const counts = online.length
           ? forkJoin(
               online.map((server) =>
-                this.mock
-                  .serverPlayers(server.id)
+                this.serversApi
+                  .players(server.id)
                   .pipe(
                     map((p): [string, ServerPlayerCount] => [
                       server.id,

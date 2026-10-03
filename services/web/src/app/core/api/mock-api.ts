@@ -5,7 +5,6 @@ import {
   ServerSettingsPatch,
   DiskAlert,
   NodeMetrics,
-  ServerPlayers,
   ServerRuntimeStats,
   TaskProgress,
 } from './models';
@@ -53,18 +52,6 @@ export class MockApi {
       jvmUsedMb: 2312,
       jvmMaxMb: 4096,
       uptimeSeconds: 3 * 3600 + 14 * 60 + serverId.length,
-    }).pipe(delay(LATENCY_MS));
-  }
-
-  /** MISSING: GET /api/servers/:id/players (online players and session time). */
-  serverPlayers(serverId: string): Observable<ServerPlayers> {
-    return of<ServerPlayers>({
-      online: 2,
-      max: 20,
-      players: [
-        { nick: 'Steve', sessionSeconds: 1860 + serverId.length },
-        { nick: 'Alex', sessionSeconds: 420 },
-      ],
     }).pipe(delay(LATENCY_MS));
   }
 

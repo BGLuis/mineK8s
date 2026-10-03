@@ -10,6 +10,7 @@ import {
   PublishResponse,
   ServerDetail,
   ServerLogsResponse,
+  ServerPlayers,
   ServerSummary,
   UpdateServerRequest,
   UpdateVersionRequest,
@@ -63,6 +64,10 @@ export class ServersApi {
 
   logs(id: string, tail = 150): Observable<ServerLogsResponse> {
     return this.api.get(`/api/servers/${id}/logs`, { params: { tail } });
+  }
+
+  players(id: string): Observable<ServerPlayers> {
+    return this.api.get(`/api/servers/${id}/players`);
   }
 
   sendCommand(id: string, command: string): Observable<CommandResponse> {

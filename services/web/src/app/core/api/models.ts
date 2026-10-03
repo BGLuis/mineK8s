@@ -556,9 +556,11 @@ export interface ServerRuntimeStats {
   uptimeSeconds: number;
 }
 
+/** GET /api/servers/:id/players. */
 export interface OnlinePlayer {
   nick: string;
-  sessionSeconds: number;
+  ip: string;
+  connectedAt: string;
 }
 
 export interface ServerPlayers {

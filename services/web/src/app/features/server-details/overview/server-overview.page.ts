@@ -124,7 +124,6 @@ function avatarColor(nick: string): string {
           </mc-panel>
 
           <mc-panel [title]="'Jogadores online · ' + onlinePlayers().length">
-            <mc-no-api-tag panelActions detail="lista de sessões" />
             @if (onlinePlayers().length === 0) {
               <p class="t-body-md text-text-muted">Nenhum jogador conectado no momento.</p>
             } @else {
@@ -267,7 +266,7 @@ export class ServerOverviewPage {
     ).pipe(
       switchMap((id) =>
         id
-          ? this.mock.serverPlayers(id).pipe(
+          ? this.serversApi.players(id).pipe(
               map((result) => result.players),
               catchError(() => of([] as OnlinePlayer[])),
             )
@@ -347,7 +346,7 @@ export class ServerOverviewPage {
   }
 
   protected session(player: OnlinePlayer): string {
-    return formatDuration(player.sessionSeconds);
+    return formatDuration(Math.max(0, (Date.now() - Date.parse(player.connectedAt)) / 1000));
   }
 
   protected onSubdomain(value: string): void {
