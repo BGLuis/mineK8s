@@ -11,6 +11,7 @@ import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
+import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
 import { PlayerSessionsService } from './player-sessions.service';
 import {
   Empty,
@@ -119,8 +120,7 @@ export class GatewayIpcService {
       subdomain: server.subdomain,
       target_ip_port: `${targetHost}:${targetPort}`,
       status: String(server.state || 'STOPPED').toUpperCase(),
-      // O Gateway só conhece políticas; modo manutenção vira a política MAINTENANCE (bypass de ADMIN preservado).
-      access_policy: server.is_maintenance ? 'MAINTENANCE' : server.access_policy || 'GROUP',
+      access_policy: effectiveAccessPolicy(server),
       allowed_group_ids: serverGroups.map((sg) => sg.group_id),
       allowed_user_ids: userAccesses.map((ua) => ua.user_id),
       proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),

@@ -13,6 +13,7 @@ import { Server } from '../database/entities/server.entity';
 import { UserGroup } from '../database/entities/user-group.entity';
 import { ServerGroup } from '../database/entities/server-group.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
+import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
@@ -108,7 +109,7 @@ export class AdminService {
             { userId: user.id, role: user.role, groupIds, isActive: true },
             {
               serverId: server.id,
-              policy: server.access_policy,
+              policy: effectiveAccessPolicy(server),
               allowedGroupIds: serverGroups.filter((sg) => sg.server_id === server.id).map((sg) => sg.group_id),
               allowedUserIds: directServerIds.has(server.id) ? [user.id] : [],
             },

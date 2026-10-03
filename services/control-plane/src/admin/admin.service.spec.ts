@@ -297,6 +297,15 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(servers.map((s) => s.id)).toEqual(['s-public', 's-group-ok', 's-indiv-ok']);
     });
 
+    it('servidor em modo manutenção sai da lista de jogadores, como o Gateway o enxerga', async () => {
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([
+        { id: 's-1', name: 'Em manutenção', subdomain: 'm', state: 'READY', access_policy: 'PUBLIC', is_maintenance: true },
+      ]);
+
+      expect(await service.listAccessibleServers('user-1')).toEqual([]);
+    });
+
     it('administrador enxerga todos os servidores, até os em manutenção', async () => {
       mockUserRepo.findOne.mockResolvedValue({ ...user, role: 'ADMIN' });
       mockServerRepo.find.mockResolvedValue([

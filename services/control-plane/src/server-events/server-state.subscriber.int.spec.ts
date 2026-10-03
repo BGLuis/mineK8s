@@ -1,21 +1,10 @@
-import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 
-import * as entityModule from '../database/entities';
-import { migrations } from '../database/migrations';
 import { Server } from '../database/entities/server.entity';
+import { createIntegrationDataSource, describeWithDatabase } from '../database/testing/integration-datasource';
 import { ServerStateSubscriber } from './server-state.subscriber';
 
-/**
- * Integração contra um Postgres real. Só roda com TEST_DATABASE_URL, por exemplo:
- *   docker run --rm -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=verify -p 55432:5432 postgres:16-alpine
- *   TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/verify npx jest server-state.subscriber.int
- * O banco é recriado a cada execução (dropSchema).
- */
-const url = process.env.TEST_DATABASE_URL;
-const describeWithDb = url ? describe : describe.skip;
-
-describeWithDb('ServerStateSubscriber contra Postgres real', () => {
+describeWithDatabase('ServerStateSubscriber contra Postgres real', () => {
   let dataSource: DataSource;
   let emitted: Array<{ id: string; status: string; is_maintenance: boolean }>;
 
@@ -28,10 +17,7 @@ describeWithDb('ServerStateSubscriber contra Postgres real', () => {
     });
 
   beforeAll(async () => {
-    const entities = Object.values(entityModule).filter((value) => typeof value === 'function') as any[];
-    dataSource = new DataSource({ type: 'postgres', url, entities, migrations, dropSchema: true });
-    await dataSource.initialize();
-    await dataSource.runMigrations();
+    dataSource = await createIntegrationDataSource('int_server_state');
   });
 
   afterAll(async () => {
@@ -47,8 +33,9 @@ describeWithDb('ServerStateSubscriber contra Postgres real', () => {
   it('aplica todas as migrations em um banco vazio, incluindo invites.created_by e servers.access_policy', async () => {
     const columns = await dataSource.query(
       `SELECT table_name, column_name FROM information_schema.columns
-       WHERE (table_name = 'invites' AND column_name = 'created_by')
-          OR (table_name = 'servers' AND column_name IN ('access_policy', 'restart_count', 'last_player_active_at'))`,
+       WHERE table_schema = current_schema()
+         AND ((table_name = 'invites' AND column_name = 'created_by')
+          OR (table_name = 'servers' AND column_name IN ('access_policy', 'restart_count', 'last_player_active_at')))`,
     );
 
     expect(columns).toHaveLength(4);
