@@ -3,17 +3,27 @@ import { Observable } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import {
+  AccessibleServer,
   CreateGroupRequest,
   Group,
   RemoveUserFromGroupResponse,
   SmartKickRequest,
   SuccessResponse,
+  UserSummary,
 } from './models';
 
 /** admin.controller.ts, `api/admin`. */
 @Injectable({ providedIn: 'root' })
 export class AdminApi {
   private readonly api = inject(ApiClient);
+
+  listUsers(): Observable<UserSummary[]> {
+    return this.api.get('/api/admin/users');
+  }
+
+  listAccessibleServers(userId: string): Observable<AccessibleServer[]> {
+    return this.api.get(`/api/admin/users/${userId}/servers`);
+  }
 
   createGroup(dto: CreateGroupRequest): Observable<Group> {
     return this.api.post('/api/admin/groups', dto);

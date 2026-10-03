@@ -83,6 +83,26 @@ describe('JoinPage', () => {
     expect(el.textContent).toContain('Acesso a 2 servidores · 3 usos restantes · expira em 09/10');
   });
 
+  it('names the servers and who invited when the backend provides them', async () => {
+    const { fixture, el } = await setup('tok');
+
+    http
+      .expectOne('/api/tailscale/invites/validate/tok')
+      .flush({ ...invite, serverNames: ['Survival', 'Creative'], createdBy: 'AdminSteve' });
+    await fixture.whenStable();
+
+    expect(el.textContent).toContain('AdminSteve chamou você para jogar em Survival e Creative.');
+  });
+
+  it('keeps the generic wording for older invites without names', async () => {
+    const { fixture, el } = await setup('tok');
+
+    http.expectOne('/api/tailscale/invites/validate/tok').flush(invite);
+    await fixture.whenStable();
+
+    expect(el.textContent).toContain('Um administrador chamou você para jogar nos servidores dele.');
+  });
+
   it('does not claim with a 2 character nick', async () => {
     const { fixture, el } = await setup('tok');
     http.expectOne('/api/tailscale/invites/validate/tok').flush(invite);

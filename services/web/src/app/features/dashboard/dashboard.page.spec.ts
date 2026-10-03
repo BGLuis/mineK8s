@@ -29,6 +29,7 @@ const server = (id: string, name: string, state: ServerState): ServerSummary => 
 describe('DashboardPage', () => {
   const started: string[] = [];
   const stopped: string[] = [];
+  const restarted: string[] = [];
 
   async function render(servers: ServerSummary[], devices: { status: string }[] = []) {
     TestBed.configureTestingModule({
@@ -40,6 +41,7 @@ describe('DashboardPage', () => {
             list: () => of(servers),
             start: (id: string) => (started.push(id), of({ message: 'ok' })),
             stop: (id: string) => (stopped.push(id), of({ message: 'ok' })),
+            restart: (id: string) => (restarted.push(id), of({ message: 'ok' })),
           },
         },
         { provide: TailscaleApi, useValue: { listDevices: () => of(devices) } },
@@ -79,6 +81,7 @@ describe('DashboardPage', () => {
     vi.useFakeTimers();
     started.length = 0;
     stopped.length = 0;
+    restarted.length = 0;
   });
   afterEach(() => vi.useRealTimers());
 
@@ -130,14 +133,15 @@ describe('DashboardPage', () => {
     expect(stopped).toEqual(['a']);
   });
 
-  it('restarts a crashed server as stop then start', async () => {
+  it('restarts a crashed server through the restart endpoint', async () => {
     const { el } = await render([server('d', 'D', 'CRASHED')]);
 
     el.querySelector<HTMLButtonElement>('mc-server-card button')!.click();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(stopped).toEqual(['d']);
-    expect(started).toEqual(['d']);
+    expect(restarted).toEqual(['d']);
+    expect(stopped).toEqual([]);
+    expect(started).toEqual([]);
   });
 
   it('shows the empty state with a create call to action when there are no servers', async () => {

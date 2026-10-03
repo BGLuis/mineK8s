@@ -4,12 +4,10 @@ import { Observable, delay, map, of, take, timer } from 'rxjs';
 import {
   ServerSettingsPatch,
   DiskAlert,
-  MessageResponse,
   NodeMetrics,
   ServerPlayers,
   ServerRuntimeStats,
   TaskProgress,
-  User,
 } from './models';
 
 const LATENCY_MS = 250;
@@ -70,40 +68,12 @@ export class MockApi {
     }).pipe(delay(LATENCY_MS));
   }
 
-  /** MISSING: POST /api/servers/:id/restart. */
-  restartServer(serverId: string): Observable<MessageResponse> {
-    return of({ message: `Reinício de ${serverId} simulado` }).pipe(delay(LATENCY_MS));
-  }
-
-  /**
-   * MISSING: PATCH /api/servers/:id (allocated_memory_mb, sleep_timeout_minutes,
-   * is_maintenance, access_policy). Only :id/domain is patchable today.
-   */
+  /** MISSING: changing allocated_memory_mb after creation; PATCH /api/servers/:id does not accept it yet. */
   updateServerSettings(
     _serverId: string,
     patch: ServerSettingsPatch,
   ): Observable<ServerSettingsPatch> {
     return of(patch).pipe(delay(LATENCY_MS));
-  }
-
-  /** MISSING: GET /api/admin/users (no endpoint lists users). */
-  listUsers(): Observable<User[]> {
-    const now = new Date().toISOString();
-    const user = (id: string, nick: string, role: User['role'], real: string): User => ({
-      id,
-      real_name: real,
-      email: null,
-      minecraft_nick: nick,
-      tailscale_user_id: null,
-      role,
-      created_at: now,
-      updated_at: now,
-    });
-    return of([
-      user('u-1', 'Luis', 'ADMIN', 'Luis Henrique'),
-      user('u-2', 'Steve', 'PLAYER', 'Steve Souza'),
-      user('u-3', 'Alex', 'PLAYER', 'Alex Lima'),
-    ]).pipe(delay(LATENCY_MS));
   }
 
   /** MISSING: progress events for backup/restore on /ws/tasks (only modpack installs emit taskProgress). */

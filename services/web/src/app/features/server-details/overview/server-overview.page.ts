@@ -15,7 +15,7 @@ import { catchError, firstValueFrom, map, of, switchMap } from 'rxjs';
 
 import { AdminApi } from '../../../core/api/admin.api';
 import { MockApi } from '../../../core/api/mock-api';
-import { OnlinePlayer } from '../../../core/api/models';
+import { OnlinePlayer, UpdateServerRequest } from '../../../core/api/models';
 import { ServersApi } from '../../../core/api/servers.api';
 import {
   DialogService,
@@ -160,7 +160,7 @@ function avatarColor(nick: string): string {
             <div class="flex flex-col gap-5">
               <div>
                 <mc-ram-slider [ngModel]="memory()" (ngModelChange)="memory.set($event)" />
-                <mc-no-api-tag class="mt-2" detail="PATCH de configurações" />
+                <mc-no-api-tag class="mt-2" detail="memória" />
               </div>
 
               <div>
@@ -172,7 +172,6 @@ function avatarColor(nick: string): string {
                   [ngModel]="sleep()"
                   (ngModelChange)="sleep.set($event)"
                 />
-                <mc-no-api-tag class="mt-2" detail="sleep_timeout_minutes" />
               </div>
 
               <mc-text-field
@@ -191,7 +190,6 @@ function avatarColor(nick: string): string {
                 <mc-setting-switch label="Acordar ao conectar (auto-wake)" [(checked)]="autoWake">
                   O gateway segura a conexão enquanto o mundo liga.
                 </mc-setting-switch>
-                <mc-no-api-tag detail="PATCH de configurações" />
               </div>
 
               <mc-button variant="primary" [block]="true" [disabled]="!canSave()" (click)="save()">
@@ -397,16 +395,29 @@ export class ServerOverviewPage {
       if (changes.domain !== null && !(await this.saveDomain(server.id, changes.domain))) {
         return;
       }
-      if (Object.keys(changes.patch).length > 0) {
-        await firstValueFrom(this.mock.updateServerSettings(server.id, changes.patch));
-        this.initial.update((initial) => initial && { ...initial, ...this.patchedFields() });
-        this.toast.warning(
-          'Memória, hibernação, manutenção e auto-wake ainda não são gravados no servidor (SEM API).',
-        );
+      if (Object.keys(changes.patch).length > 0 && !(await this.saveSettings(server.id, changes.patch))) {
+        return;
       }
+      if (Object.keys(changes.memory).length > 0) {
+        await firstValueFrom(this.mock.updateServerSettings(server.id, changes.memory));
+        this.toast.warning('A memória ainda não é gravada no servidor (SEM API).');
+      }
+      this.initial.update((initial) => initial && { ...initial, ...this.patchedFields() });
     } finally {
       this.saving.set(false);
     }
+  }
+
+  private async saveSettings(id: string, patch: UpdateServerRequest): Promise<boolean> {
+    try {
+      await firstValueFrom(this.serversApi.update(id, patch));
+    } catch (error) {
+      this.toast.error(`Não foi possível salvar as configurações. ${errorReason(error)}`);
+      return false;
+    }
+    this.toast.success('Configurações salvas.');
+    this.store.refresh();
+    return true;
   }
 
   /** Returns false when the user cancelled or the control plane rejected the change. */

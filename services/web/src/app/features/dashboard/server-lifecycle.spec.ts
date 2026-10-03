@@ -27,6 +27,10 @@ describe('ServerLifecycle', () => {
               calls.push(`stop:${id}`);
               return of({ message: 'ok' });
             },
+            restart: (id: string) => {
+              calls.push(`restart:${id}`);
+              return of({ message: 'ok' });
+            },
           },
         },
       ],
@@ -35,11 +39,11 @@ describe('ServerLifecycle', () => {
     toast = TestBed.inject(ToastService);
   });
 
-  it('restarts as stop followed by start because the API has no restart endpoint', async () => {
+  it('restarts through the dedicated endpoint so the control plane keeps the graceful shutdown', async () => {
     const ok = await lifecycle.run('restart', { id: 's1', name: 'Pixelmon' });
 
     expect(ok).toBe(true);
-    expect(calls).toEqual(['stop:s1', 'start:s1']);
+    expect(calls).toEqual(['restart:s1']);
   });
 
   it('clears the busy flag and reports an error toast when the call fails', async () => {

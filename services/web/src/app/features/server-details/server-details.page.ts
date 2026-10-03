@@ -99,7 +99,6 @@ import { ServerDetailStore } from './server-detail.store';
           >
             {{ published() ? 'Despublicar' : 'Publicar' }}
           </mc-button>
-          <mc-no-api-tag detail="restart" />
           <mc-button
             size="sm"
             [disabled]="!actions().restartEnabled || store.busy()"

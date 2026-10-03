@@ -296,6 +296,9 @@ export interface InviteSummary {
   joinUrl: string;
   groupIds: string[];
   serverIds: string[];
+  /** Only filled by the public validation endpoint. */
+  serverNames?: string[];
+  createdBy?: string | null;
   createdAt: string;
 }
 
@@ -338,6 +341,24 @@ export interface User {
   role: UserRole;
   created_at: string;
   updated_at: string;
+}
+
+/** GET /api/admin/users. */
+export interface UserSummary {
+  id: string;
+  minecraftNick: string;
+  realName: string | null;
+  role: UserRole;
+  devices: { id: string; deviceName: string | null; status: DeviceStatus; lastSeenAt: string | null }[];
+  groupIds: string[];
+}
+
+/** GET /api/admin/users/:id/servers: servers the user may join, by the gateway's own access rules. */
+export interface AccessibleServer {
+  id: string;
+  name: string;
+  subdomain: string;
+  state: ServerState;
 }
 
 /** tailscale_devices entity, with the `user` relation loaded by DevicesService. */
@@ -551,9 +572,15 @@ export interface DiskAlert {
   percent: number;
 }
 
+/** PATCH /api/servers/:id. INTERNET is not accepted here: publishing goes through /publish. */
+export interface UpdateServerRequest {
+  sleep_timeout_minutes?: number;
+  auto_wake?: boolean;
+  is_maintenance?: boolean;
+  access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
+}
+
+/** Memory is still MockApi-only: the backend has no way to reapply the Deployment yet (issue 98). */
 export interface ServerSettingsPatch {
   allocated_memory_mb?: number;
-  sleep_timeout_minutes?: number;
-  is_maintenance?: boolean;
-  access_policy?: ServerAccessPolicy;
 }

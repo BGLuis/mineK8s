@@ -11,6 +11,7 @@ import {
   ServerDetail,
   ServerLogsResponse,
   ServerSummary,
+  UpdateServerRequest,
   UpdateVersionRequest,
   UpdateVersionResponse,
 } from './models';
@@ -38,6 +39,14 @@ export class ServersApi {
 
   stop(id: string): Observable<MessageResponse> {
     return this.api.post(`/api/servers/${id}/stop`);
+  }
+
+  restart(id: string): Observable<MessageResponse> {
+    return this.api.post(`/api/servers/${id}/restart`);
+  }
+
+  update(id: string, patch: UpdateServerRequest): Observable<ServerDetail> {
+    return this.api.patch(`/api/servers/${id}`, patch);
   }
 
   updateVersion(id: string, dto: UpdateVersionRequest): Observable<UpdateVersionResponse> {
