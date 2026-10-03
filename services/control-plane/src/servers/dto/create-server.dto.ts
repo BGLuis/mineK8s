@@ -17,6 +17,7 @@ import { Type } from 'class-transformer';
 
 export enum ServerType {
   PAPER = 'PAPER',
+  PURPUR = 'PURPUR',
   VANILLA = 'VANILLA',
   FABRIC = 'FABRIC',
   FORGE = 'FORGE',
