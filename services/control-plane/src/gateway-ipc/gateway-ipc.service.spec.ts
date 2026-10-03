@@ -127,6 +127,51 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     });
   });
 
+  describe('publishRoute: mudanças de configuração chegam ao Gateway como UPSERT', () => {
+    const baseServer = {
+      id: 'server-uuid-1',
+      subdomain: 'survival',
+      state: 'READY',
+      access_policy: 'GROUP',
+      is_maintenance: false,
+      auto_wake: true,
+      game_type: 'MINECRAFT',
+      routing_model: 'VirtualHost',
+      allocated_port: 25565,
+      minecraft_settings: null,
+    };
+
+    it('envia a política configurada com os grupos e usuários permitidos', async () => {
+      mockServerRepo.findOne = jest.fn(async () => baseServer);
+      const emitted = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.publishRoute('server-uuid-1');
+
+      const event = await emitted;
+      expect(event.action).toBe(RouteAction.UPSERT);
+      expect(event.access_policy).toBe('GROUP');
+      expect(event.allowed_group_ids).toEqual(['group-vip']);
+    });
+
+    it('is_maintenance vira a política MAINTENANCE, que o Gateway já nega a não-admins', async () => {
+      mockServerRepo.findOne = jest.fn(async () => ({ ...baseServer, is_maintenance: true }));
+      const emitted = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.publishRoute('server-uuid-1');
+
+      expect((await emitted).access_policy).toBe('MAINTENANCE');
+    });
+
+    it('ignora servidor inexistente sem emitir evento', async () => {
+      mockServerRepo.findOne = jest.fn(async () => null);
+      const spy = jest.spyOn(service, 'broadcastRouteUpdate');
+
+      await service.publishRoute('nope');
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('StreamRouteUpdates (RF-GW-16)', () => {
     it('deve transmitir RouteUpdateEvent via Subject reativo para o Gateway', async () => {
       const stream = service.getRouteUpdatesStream();

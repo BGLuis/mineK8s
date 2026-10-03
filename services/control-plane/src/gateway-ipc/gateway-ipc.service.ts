@@ -77,38 +77,55 @@ export class GatewayIpcService {
     const routes: RouteUpdateEvent[] = [];
 
     for (const server of servers) {
-      const serverGroups = await this.serverGroupRepository.find({
-        where: { server_id: server.id },
-      });
-      const userAccesses = await this.userServerAccessRepository.find({
-        where: { server_id: server.id },
-      });
-
-      const allowedGroupIds = serverGroups.map((sg) => sg.group_id);
-      const allowedUserIds = userAccesses.map((ua) => ua.user_id);
-
-      const targetPort = 25565;
-      const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
-
-      routes.push({
-        action: RouteAction.UPSERT,
-        server_id: server.id,
-        subdomain: server.subdomain,
-        target_ip_port: `${targetHost}:${targetPort}`,
-        status: String(server.state || 'STOPPED').toUpperCase(),
-        access_policy: server.access_policy || 'GROUP',
-        allowed_group_ids: allowedGroupIds,
-        allowed_user_ids: allowedUserIds,
-        proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
-        game_type: server.game_type || 'MINECRAFT',
-        routing_model: server.routing_model || 'VirtualHost',
-        listen_port: server.allocated_port || 25565,
-        auto_wake: server.auto_wake !== false,
-      });
+      routes.push(await this.buildUpsertEvent(server));
     }
 
     this.logger.log(`Snapshot inicial construído com sucesso: ${routes.length} rotas enviadas ao Gateway`);
     return { routes };
+  }
+
+  /**
+   * Reenvia ao Gateway a rota completa do servidor (política, grupos, usuários, auto-wake).
+   * STATUS_CHANGE só atualiza estado e destino, então mudanças de configuração precisam de UPSERT.
+   */
+  async publishRoute(serverId: string): Promise<void> {
+    const server = await this.serverRepository.findOne({
+      where: { id: serverId },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      return;
+    }
+    this.broadcastRouteUpdate(await this.buildUpsertEvent(server));
+  }
+
+  private async buildUpsertEvent(server: Server): Promise<RouteUpdateEvent> {
+    const serverGroups = await this.serverGroupRepository.find({
+      where: { server_id: server.id },
+    });
+    const userAccesses = await this.userServerAccessRepository.find({
+      where: { server_id: server.id },
+    });
+
+    const targetPort = 25565;
+    const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
+
+    return {
+      action: RouteAction.UPSERT,
+      server_id: server.id,
+      subdomain: server.subdomain,
+      target_ip_port: `${targetHost}:${targetPort}`,
+      status: String(server.state || 'STOPPED').toUpperCase(),
+      // O Gateway só conhece políticas; modo manutenção vira a política MAINTENANCE (bypass de ADMIN preservado).
+      access_policy: server.is_maintenance ? 'MAINTENANCE' : server.access_policy || 'GROUP',
+      allowed_group_ids: serverGroups.map((sg) => sg.group_id),
+      allowed_user_ids: userAccesses.map((ua) => ua.user_id),
+      proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
+      game_type: server.game_type || 'MINECRAFT',
+      routing_model: server.routing_model || 'VirtualHost',
+      listen_port: server.allocated_port || 25565,
+      auto_wake: server.auto_wake !== false,
+    };
   }
 
   /**

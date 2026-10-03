@@ -29,6 +29,7 @@ import { ServersFilesService } from './servers-files.service';
 import { ServersBackupService } from './servers-backup.service';
 import { CreateServerDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
+import { UpdateServerDto } from './dto/update-server.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
@@ -92,6 +93,26 @@ export class ServersController {
   @ApiResponse({ status: 404, description: 'Server not found' })
   async stop(@Param('id') id: string) {
     return this.serversService.stop(id);
+  }
+
+  @Post(':id/restart')
+  @ApiOperation({ summary: 'Restart a running server with graceful shutdown (save-all, stop, start)' })
+  @ApiResponse({ status: 200, description: 'Server restart initiated' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is not running' })
+  async restart(@Param('id') id: string) {
+    return this.serversService.restart(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Update quick settings (sleep timeout, auto-wake, maintenance, access policy) and sync the Gateway',
+  })
+  @ApiResponse({ status: 200, description: 'Server updated' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is published on the internet' })
+  async update(@Param('id') id: string, @Body() dto: UpdateServerDto) {
+    return this.serversService.update(id, dto);
   }
 
   @Post(':id/update-version')

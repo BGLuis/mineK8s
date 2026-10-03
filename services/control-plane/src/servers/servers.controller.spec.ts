@@ -23,6 +23,8 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       findOne: jest.fn(),
       start: jest.fn(),
       stop: jest.fn(),
+      restart: jest.fn(),
+      update: jest.fn(),
       updateVersion: jest.fn(),
       delete: jest.fn(),
       updateDomain: jest.fn(),
@@ -173,6 +175,22 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     await expect(controller.downloadBackup('srv-1', 'backup-missing', res)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('Configurações e restart', () => {
+    it('PATCH :id delega o DTO para o serviço', async () => {
+      mockServersService.update.mockResolvedValue({ id: 'srv-1' });
+
+      await controller.update('srv-1', { is_maintenance: true });
+
+      expect(mockServersService.update).toHaveBeenCalledWith('srv-1', { is_maintenance: true });
+    });
+
+    it('POST :id/restart delega para o serviço', async () => {
+      mockServersService.restart.mockResolvedValue({ message: 'Instância reiniciando' });
+
+      await expect(controller.restart('srv-1')).resolves.toEqual({ message: 'Instância reiniciando' });
+    });
   });
 
   describe('Cloudflare Public Exposure Endpoints (RF-CF-07)', () => {

@@ -33,6 +33,7 @@ import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
 import { ServerSummaryDto } from './dto/server-summary.dto';
+import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
 
@@ -242,6 +243,59 @@ export class ServersService {
     await this.k8sService.stopServer(server);
 
     return { message: 'Instância parando' };
+  }
+
+  async restart(id: string): Promise<{ message: string }> {
+    const server = await this.serverRepo.findOne({ where: { id } });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    if (server.state !== 'READY' && server.state !== 'CRASHED') {
+      throw new ConflictException(
+        `Só é possível reiniciar um servidor em execução (estado atual: ${server.state})`,
+      );
+    }
+
+    server.state = 'STOPPING';
+    await this.serverRepo.save(server);
+    await this.k8sService.restartServer(server);
+    server.state = 'STARTING';
+    await this.serverRepo.save(server);
+
+    return { message: 'Instância reiniciando' };
+  }
+
+  async update(id: string, dto: UpdateServerDto) {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    const changes = Object.entries(dto).filter(([, value]) => value !== undefined);
+    if (changes.length === 0) {
+      throw new BadRequestException('Informe ao menos um campo para atualizar');
+    }
+    if (server.access_policy === 'INTERNET' && dto.access_policy) {
+      throw new ConflictException(
+        'Servidor publicado na internet: despublique em DELETE /api/servers/:id/publish antes de mudar a política',
+      );
+    }
+
+    Object.assign(server, Object.fromEntries(changes));
+    await this.serverRepo.save(server);
+
+    // O Gateway só enxerga mudanças de política, manutenção e auto-wake por um UPSERT de rota.
+    try {
+      await this.gatewayIpcService?.publishRoute(server.id);
+    } catch (err: any) {
+      this.logger.warn(`Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`);
+    }
+
+    return this.findOne(id);
   }
 
   async delete(id: string): Promise<{ message: string }> {

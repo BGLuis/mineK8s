@@ -65,6 +65,7 @@ describe('ServersService', () => {
       provisionServer: jest.fn().mockResolvedValue(undefined),
       startServer: jest.fn().mockResolvedValue(undefined),
       stopServer: jest.fn().mockResolvedValue(undefined),
+      restartServer: jest.fn().mockResolvedValue(undefined),
       deprovisionServer: jest.fn().mockResolvedValue(undefined),
       getServerDeployment: jest.fn().mockResolvedValue({
         replicas: 1,
@@ -110,6 +111,7 @@ describe('ServersService', () => {
 
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
+      publishRoute: jest.fn().mockResolvedValue(undefined),
     };
 
     mockSlpProbeService = {
@@ -199,6 +201,76 @@ describe('ServersService', () => {
       expect(res.message).toBe('Instância parando');
       expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
       expect(server.state).toBe('STOPPED');
+    });
+  });
+
+  describe('restart', () => {
+    it('reinicia servidor READY com shutdown gracioso e termina em STARTING', async () => {
+      const server: Server = { id: 'srv-1', name: 'Hub', subdomain: 'hub', state: 'READY' } as any;
+      serversDb.set('srv-1', server);
+
+      const res = await service.restart('srv-1');
+
+      expect(res.message).toBe('Instância reiniciando');
+      expect(mockK8sService.restartServer).toHaveBeenCalledWith(server);
+      expect(server.state).toBe('STARTING');
+    });
+
+    it('recusa reiniciar servidor parado, que deveria ser iniciado', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub', state: 'STOPPED' } as any);
+
+      await expect(service.restart('srv-1')).rejects.toThrow(/reiniciar um servidor em execução/);
+      expect(mockK8sService.restartServer).not.toHaveBeenCalled();
+    });
+
+    it('responde 404 para servidor inexistente', async () => {
+      await expect(service.restart('nope')).rejects.toThrow(/not found/);
+    });
+  });
+
+  describe('update (PATCH /api/servers/:id)', () => {
+    const seed = (overrides: Partial<Server> = {}) => {
+      const server = {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+        auto_wake: true,
+        sleep_timeout_minutes: 15,
+        ...overrides,
+      } as any;
+      serversDb.set('srv-1', server);
+      return server;
+    };
+
+    it('grava os campos enviados, preserva os demais e republica a rota no Gateway', async () => {
+      const server = seed();
+
+      await service.update('srv-1', { is_maintenance: true, sleep_timeout_minutes: 30 });
+
+      expect(server).toMatchObject({ is_maintenance: true, sleep_timeout_minutes: 30, auto_wake: true });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('não derruba o PATCH se o Gateway estiver indisponível', async () => {
+      seed();
+      mockGatewayIpcService.publishRoute.mockRejectedValue(new Error('stream fechado'));
+
+      await expect(service.update('srv-1', { auto_wake: false })).resolves.toBeDefined();
+    });
+
+    it('recusa corpo vazio', async () => {
+      seed();
+
+      await expect(service.update('srv-1', {})).rejects.toThrow(/ao menos um campo/);
+    });
+
+    it('recusa mudar a política de um servidor publicado na internet', async () => {
+      seed({ access_policy: 'INTERNET' });
+
+      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/despublique/);
     });
   });
 
