@@ -18,7 +18,7 @@ export class BootstrapAdminDTO {
   @MinLength(3)
   @MaxLength(16)
   @Matches(/^[a-zA-Z0-9_]{3,16}$/, {
-    message: 'minecraft_nick must contain only letters, numbers and underscores (3-16 chars)',
+    message: 'O nickname deve conter de 3 a 16 caracteres alfanuméricos ou sublinhado',
   })
   minecraft_nick: string;
 
