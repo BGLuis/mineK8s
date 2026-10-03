@@ -142,6 +142,8 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
 
   it('deve criar tarefa QUEUED, emitir evento no WebSocket e iniciar pipeline', async () => {
     sampleServer.state = 'STOPPED';
+    // O pipeline tem teste próprio; rodá-lo solto escreve no diretório temporário enquanto o afterEach o apaga.
+    const runPipeline = jest.spyOn(service, 'runPipeline').mockResolvedValue(undefined);
 
     const res = await service.installModpack(sampleServer.id, {
       source: 'MODRINTH',
@@ -149,6 +151,7 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
       versionId: '1.0.0',
     });
 
+    expect(runPipeline).toHaveBeenCalledTimes(1);
     expect(res.taskId).toBeDefined();
     expect(res.status).toBe(ModpackTaskStatus.QUEUED);
     expect(mockTasksGateway.emitTaskProgress).toHaveBeenCalledWith(
