@@ -33,6 +33,9 @@ export interface SendCommandDto {
   command: string;
 }
 
+const MAX_COMMANDS_PER_WINDOW = 5;
+const COMMAND_WINDOW_MS = 1000;
+
 @WebSocketGateway({
   namespace: '/terminal',
   cors: {
@@ -152,6 +155,14 @@ export class TerminalGateway
     const { serverId, command } = data;
     const user: User | undefined = client.data?.user;
 
+    if (!this.tryConsumeCommandSlot(client)) {
+      client.emit('error', {
+        code: 'RATE_LIMITED',
+        message: `Limite de ${MAX_COMMANDS_PER_WINDOW} comandos por segundo excedido. Aguarde um instante.`,
+      });
+      return;
+    }
+
     const server = await this.serverRepo.findOne({
       where: { id: serverId },
       relations: ['minecraft_settings'],
@@ -202,6 +213,22 @@ export class TerminalGateway
       event: 'command_output',
       data: responseData,
     };
+  }
+
+  /** Janela deslizante por socket (SRS 03): comandos recusados não ocupam vaga. */
+  private tryConsumeCommandSlot(client: any): boolean {
+    client.data = client.data || {};
+    const now = Date.now();
+    const recent: number[] = (client.data.commandTimestamps || []).filter(
+      (timestamp: number) => now - timestamp < COMMAND_WINDOW_MS,
+    );
+    if (recent.length >= MAX_COMMANDS_PER_WINDOW) {
+      client.data.commandTimestamps = recent;
+      return false;
+    }
+    recent.push(now);
+    client.data.commandTimestamps = recent;
+    return true;
   }
 
   private async checkUserAccess(

@@ -245,4 +245,62 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       }));
     });
   });
+
+  describe('rate limit de send_command (SRS 03: 5 comandos/s por sessão)', () => {
+    const makeClient = (): any => ({
+      data: { user: testAdminUser },
+      handshake: { address: '192.168.1.100' },
+      emit: jest.fn(),
+    });
+    const send = (client: any, command = 'list') =>
+      gateway.handleSendCommand(client, { serverId: testServer.id, command });
+
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-03T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('recusa o 6º comando dentro de 1 s sem chegar ao RCON nem à auditoria', async () => {
+      const client = makeClient();
+      for (let i = 0; i < 5; i++) {
+        await send(client);
+      }
+
+      const sixth = await send(client);
+
+      expect(sixth).toBeUndefined();
+      expect(client.emit).toHaveBeenLastCalledWith(
+        'error',
+        expect.objectContaining({ code: 'RATE_LIMITED' }),
+      );
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledTimes(5);
+      expect(mockAuditRepo.save).toHaveBeenCalledTimes(5);
+    });
+
+    it('volta a aceitar comandos quando a janela de 1 s passa', async () => {
+      const client = makeClient();
+      for (let i = 0; i < 5; i++) {
+        await send(client);
+      }
+      jest.advanceTimersByTime(1000);
+
+      await send(client);
+
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledTimes(6);
+    });
+
+    it('conta por sessão: o limite de um socket não bloqueia outro', async () => {
+      const noisy = makeClient();
+      for (let i = 0; i < 6; i++) {
+        await send(noisy);
+      }
+
+      await send(makeClient());
+
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledTimes(6);
+    });
+  });
 });
