@@ -13,8 +13,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AuthService } from '../auth/auth.service';
-import { authenticateSocket } from '../common/ws-auth';
+import { authenticateSocket, canAccessServer } from '../common/ws-auth';
 import { JwtService } from '../auth/jwt.service';
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
@@ -39,9 +40,6 @@ const COMMAND_WINDOW_MS = 1000;
 
 @WebSocketGateway({
   namespace: '/terminal',
-  cors: {
-    origin: '*',
-  },
 })
 export class TerminalGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -66,6 +64,7 @@ export class TerminalGateway
     private readonly logStreamer: K8sLogStreamerService,
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
+    private readonly trustedProxies: TrustedProxyService,
   ) {}
 
   /**
@@ -232,22 +231,8 @@ export class TerminalGateway
     return true;
   }
 
-  private async checkUserAccess(
-    user: User | undefined,
-    serverId: string,
-  ): Promise<boolean> {
-    if (!user) return false;
-    if (user.role === 'ADMIN') return true;
-
-    // Verifica permissão explícita de acesso ao servidor
-    const access = await this.accessRepo.findOne({
-      where: {
-        user_id: user.id,
-        server_id: serverId,
-      },
-    });
-
-    return !!access;
+  private checkUserAccess(user: User | undefined, serverId: string): Promise<boolean> {
+    return canAccessServer(user, serverId, this.accessRepo);
   }
 
   private ensureRoomLogStream(server: Server): void {
@@ -274,6 +259,6 @@ export class TerminalGateway
   }
 
   private authenticateClient(client: any): Promise<User | null> {
-    return authenticateSocket(client, this.authService, this.jwtService);
+    return authenticateSocket(client, this.authService, this.jwtService, this.trustedProxies);
   }
 }

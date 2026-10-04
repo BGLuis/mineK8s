@@ -33,7 +33,7 @@ import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
-import { ServerSummaryDto } from './dto/server-summary.dto';
+import { ServerDetailDto, ServerSummaryDto, toServerSettingsDto } from './dto/server-summary.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
@@ -168,6 +168,7 @@ export class ServersService {
         allocated_memory_mb: s.allocated_memory_mb,
         allocated_port: s.allocated_port,
         state: s.state,
+        access_policy: s.access_policy,
         is_maintenance: s.is_maintenance,
         auto_wake: s.auto_wake,
         sleep_timeout_minutes: s.sleep_timeout_minutes,
@@ -180,7 +181,7 @@ export class ServersService {
     });
   }
 
-  async findOne(id: string): Promise<ServerSummaryDto & { settings?: MinecraftServerSettings }> {
+  async findOne(id: string): Promise<ServerDetailDto> {
     const server = await this.serverRepo.findOne({
       where: { id },
       relations: ['minecraft_settings'],
@@ -208,6 +209,7 @@ export class ServersService {
       allocated_memory_mb: server.allocated_memory_mb,
       allocated_port: server.allocated_port,
       state: server.state,
+      access_policy: server.access_policy,
       is_maintenance: server.is_maintenance,
       auto_wake: server.auto_wake,
       sleep_timeout_minutes: server.sleep_timeout_minutes,
@@ -216,7 +218,7 @@ export class ServersService {
       replicas: dep?.replicas ?? 0,
       ready_replicas: dep?.status?.readyReplicas ?? 0,
       players_online: this.playerSessions?.count(server.id) ?? 0,
-      settings: server.minecraft_settings,
+      settings: server.minecraft_settings ? toServerSettingsDto(server.minecraft_settings) : undefined,
     };
   }
 

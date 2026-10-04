@@ -1,4 +1,5 @@
-import { ServerState } from '@database/entities/server.entity';
+import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
+import { ServerAccessPolicy, ServerState } from '@database/entities/server.entity';
 
 export class ServerSummaryDto {
   id: string;
@@ -11,6 +12,7 @@ export class ServerSummaryDto {
   allocated_memory_mb: number;
   allocated_port: number | null;
   state: ServerState;
+  access_policy: ServerAccessPolicy;
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
@@ -19,4 +21,43 @@ export class ServerSummaryDto {
   replicas?: number;
   ready_replicas?: number;
   players_online: number;
+}
+
+/** Settings exposed to the panel: an explicit allow-list, so a new entity column is never leaked by default. */
+export class ServerSettingsDto {
+  motd: string;
+  max_players: number;
+  difficulty: string;
+  gamemode: string;
+  hardcore: boolean;
+  pvp: boolean;
+  spawn_protection: number;
+  view_distance: number;
+  simulation_distance: number;
+  enable_rcon: boolean;
+  rcon_port: number;
+  enforce_secure_chat: boolean;
+  online_mode: boolean;
+}
+
+export class ServerDetailDto extends ServerSummaryDto {
+  settings?: ServerSettingsDto;
+}
+
+export function toServerSettingsDto(settings: MinecraftServerSettings): ServerSettingsDto {
+  return {
+    motd: settings.motd,
+    max_players: settings.max_players,
+    difficulty: settings.difficulty,
+    gamemode: settings.gamemode,
+    hardcore: settings.hardcore,
+    pvp: settings.pvp,
+    spawn_protection: settings.spawn_protection,
+    view_distance: settings.view_distance,
+    simulation_distance: settings.simulation_distance,
+    enable_rcon: settings.enable_rcon,
+    rcon_port: settings.rcon_port,
+    enforce_secure_chat: settings.enforce_secure_chat,
+    online_mode: settings.online_mode,
+  };
 }

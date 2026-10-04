@@ -31,6 +31,7 @@ export const appConfigSchema = Joi.object({
     .description('Secret key for signing JWT tokens (min 32 chars)'),
   JWT_EXPIRATION: Joi.string().default('1d'),
   INITIAL_BOOTSTRAP_TOKEN: Joi.string().allow('').optional(),
+  AUTH_TRUSTED_PROXY_IPS: Joi.string().allow('').default(''),
 
   // Tailscale
   TAILSCALE_SOCKET_PATH: Joi.string().default('/run/tailscale/tailscaled.sock'),

@@ -200,11 +200,8 @@ function avatarColor(nick: string): string {
           <mc-panel title="Quem pode entrar">
             <p class="t-body-md mb-4 flex flex-wrap items-center gap-2 text-text-muted">
               <span
-                >Política: <strong class="text-text-primary">{{ policy().label }}</strong></span
+                >Política: <strong class="text-text-primary">{{ policy() }}</strong></span
               >
-              @if (policy().assumed) {
-                <mc-no-api-tag detail="política" />
-              }
             </p>
             <mc-button variant="light" size="sm" (click)="manageAccess()"
               >Gerenciar grupos</mc-button
@@ -317,16 +314,7 @@ export class ServerOverviewPage {
     );
   });
 
-  protected readonly policy = computed(() => {
-    const server = this.store.server();
-    const known = this.store.accessPolicy();
-    if (known) {
-      return { label: policyLabel(known), assumed: false };
-    }
-    return server?.is_maintenance
-      ? { label: policyLabel('MAINTENANCE'), assumed: true }
-      : { label: `${policyLabel('GROUP')} (padrão)`, assumed: true };
-  });
+  protected readonly policy = computed(() => policyLabel(this.store.accessPolicy() ?? 'GROUP'));
 
   constructor() {
     effect(() => {

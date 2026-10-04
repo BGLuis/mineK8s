@@ -31,6 +31,7 @@ export interface ServerSummary {
   allocated_memory_mb: number;
   allocated_port: number | null;
   state: ServerState;
+  access_policy: ServerAccessPolicy;
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
@@ -40,10 +41,8 @@ export interface ServerSummary {
   ready_replicas?: number;
 }
 
-/** minecraft_server_settings entity. */
+/** ServerSettingsDto (servers/dto/server-summary.dto.ts). The RCON password is never sent. */
 export interface MinecraftServerSettings {
-  id: string;
-  server_id: string;
   motd: string;
   max_players: number;
   difficulty: string;
@@ -55,12 +54,8 @@ export interface MinecraftServerSettings {
   simulation_distance: number;
   enable_rcon: boolean;
   rcon_port: number;
-  /** Returned by the API (known defect #5 in the design report). Never render it. */
-  rcon_password: string;
   enforce_secure_chat: boolean;
   online_mode: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 /** GET /api/servers/:id. */
@@ -524,11 +519,6 @@ export interface BootstrapRequest {
   minecraft_nick: string;
   email?: string;
   real_name?: string;
-}
-
-export interface LoginRequest {
-  minecraft_nick: string;
-  tailscale_user_id?: string;
 }
 
 export interface TokenResponse {

@@ -16,8 +16,9 @@ export class AuthSession {
   readonly isAuthenticated = computed(() => this.tokens.token() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'ADMIN');
 
-  login(minecraftNick: string): Observable<User> {
-    return this.api.token({ minecraft_nick: minecraftNick }).pipe(
+  /** Opens a session for the Tailscale identity behind this device; nothing is typed. */
+  login(): Observable<User> {
+    return this.api.session().pipe(
       tap((res) => this.accept(res)),
       map((res) => res.user),
     );

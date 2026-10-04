@@ -1,0 +1,25 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "test/.*\\.e2e-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "@swc/jest"
+  },
+  "transformIgnorePatterns": ["/node_modules/(?!(@nestjs|es-toolkit)/)"],
+  "setupFiles": ["<rootDir>/test/jest-setup.ts"],
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^@config/(.*)$": "<rootDir>/src/config/$1",
+    "^@logging/(.*)$": "<rootDir>/src/logging/$1",
+    "^@database/(.*)$": "<rootDir>/src/database/$1",
+    "^@common/(.*)$": "<rootDir>/src/common/$1",
+    "^@servers/(.*)$": "<rootDir>/src/servers/$1",
+    "^@k8s/(.*)$": "<rootDir>/src/k8s/$1",
+    "^@auth/(.*)$": "<rootDir>/src/auth/$1",
+    "^@rcon/(.*)$": "<rootDir>/src/rcon/$1",
+    "^@console/(.*)$": "<rootDir>/src/console/$1",
+    "^@terminal/(.*)$": "<rootDir>/src/terminal/$1",
+    "^@tailscale/(.*)$": "<rootDir>/src/tailscale/$1"
+  },
+  "testEnvironment": "node"
+}

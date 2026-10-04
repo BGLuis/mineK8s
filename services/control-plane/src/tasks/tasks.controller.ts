@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Repository } from 'typeorm';
 
 import { Roles } from '@auth/roles.decorator';
+import { UUID_PATTERN } from '@common/uuid';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
 import { TaskProgressPayload } from './tasks.gateway';
 
@@ -12,8 +13,6 @@ export interface TaskStateDto extends TaskProgressPayload {
   startedAt: Date;
   updatedAt: Date;
 }
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @ApiTags('Tasks')
 @ApiBearerAuth()

@@ -1,3 +1,4 @@
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { ServersStateGateway } from './servers-state.gateway';
 
 describe('ServersStateGateway (/ws/servers)', () => {
@@ -23,7 +24,11 @@ describe('ServersStateGateway (/ws/servers)', () => {
         token === 'admin-jwt' ? { sub: admin.id } : token === 'player-jwt' ? { sub: player.id } : null,
       ),
     };
-    gateway = new ServersStateGateway(authService, jwtService);
+    gateway = new ServersStateGateway(
+      authService,
+      jwtService,
+      new TrustedProxyService({ authTrustedProxyIps: [] } as any),
+    );
   });
 
   it('mantém conectado um administrador autenticado', async () => {
