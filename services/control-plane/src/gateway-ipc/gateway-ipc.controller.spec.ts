@@ -38,10 +38,7 @@ describe('GatewayIpcController', () => {
       ),
       handleSessionEvent: jest.fn(async () => undefined),
       handleSessionStreamClosed: jest.fn(),
-      revokePlayerSession: jest.fn(async () => ({
-        session_found: true,
-        terminated_connections_count: 1,
-      })),
+      openCommandStream: jest.fn((results$) => results$),
       resolvePlayerIdentity: jest.fn(async () => ({
         found: true,
         user_id: 'u-1',
@@ -123,14 +120,13 @@ describe('GatewayIpcController', () => {
     expect(mockIpcService.handleSessionStreamClosed).toHaveBeenCalledTimes(2);
   });
 
-  it('deve delegar revokePlayerSession', async () => {
-    const res = await controller.revokePlayerSession({
-      server_id: 'srv-1',
-      client_ip: '100.64.0.5',
-      minecraft_nick: 'Steve',
-      reason_message: 'Kick',
-    });
-    expect(res.session_found).toBe(true);
+  it('entrega o stream de resultados do Gateway ao serviço e devolve o stream de comandos', () => {
+    const results$ = new Subject<any>();
+
+    const commands$ = controller.streamCommands(results$);
+
+    expect(mockIpcService.openCommandStream).toHaveBeenCalledWith(results$);
+    expect(commands$).toBe(results$);
   });
 
   it('deve delegar resolvePlayerIdentity', async () => {

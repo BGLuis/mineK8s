@@ -1,4 +1,5 @@
 pub mod client;
+pub mod commands;
 pub mod link;
 pub mod protocol;
 

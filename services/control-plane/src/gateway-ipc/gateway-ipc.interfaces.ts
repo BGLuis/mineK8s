@@ -37,6 +37,18 @@ export interface SessionLifecycleEvent {
   reason: string;
 }
 
+export interface GatewayCommand {
+  command_id: string;
+  revoke_session: RevokeSessionRequest;
+}
+
+export interface GatewayCommandResult {
+  command_id: string;
+  // Sem `defaults` no proto-loader, campos zerados chegam ausentes: um `{}` aqui é "0 sessões".
+  revoke_session?: Partial<RevokeSessionResponse>;
+  error?: string;
+}
+
 export interface RevokeSessionRequest {
   server_id: string;
   client_ip: string;

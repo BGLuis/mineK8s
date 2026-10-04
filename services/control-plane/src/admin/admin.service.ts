@@ -255,7 +255,7 @@ export class AdminService {
             reason_message: kickReason,
           });
         } catch (ipcErr: any) {
-          this.logger.debug(`Falha ao despachar revokePlayerSession via IPC: ${ipcErr.message}`);
+          this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
         }
 
         kickedServers.push(server.id);
@@ -295,7 +295,7 @@ export class AdminService {
   /**
    * Disparo manual de Smart Kick para um jogador específico (RF-GW-15, RF-TS-09).
    */
-  async smartKick(dto: SmartKickDto): Promise<{ success: boolean }> {
+  async smartKick(dto: SmartKickDto): Promise<{ success: boolean; terminated_connections: number }> {
     const server = await this.serverRepo.findOne({
       where: { id: dto.serverId },
       relations: ['minecraft_settings'],
@@ -313,13 +313,13 @@ export class AdminService {
       this.logger.debug(`RCON offline ou falhou: ${err.message}`);
     }
 
-    await this.gatewayIpcService.revokePlayerSession({
+    const revoked = await this.gatewayIpcService.revokePlayerSession({
       server_id: server.id,
       client_ip: '',
       minecraft_nick: dto.minecraftNick,
       reason_message: reason,
     });
 
-    return { success: true };
+    return { success: true, terminated_connections: revoked.terminated_connections_count };
   }
 }

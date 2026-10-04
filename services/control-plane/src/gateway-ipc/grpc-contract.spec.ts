@@ -1,7 +1,9 @@
 import * as path from 'path';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
+import { Observable } from 'rxjs';
 
+import { GatewayIpcService } from './gateway-ipc.service';
 import { GATEWAY_GRPC_LOADER_OPTIONS } from './grpc-loader-options';
 
 const PROTO_PATH = path.resolve(__dirname, '../../../../proto/gateway_control.proto');
@@ -18,7 +20,7 @@ async function startServer(loaderOptions: protoLoader.Options, handlers: Record<
   const server = new grpc.Server();
   server.addService(Service.service, {
     StreamRouteUpdates: () => undefined,
-    RevokePlayerSession: () => undefined,
+    StreamCommands: () => undefined,
     ResolvePlayerIdentity: () => undefined,
     StreamSessionEvents: () => undefined,
     GetInitialRoutingSnapshot: () => undefined,
@@ -91,6 +93,45 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
       access_policy: 'GROUP',
       auto_wake: true,
     });
+  });
+
+  it('StreamCommands: o serviço real envia o comando ao Gateway e lê a contagem 0 que o proto omite', async () => {
+    const service = new GatewayIpcService(...(Array(5).fill(undefined) as [any, any, any, any, any]));
+    const { server, client } = await startServer(GATEWAY_GRPC_LOADER_OPTIONS, {
+      StreamCommands: (call: any) => {
+        const results = new Observable<any>((subscriber) => {
+          call.on('data', (message: any) => subscriber.next(message));
+          call.on('end', () => subscriber.complete());
+          call.on('error', () => subscriber.complete());
+        });
+        service.openCommandStream(results).subscribe({
+          next: (command) => call.write(command),
+          complete: () => call.end(),
+        });
+      },
+    });
+    closers.push(() => server.forceShutdown(), () => client.close());
+
+    const received: any[] = [];
+    const gateway = client.StreamCommands();
+    gateway.on('error', () => undefined);
+    gateway.on('data', (command: any) => {
+      received.push(command);
+      // Contagem zero: o proto3 não serializa os campos zerados, então só chega o sub-objeto vazio.
+      gateway.write({ command_id: command.command_id, revoke_session: { session_found: false, terminated_connections_count: 0 } });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const revoked = await service.revokePlayerSession({
+      server_id: 'srv-1',
+      client_ip: '',
+      minecraft_nick: 'Steve',
+      reason_message: 'kick',
+    });
+
+    expect(received[0]).toMatchObject({ revoke_session: { server_id: 'srv-1', minecraft_nick: 'Steve' } });
+    expect(revoked).toEqual({ session_found: false, terminated_connections_count: 0 });
+    gateway.end();
   });
 
   it('sem as opções, o snapshot perderia os campos (documenta por que o loader é obrigatório)', async () => {

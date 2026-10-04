@@ -10,8 +10,9 @@ service GatewayControlService {
   // Streaming contínuo: Gateway despacha eventos de conexão, desconexão e métricas
   rpc StreamSessionEvents (stream SessionLifecycleEvent) returns (Empty);
 
-  // Comando RPC pontual: Control Plane solicita expulsão imediata de jogador (Smart Kick)
-  rpc RevokePlayerSession (RevokeSessionRequest) returns (RevokeSessionResponse);
+  // Canal de comandos Control Plane -> Gateway (ex.: Smart Kick). O Gateway abre o stream e o mantém;
+  // o Control Plane envia comandos e o Gateway responde cada um com o resultado, correlacionado por command_id.
+  rpc StreamCommands (stream GatewayCommandResult) returns (stream GatewayCommand);
 
   // Sincronização inicial: Gateway busca snapshot completo de todas as rotas no boot
   rpc GetInitialRoutingSnapshot (Empty) returns (RoutingSnapshotResponse);
@@ -57,6 +58,19 @@ message SessionLifecycleEvent {
   string reason = 7;
 }
 
+message GatewayCommand {
+  string command_id = 1;
+  RevokeSessionRequest revoke_session = 2;
+}
+
+message GatewayCommandResult {
+  string command_id = 1;
+  RevokeSessionResponse revoke_session = 2;
+  string error = 3; // preenchido quando o Gateway não conseguiu executar o comando
+}
+
+// Com client_ip, derruba todas as sessões daquele IP (ban de rede), em qualquer servidor.
+// Sem client_ip, derruba as sessões do minecraft_nick; server_id vazio vale para todos os servidores.
 message RevokeSessionRequest {
   string server_id = 1;
   string client_ip = 2;

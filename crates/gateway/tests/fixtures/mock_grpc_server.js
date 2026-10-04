@@ -101,10 +101,40 @@ server.addService(gatewayService, {
     call.on('end', () => callback(null, {}));
     call.on('error', () => {});
   },
-  RevokePlayerSession: (call, callback) => {
-    callback(null, { session_found: true, terminated_connections_count: 1 });
+  // Um comando por linha REVOKE:<server_id>:<client_ip>:<nick> em stdin; o resultado volta como COMMAND_RESULT.
+  StreamCommands: (call) => {
+    commandStream = call;
+    console.log('COMMANDS_CONNECTED');
+    call.on('data', (result) => {
+      const revoke = result.revoke_session;
+      const outcome = revoke ? `${revoke.session_found}:${revoke.terminated_connections_count}` : 'none:none';
+      console.log(`COMMAND_RESULT:${result.command_id}:${outcome}:${result.error}`);
+    });
+    call.on('end', () => call.end());
+    call.on('error', () => {});
+    call.on('cancelled', () => {
+      if (commandStream === call) commandStream = null;
+    });
   },
 });
+
+let commandStream = null;
+let nextCommandId = 1;
+require('readline')
+  .createInterface({ input: process.stdin })
+  .on('line', (line) => {
+    const [kind, serverId, clientIp, nick] = line.trim().split(':');
+    if (kind !== 'REVOKE' || !commandStream) {
+      console.log(`COMMAND_NOT_SENT:${line.trim()}`);
+      return;
+    }
+    const id = `cmd-${nextCommandId++}`;
+    commandStream.write({
+      command_id: id,
+      revoke_session: { server_id: serverId, client_ip: clientIp, minecraft_nick: nick, reason_message: 'test' },
+    });
+    console.log(`COMMAND_SENT:${id}`);
+  });
 
 server.bindAsync('127.0.0.1:0', grpc.ServerCredentials.createInsecure(), (err, port) => {
   if (err) {

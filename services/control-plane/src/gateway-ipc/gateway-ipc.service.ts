@@ -1,4 +1,12 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import {
+  BadGatewayException,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Observable, Subject } from 'rxjs';
 import { Repository } from 'typeorm';
@@ -15,6 +23,8 @@ import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-po
 import { PlayerSessionsService } from './player-sessions.service';
 import {
   Empty,
+  GatewayCommand,
+  GatewayCommandResult,
   ResolvePlayerRequest,
   ResolvePlayerResponse,
   RevokeSessionRequest,
@@ -26,10 +36,26 @@ import {
   SessionLifecycleEvent,
 } from './gateway-ipc.interfaces';
 
+/** Prazo para o Gateway responder um comando; derrubar sockets é imediato, então passar disso é falha. */
+const COMMAND_TIMEOUT_MS = 5000;
+
+interface CommandChannel {
+  send(command: GatewayCommand): void;
+}
+
+interface PendingCommand {
+  channel: CommandChannel;
+  resolve: (result: GatewayCommandResult) => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
 @Injectable()
 export class GatewayIpcService {
   private readonly logger = new Logger(GatewayIpcService.name);
   private readonly routeUpdates$ = new Subject<RouteUpdateEvent>();
+  private readonly commandChannels = new Set<CommandChannel>();
+  private readonly pendingCommands = new Map<string, PendingCommand>();
 
   constructor(
     @InjectRepository(Server)
@@ -288,16 +314,99 @@ export class GatewayIpcService {
   }
 
   /**
-   * Processa comando de revogação de sessão (Smart Kick).
+   * Registra o canal de comandos de um Gateway conectado (StreamCommands). Os comandos saem pelo Observable
+   * devolvido e os resultados entram por `results`. Quando o Gateway se desconecta, os comandos que ele ainda
+   * não respondeu falham.
+   */
+  openCommandStream(results: Observable<GatewayCommandResult>): Observable<GatewayCommand> {
+    return new Observable<GatewayCommand>((subscriber) => {
+      const channel: CommandChannel = { send: (command) => subscriber.next(command) };
+      this.commandChannels.add(channel);
+      this.logger.log(`Canal de comandos do Gateway registrado (${this.commandChannels.size} ativo(s))`);
+
+      const incoming = results.subscribe({
+        next: (result) => this.settleCommand(channel, result),
+        error: () => subscriber.complete(),
+        complete: () => subscriber.complete(),
+      });
+
+      return () => {
+        incoming.unsubscribe();
+        this.commandChannels.delete(channel);
+        this.failPendingCommands(
+          channel,
+          new ServiceUnavailableException('Gateway disconnected before answering the command'),
+        );
+        this.logger.log(`Canal de comandos do Gateway encerrado (${this.commandChannels.size} ativo(s))`);
+      };
+    });
+  }
+
+  /**
+   * Manda ao Gateway o comando de revogar sessões (Smart Kick, ban de rede) e devolve o que ele de fato derrubou.
+   *
+   * O comando não é enfileirado: sem Gateway conectado, ou sem resposta no prazo, a chamada falha em vez de
+   * reportar um sucesso que não aconteceu. Um kick atrasado derrubaria uma sessão legítima aberta depois.
    */
   async revokePlayerSession(req: RevokeSessionRequest): Promise<RevokeSessionResponse> {
-    this.logger.log(
-      `Revogação de sessão solicitada para jogador ${req.minecraft_nick || req.client_ip} no servidor ${req.server_id}`,
-    );
+    if (this.commandChannels.size === 0) {
+      throw new ServiceUnavailableException('Gateway is not connected: the session revocation was not delivered');
+    }
 
-    return {
-      session_found: true,
-      terminated_connections_count: 1,
-    };
+    const outcomes = await Promise.allSettled(
+      [...this.commandChannels].map((channel) => this.sendRevoke(channel, req)),
+    );
+    const answers = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
+    if (answers.length === 0) {
+      throw (outcomes[0] as PromiseRejectedResult).reason;
+    }
+
+    const terminated = answers.reduce((sum, answer) => sum + answer.terminated_connections_count, 0);
+    this.logger.log(
+      `Revogação de sessão para ${req.client_ip || req.minecraft_nick} (servidor: ${req.server_id || 'todos'}): ${terminated} sessão(ões) derrubada(s)`,
+    );
+    return { session_found: terminated > 0, terminated_connections_count: terminated };
+  }
+
+  private async sendRevoke(channel: CommandChannel, req: RevokeSessionRequest): Promise<RevokeSessionResponse> {
+    const commandId = randomUUID();
+    const result = await new Promise<GatewayCommandResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingCommands.delete(commandId);
+        reject(new ServiceUnavailableException('Gateway did not answer the session revocation in time'));
+      }, COMMAND_TIMEOUT_MS);
+      this.pendingCommands.set(commandId, { channel, resolve, reject, timer });
+      channel.send({ command_id: commandId, revoke_session: req });
+    });
+
+    if (result.error) {
+      throw new BadGatewayException(`Gateway could not revoke the session: ${result.error}`);
+    }
+    if (!result.revoke_session) {
+      throw new BadGatewayException('Gateway answered the session revocation without a result');
+    }
+    const terminated = result.revoke_session.terminated_connections_count ?? 0;
+    return { session_found: terminated > 0, terminated_connections_count: terminated };
+  }
+
+  private settleCommand(channel: CommandChannel, result: GatewayCommandResult): void {
+    const pending = this.pendingCommands.get(result.command_id);
+    if (!pending || pending.channel !== channel) {
+      this.logger.warn(`Resultado de comando desconhecido ou expirado do Gateway: ${result.command_id}`);
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.pendingCommands.delete(result.command_id);
+    pending.resolve(result);
+  }
+
+  private failPendingCommands(channel: CommandChannel, error: Error): void {
+    for (const [commandId, pending] of this.pendingCommands) {
+      if (pending.channel === channel) {
+        clearTimeout(pending.timer);
+        this.pendingCommands.delete(commandId);
+        pending.reject(error);
+      }
+    }
   }
 }

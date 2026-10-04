@@ -8,10 +8,11 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::{Request, Status};
 use tracing::{error, info, warn};
 
+use crate::ipc::commands::execute_command;
 use crate::ipc::protocol::{
-    Empty, ResolvePlayerRequest, ResolvePlayerResponse, RevokeSessionRequest,
-    RevokeSessionResponse, RouteAction, RouteUpdateEvent, RoutingSnapshotResponse,
-    SessionEventType, SessionLifecycleEvent,
+    Empty, GatewayCommand, GatewayCommandResult, ResolvePlayerRequest, ResolvePlayerResponse,
+    RouteAction, RouteUpdateEvent, RoutingSnapshotResponse, SessionEventType,
+    SessionLifecycleEvent,
 };
 use crate::routing::{CachedServerRoute, RouteTable, ServerInstanceStatus};
 use crate::session::SessionManager;
@@ -78,19 +79,20 @@ impl GatewayControlServiceClient {
         self.inner.client_streaming(Request::new(events), path, codec).await
     }
 
-    pub async fn revoke_player_session(
+    /// Abre a chamada `StreamCommands`. A resposta (headers) só chega quando o Control Plane tem
+    /// algo a dizer, então esta futura pode ficar pendente enquanto a conexão estiver saudável.
+    pub async fn stream_commands(
         &mut self,
-        mut request: Request<RevokeSessionRequest>,
-    ) -> Result<tonic::Response<RevokeSessionResponse>, Status> {
-        request.set_timeout(UNARY_TIMEOUT);
+        results: ReceiverStream<GatewayCommandResult>,
+    ) -> Result<tonic::Response<tonic::Streaming<GatewayCommand>>, Status> {
         self.inner.ready().await.map_err(|e| {
             Status::unknown(format!("GatewayControlService indisponível: {}", e))
         })?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
-            "/minekubernetes.gateway.v1.GatewayControlService/RevokePlayerSession",
+            "/minekubernetes.gateway.v1.GatewayControlService/StreamCommands",
         );
-        self.inner.unary(request, path, codec).await
+        self.inner.streaming(Request::new(results), path, codec).await
     }
 
     pub async fn resolve_player_identity(
@@ -275,6 +277,60 @@ impl GatewayIpcClient {
         info!("Publicação de eventos de sessão finalizada ordenadamente.");
     }
 
+    /// Recebe os comandos do Control Plane (Smart Kick, ban de rede), executa cada um nas sessões do
+    /// Gateway e devolve o resultado pelo mesmo stream, reconectando sozinho.
+    ///
+    /// Comando nenhum é enfileirado enquanto o stream está fora: quem o enviou recebe um erro do
+    /// Control Plane, e um kick executado minutos depois derrubaria uma sessão legítima.
+    pub async fn run_commands_loop(self, sessions: SessionManager, mut shutdown_rx: watch::Receiver<bool>) {
+        info!("Iniciando canal de comandos com o Control Plane...");
+        let mut client = self.client.clone();
+
+        while !*shutdown_rx.borrow() {
+            let (tx, rx) = mpsc::channel::<GatewayCommandResult>(32);
+            let opened = tokio::select! {
+                result = client.stream_commands(ReceiverStream::new(rx)) => result,
+                _ = shutdown_requested(&mut shutdown_rx) => return,
+            };
+
+            match opened {
+                Ok(response) => {
+                    let mut commands = response.into_inner();
+                    info!("Canal de comandos aberto com o Control Plane.");
+                    loop {
+                        tokio::select! {
+                            message = commands.message() => match message {
+                                Ok(Some(command)) => {
+                                    let result = execute_command(&sessions, command);
+                                    if tx.send(result).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Ok(None) => {
+                                    warn!("Control Plane encerrou o canal de comandos.");
+                                    break;
+                                }
+                                Err(e) => {
+                                    warn!(error = %e, "Canal de comandos interrompido.");
+                                    break;
+                                }
+                            },
+                            _ = shutdown_requested(&mut shutdown_rx) => return,
+                        }
+                    }
+                }
+                Err(e) => warn!(error = %e, "Falha ao abrir o canal de comandos."),
+            }
+
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(3)) => {},
+                _ = shutdown_requested(&mut shutdown_rx) => break,
+            }
+        }
+
+        info!("Canal de comandos finalizado ordenadamente.");
+    }
+
     /// Loop resiliente de sincronização de rotas com reconexão automática e reconstrução de snapshot.
     pub async fn run_sync_loop(
         mut self,
@@ -345,6 +401,12 @@ impl GatewayIpcClient {
 
         info!("Loop de sincronização gRPC finalizado ordenadamente.");
     }
+}
+
+/// Resolve quando o shutdown é pedido. Devolve `()` porque o `Ref` do `watch` não é `Send`
+/// e não pode atravessar o `select!` de uma tarefa spawnada.
+async fn shutdown_requested(shutdown_rx: &mut watch::Receiver<bool>) {
+    let _ = shutdown_rx.wait_for(|stop| *stop).await;
 }
 
 /// Aplica um evento de atualização na RouteTable em memória.

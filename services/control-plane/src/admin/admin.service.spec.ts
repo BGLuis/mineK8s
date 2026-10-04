@@ -223,7 +223,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         reason: 'Comportamento inadequado',
       });
 
-      expect(res.success).toBe(true);
+      expect(res).toEqual({ success: true, terminated_connections: 1 });
       expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
         mockServer,
         'kick ToxicPlayer Comportamento inadequado',
@@ -234,6 +234,31 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         minecraft_nick: 'ToxicPlayer',
         reason_message: 'Comportamento inadequado',
       });
+    });
+  });
+
+  describe('smartKick manual: resultado do Gateway', () => {
+    beforeEach(() => {
+      mockServerRepo.findOne.mockResolvedValue({ id: 'srv-creative', subdomain: 'creative' });
+    });
+
+    it('devolve a contagem real de sessões derrubadas, inclusive 0', async () => {
+      mockGatewayIpcService.revokePlayerSession.mockResolvedValue({
+        session_found: false,
+        terminated_connections_count: 0,
+      });
+
+      const res = await service.smartKick({ serverId: 'srv-creative', minecraftNick: 'Offline' });
+
+      expect(res).toEqual({ success: true, terminated_connections: 0 });
+    });
+
+    it('propaga a falha do Gateway em vez de responder sucesso', async () => {
+      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(new Error('Gateway is not connected'));
+
+      await expect(service.smartKick({ serverId: 'srv-creative', minecraftNick: 'ToxicPlayer' })).rejects.toThrow(
+        'Gateway is not connected',
+      );
     });
   });
 
