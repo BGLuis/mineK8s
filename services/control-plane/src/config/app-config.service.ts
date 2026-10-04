@@ -11,6 +11,7 @@ import {
   TailscaleConfig,
   CloudflareConfig,
   HealthBotConfig,
+  ModpackCatalogConfig,
 } from './app-config.values';
 
 @Injectable()
@@ -148,5 +149,11 @@ export class AppConfigService {
       this.config.get<number>('HEALTH_BOT_TIMEOUT_MS', 5000),
     );
   }
-}
 
+  get modpackCatalog(): ModpackCatalogConfig {
+    return new ModpackCatalogConfig(
+      this.config.get<number>('MODPACK_CATALOG_CACHE_TTL_MS', 60000),
+      this.config.get<number>('MODPACK_CATALOG_TIMEOUT_MS', 8000),
+    );
+  }
+}
