@@ -8,6 +8,17 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { AuthService } from '../auth/auth.service';
+import { JwtService } from '../auth/jwt.service';
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
+import { authenticateSocket, canAccessServer } from '../common/ws-auth';
+import { UUID_PATTERN } from '../common/uuid';
+import { ModpackTaskEntity } from '../database/entities/modpack-task.entity';
+import { User } from '../database/entities/user.entity';
+import { UserServerAccess } from '../database/entities/user-server-access.entity';
 
 export interface TaskProgressPayload {
   taskId: string;
@@ -26,9 +37,6 @@ export interface SubscribeToTaskDto {
 
 @WebSocketGateway({
   namespace: '/ws/tasks',
-  cors: {
-    origin: '*',
-  },
 })
 export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(TasksGateway.name);
@@ -36,8 +44,38 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: any;
 
-  handleConnection(client: any) {
-    this.logger.debug(`Cliente conectado ao WebSocket de tarefas: ${client.id}`);
+  constructor(
+    @InjectRepository(ModpackTaskEntity)
+    private readonly taskRepo: Repository<ModpackTaskEntity>,
+    @InjectRepository(UserServerAccess)
+    private readonly accessRepo: Repository<UserServerAccess>,
+    private readonly authService: AuthService,
+    private readonly jwtService: JwtService,
+    private readonly trustedProxies: TrustedProxyService,
+  ) {}
+
+  async handleConnection(client: any) {
+    try {
+      const user = await authenticateSocket(
+        client,
+        this.authService,
+        this.jwtService,
+        this.trustedProxies,
+      );
+      if (!user) {
+        this.logger.warn(`Conexão rejeitada no WebSocket de tarefas: credenciais ausentes ou inválidas`);
+        client.emit('unauthorized', { message: 'Missing or invalid credentials' });
+        client.disconnect?.();
+        return;
+      }
+
+      client.data = client.data || {};
+      client.data.user = user;
+      this.logger.debug(`Cliente conectado ao WebSocket de tarefas: ${client.id} (user ${user.id})`);
+    } catch (err) {
+      this.logger.error(`Erro no handshake de /ws/tasks: ${(err as Error).message}`);
+      client.disconnect?.();
+    }
   }
 
   handleDisconnect(client: any) {
@@ -45,12 +83,21 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('subscribeToTask')
-  handleSubscribeToTask(
+  async handleSubscribeToTask(
     @ConnectedSocket() client: any,
     @MessageBody() dto: SubscribeToTaskDto,
   ) {
     if (!dto?.taskId) {
       return { status: 'error', message: 'taskId is required' };
+    }
+
+    // Same answer for a missing task and for one the user may not see, so ids cannot be probed.
+    const task = UUID_PATTERN.test(dto.taskId)
+      ? await this.taskRepo.findOne({ where: { id: dto.taskId } })
+      : null;
+    const user: User | undefined = client.data?.user;
+    if (!task || !(await canAccessServer(user, task.serverId, this.accessRepo))) {
+      return { status: 'error', message: `Task "${dto.taskId}" not found` };
     }
 
     const room = `task:${dto.taskId}`;

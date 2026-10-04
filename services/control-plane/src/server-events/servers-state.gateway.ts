@@ -22,9 +22,6 @@ export interface ServerStateEvent {
  */
 @WebSocketGateway({
   namespace: '/ws/servers',
-  cors: {
-    origin: '*',
-  },
 })
 export class ServersStateGateway implements OnGatewayConnection {
   private readonly logger = new Logger(ServersStateGateway.name);

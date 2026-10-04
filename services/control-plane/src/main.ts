@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
+import { AllowedOriginsIoAdapter } from './common/allowed-origins.io-adapter';
 import { AppConfigService } from './config/app-config.service';
 import { GATEWAY_GRPC_LOADER_OPTIONS } from './gateway-ipc/grpc-loader-options';
 
@@ -37,6 +38,8 @@ async function bootstrap() {
     origin: configService.allowedOrigins,
     credentials: true,
   });
+
+  app.useWebSocketAdapter(new AllowedOriginsIoAdapter(app, configService.allowedOrigins));
 
   // Strict ValidationPipe
   app.useGlobalPipes(
