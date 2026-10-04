@@ -1,0 +1,167 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout on push events
+      pull-requests: read # paths-filter lists PR files through the API
+    outputs:
+      packages: ${{ steps.filter.outputs.changes }}
+    steps:
+      # On pull_request, paths-filter uses the API and needs no checkout.
+      - if: github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            control-plane:
+              - 'services/control-plane/**'
+              - 'proto/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'services/web/**'
+              - '.github/workflows/ci.yml'
+            gateway:
+              - 'crates/**'
+              - 'proto/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/ci.yml'
+            workflows:
+              - '.github/**'
+
+  control-plane:
+    name: control-plane
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.packages), 'control-plane')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+    defaults:
+      run:
+        working-directory: services/control-plane
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The gRPC contract spec loads proto/gateway_control.proto from the repo root.
+          sparse-checkout: |
+            services/control-plane
+            proto
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/control-plane/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npx jest --ci
+      - run: npm run build
+
+  web:
+    name: web
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.packages), 'web')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+    defaults:
+      run:
+        working-directory: services/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: services/web
+      # Angular 22 needs Node ^24.15, so keep this on the 24 line (see engines in package-lock.json).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test -- --watch=false
+      - run: npm run build
+
+  gateway:
+    name: gateway
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.packages), 'gateway')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup, cargo, clippy and rustfmt are preinstalled on the runner image.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Advisory until the existing findings are fixed (154 rustfmt diffs, 2 clippy errors in
+      # gateway). Drop continue-on-error once `cargo fmt --check` and clippy are clean.
+      - run: cargo fmt --all --check
+        continue-on-error: true
+      - run: cargo clippy --locked --all-targets -- -D warnings
+        continue-on-error: true
+      - run: cargo test --locked
+
+  workflows:
+    name: workflows
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.packages), 'workflows')
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          advanced-security: false
+          annotations: true
+
+  # The ONLY required status check. always(): a failed dependency must not turn it into a (passing) skip.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, control-plane, web, gateway, workflows]
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done
