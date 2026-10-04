@@ -140,6 +140,80 @@ describe('ManifestBuilder', () => {
       expect(container.args[0]).toContain('fuser -s /data/world/session.lock');
       expect(container.args[0]).toContain('exec java');
     });
+
+    describe('provisionamento do server.jar (#102)', () => {
+      const initContainersOf = (dep: ReturnType<typeof ManifestBuilder.buildDeployment>) =>
+        dep.spec.template.spec.initContainers;
+
+      it.each(['PAPER', 'PURPUR'])(
+        'should add an init container that fetches the %s jar into the data volume before the runner starts',
+        (type) => {
+          sampleServer.server_type = type;
+          sampleServer.game_version = '1.20.4';
+
+          const init = initContainersOf(
+            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+          )![0];
+
+          expect(init.name).toBe('fetch-server-jar');
+          expect(init.env).toEqual([
+            { name: 'SERVER_TYPE', value: type },
+            { name: 'MC_VERSION', value: '1.20.4' },
+          ]);
+          expect(init.volumeMounts).toEqual([{ name: 'server-data', mountPath: '/data' }]);
+        },
+      );
+
+      it('should point each type at its official download API and verify the Paper checksum', () => {
+        const script = initContainersOf(
+          ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+        )![0].args[0];
+
+        expect(script).toContain('https://api.purpurmc.org/v2/purpur/$MC_VERSION/latest/download');
+        expect(script).toContain('https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest');
+        expect(script).toContain('sha256sum -c -');
+      });
+
+      it('should not overwrite a jar already installed for the same type and version, but refetch when they change', () => {
+        const script = initContainersOf(
+          ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+        )![0].args[0];
+
+        expect(script).toContain('[ -s /data/server.jar ]');
+        expect(script).toContain('cat /data/.server-jar');
+        expect(script).toContain('mv /data/server.jar.tmp /data/server.jar');
+      });
+
+      it.each(['FORGE', 'NEOFORGE', 'FABRIC', 'VANILLA'])(
+        'should not add a jar init container for %s',
+        (type) => {
+          sampleServer.server_type = type;
+          const dep = ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService);
+
+          expect(initContainersOf(dep)).toBeUndefined();
+        },
+      );
+
+      it.each(['1.20.4; rm -rf /data', '$(id)', '../../etc', '', '1.20.4&x=1', '1'])(
+        'should reject game_version "%s" instead of handing it to the download script',
+        (version) => {
+          sampleServer.game_version = version;
+
+          expect(() =>
+            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+          ).toThrow(/game_version invalida/);
+        },
+      );
+
+      it('should accept release candidates and two-part versions', () => {
+        for (const version of ['1.21', '1.21.4', '1.21-pre1', '1.21.4-rc2']) {
+          sampleServer.game_version = version;
+          expect(() =>
+            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+          ).not.toThrow();
+        }
+      });
+    });
   });
 
   describe('buildBackupJob (RF-STO-01, RF-STO-02, RF-STO-10, D-01..D-04)', () => {

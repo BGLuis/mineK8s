@@ -2,6 +2,35 @@ import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
 
+const JAR_PROVIDED_TYPES = ['PAPER', 'PURPUR'];
+const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
+
+// O version/type chegam por env para nunca serem interpolados no script de shell.
+const FETCH_SERVER_JAR_SCRIPT = [
+  'set -eu',
+  'want="$SERVER_TYPE-$MC_VERSION"',
+  'if [ -s /data/server.jar ] && [ "$(cat /data/.server-jar 2>/dev/null)" = "$want" ]; then echo "server.jar $want ja presente"; exit 0; fi',
+  'sha=""',
+  'case "$SERVER_TYPE" in',
+  '  PURPUR) url="https://api.purpurmc.org/v2/purpur/$MC_VERSION/latest/download" ;;',
+  '  PAPER)',
+  // Fill v3 exige User-Agent identificado; o wget padrao do busybox e recusado.
+  '    meta=$(wget -q -U "minek8s-control-plane/1.0 (https://github.com/BGLuis/mineK8s)" -O - "https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest")',
+  // Variavel de padrao: aspas literais dentro de ${meta#...} anulam o corte no sh.
+  `    pat='*"server:default":'`,
+  '    section=${meta#$pat}',
+  "    url=$(printf %s \"$section\" | grep -o 'https://[^\"]*' | head -1)",
+  "    sha=$(printf %s \"$section\" | grep -o '\"sha256\":\"[0-9a-f]*\"' | head -1 | cut -d'\"' -f4)",
+  '    ;;',
+  '  *) echo "tipo $SERVER_TYPE sem provedor de jar" >&2; exit 1 ;;',
+  'esac',
+  '[ -n "$url" ] || { echo "URL do jar nao encontrada para $want" >&2; exit 1; }',
+  'wget -q -U "minek8s-control-plane/1.0 (https://github.com/BGLuis/mineK8s)" -O /data/server.jar.tmp "$url"',
+  '[ -z "$sha" ] || echo "$sha  /data/server.jar.tmp" | sha256sum -c -',
+  'mv /data/server.jar.tmp /data/server.jar',
+  'echo "$want" > /data/.server-jar',
+].join('\n');
+
 export class ManifestBuilder {
   public static buildPVC(server: Server, configService: AppConfigService) {
     const namespace = configService.kubernetes.namespace;
@@ -79,6 +108,11 @@ export class ManifestBuilder {
     const isModpack = ['FORGE', 'NEOFORGE', 'FABRIC'].includes(
       server.server_type.toUpperCase(),
     );
+
+    const serverType = server.server_type.toUpperCase();
+    const initContainers = JAR_PROVIDED_TYPES.includes(serverType)
+      ? [ManifestBuilder.buildFetchServerJarInitContainer(serverType, server.game_version)]
+      : undefined;
 
     const aikarsFlags = [
       `-Xms${heapMb}M`,
@@ -164,6 +198,7 @@ export class ManifestBuilder {
               fsGroup: 1000,
               fsGroupChangePolicy: 'OnRootMismatch',
             },
+            initContainers,
             containers: [
               {
                 name: 'runner',
@@ -230,6 +265,27 @@ export class ManifestBuilder {
           },
         },
       },
+    };
+  }
+
+  private static buildFetchServerJarInitContainer(serverType: string, gameVersion: string) {
+    if (!MC_VERSION_PATTERN.test(gameVersion)) {
+      throw new Error(`game_version invalida para download do server.jar: "${gameVersion}"`);
+    }
+    return {
+      name: 'fetch-server-jar',
+      image: 'alpine:3.20',
+      command: ['/bin/sh', '-c'],
+      args: [FETCH_SERVER_JAR_SCRIPT],
+      env: [
+        { name: 'SERVER_TYPE', value: serverType },
+        { name: 'MC_VERSION', value: gameVersion },
+      ],
+      resources: {
+        requests: { memory: '32Mi', cpu: '50m' },
+        limits: { memory: '128Mi' },
+      },
+      volumeMounts: [{ name: 'server-data', mountPath: '/data' }],
     };
   }
 
