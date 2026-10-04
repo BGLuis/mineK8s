@@ -1,14 +1,28 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info};
 
-use gateway::ipc::run_control_plane_link;
+use gateway::identity::TailscaleLocalWhoIs;
+use gateway::ipc::{run_control_plane_link, GatewayIpcClient};
 use gateway::routing::RouteTable;
 use gateway::session::SessionManager;
 use gateway::telemetry::TelemetryServer;
 use gateway::{GatewayConfig, GatewayServer};
+
+/// `TAILSCALE_SOCKET_PATH` (mesma variável do Control Plane); sem ela, o socket padrão do `tailscaled`.
+fn tailscale_socket_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("TAILSCALE_SOCKET_PATH").filter(|p| !p.is_empty()) {
+        return PathBuf::from(path);
+    }
+    let preferred = PathBuf::from("/run/tailscale/tailscaled.sock");
+    if preferred.exists() {
+        return preferred;
+    }
+    PathBuf::from("/var/run/tailscale/tailscaled.sock")
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,6 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if control_plane_url.is_some() {
         session_manager = session_manager.with_event_sender(session_tx.clone());
         server = server.with_wake_sender(wake_tx);
+    }
+    server = server.with_whois(TailscaleLocalWhoIs::new(tailscale_socket_path()));
+    if let Some(url) = &control_plane_url {
+        server = server.with_identity_control_plane(GatewayIpcClient::connect_lazy(url.clone())?);
     }
     let server = server.with_session_manager(session_manager.clone());
     let metrics = Arc::clone(server.metrics());

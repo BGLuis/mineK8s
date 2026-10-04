@@ -4,10 +4,10 @@ import { Observable, endWith, ignoreElements, tap } from 'rxjs';
 
 import {
   Empty,
+  GatewayCommand,
+  GatewayCommandResult,
   ResolvePlayerRequest,
   ResolvePlayerResponse,
-  RevokeSessionRequest,
-  RevokeSessionResponse,
   RouteUpdateEvent,
   RoutingSnapshotResponse,
   SessionLifecycleEvent,
@@ -69,11 +69,13 @@ export class GatewayIpcController {
   }
 
   /**
-   * Comando RPC pontual: Control Plane solicita expulsão imediata de jogador (Smart Kick).
+   * Canal de comandos Control Plane -> Gateway (Smart Kick, ban de rede): o Gateway abre o stream e devolve
+   * o resultado de cada comando, que o serviço correlaciona pelo command_id.
    */
-  @GrpcMethod('GatewayControlService', 'RevokePlayerSession')
-  async revokePlayerSession(req: RevokeSessionRequest): Promise<RevokeSessionResponse> {
-    return this.ipcService.revokePlayerSession(req);
+  @GrpcStreamMethod('GatewayControlService', 'StreamCommands')
+  streamCommands(results: Observable<GatewayCommandResult>): Observable<GatewayCommand> {
+    this.logger.log('Gateway L7 abriu o canal de comandos (StreamCommands)');
+    return this.ipcService.openCommandStream(results);
   }
 
   /**

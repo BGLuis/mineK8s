@@ -57,7 +57,8 @@ server.addService(gatewayService, {
   },
   ResolvePlayerIdentity: (call, callback) => {
     const req = call.request;
-    if (req.tailscale_user_id === 'user-e2e-123') {
+    // O WhoIs real devolve o ID do usuário Tailscale como número: 1001 e 2002 são os ids dos casos de login.
+    if (req.tailscale_user_id === 'user-e2e-123' || req.tailscale_user_id === '1001') {
       callback(null, {
         found: true,
         user_id: 'usr-e2e-real',
@@ -66,6 +67,27 @@ server.addService(gatewayService, {
         group_ids: ['grp-e2e'],
         is_active: true,
         is_mojang_verified: true,
+      });
+    } else if (req.tailscale_user_id === '2002') {
+      callback(null, {
+        found: true,
+        user_id: 'usr-player-1',
+        minecraft_nick: 'PlayerOne',
+        role: 'PLAYER',
+        group_ids: ['grp-e2e'],
+        is_active: true,
+        is_mojang_verified: false,
+      });
+    } else if (!req.tailscale_user_id && !req.node_id && req.client_ip === '127.0.0.1') {
+      // Fallback do Gateway quando o tailscaled local não responde: só chega o IP de origem.
+      callback(null, {
+        found: true,
+        user_id: 'usr-ip-only',
+        minecraft_nick: 'IpOnly',
+        role: 'PLAYER',
+        group_ids: [],
+        is_active: true,
+        is_mojang_verified: false,
       });
     } else {
       callback(null, { found: false });
@@ -79,10 +101,40 @@ server.addService(gatewayService, {
     call.on('end', () => callback(null, {}));
     call.on('error', () => {});
   },
-  RevokePlayerSession: (call, callback) => {
-    callback(null, { session_found: true, terminated_connections_count: 1 });
+  // Um comando por linha REVOKE:<server_id>:<client_ip>:<nick> em stdin; o resultado volta como COMMAND_RESULT.
+  StreamCommands: (call) => {
+    commandStream = call;
+    console.log('COMMANDS_CONNECTED');
+    call.on('data', (result) => {
+      const revoke = result.revoke_session;
+      const outcome = revoke ? `${revoke.session_found}:${revoke.terminated_connections_count}` : 'none:none';
+      console.log(`COMMAND_RESULT:${result.command_id}:${outcome}:${result.error}`);
+    });
+    call.on('end', () => call.end());
+    call.on('error', () => {});
+    call.on('cancelled', () => {
+      if (commandStream === call) commandStream = null;
+    });
   },
 });
+
+let commandStream = null;
+let nextCommandId = 1;
+require('readline')
+  .createInterface({ input: process.stdin })
+  .on('line', (line) => {
+    const [kind, serverId, clientIp, nick] = line.trim().split(':');
+    if (kind !== 'REVOKE' || !commandStream) {
+      console.log(`COMMAND_NOT_SENT:${line.trim()}`);
+      return;
+    }
+    const id = `cmd-${nextCommandId++}`;
+    commandStream.write({
+      command_id: id,
+      revoke_session: { server_id: serverId, client_ip: clientIp, minecraft_nick: nick, reason_message: 'test' },
+    });
+    console.log(`COMMAND_SENT:${id}`);
+  });
 
 server.bindAsync('127.0.0.1:0', grpc.ServerCredentials.createInsecure(), (err, port) => {
   if (err) {

@@ -47,8 +47,8 @@ impl AccessDecisionEngine {
             };
         }
 
-        // 3. Servidor público
-        if route.access_policy == AccessPolicy::Public {
+        // 3. Servidor público (INTERNET é aberto a qualquer um, inclusive a quem entra pela tailnet)
+        if matches!(route.access_policy, AccessPolicy::Public | AccessPolicy::Internet) {
             return AccessDecision::Allowed { admin_bypass: false };
         }
 
@@ -144,6 +144,13 @@ mod tests {
             true,
             &route,
         );
+        assert_eq!(decision, AccessDecision::Allowed { admin_bypass: false });
+    }
+
+    #[test]
+    fn test_internet_route_is_open_to_tailnet_players() {
+        let route = make_test_route(AccessPolicy::Internet);
+        let decision = AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
         assert_eq!(decision, AccessDecision::Allowed { admin_bypass: false });
     }
 

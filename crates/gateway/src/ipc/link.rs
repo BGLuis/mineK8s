@@ -28,7 +28,8 @@ pub fn wake_event(server_id: String) -> SessionLifecycleEvent {
     }
 }
 
-/// Liga o Gateway ao Control Plane: sincroniza rotas, publica eventos de sessão e repassa pedidos de wake.
+/// Liga o Gateway ao Control Plane: sincroniza rotas, publica eventos de sessão, repassa pedidos de wake
+/// e executa os comandos de revogação de sessão.
 ///
 /// O Gateway continua atendendo mesmo com o Control Plane fora do ar; a conexão inicial é tentada
 /// de novo a cada 3 s e os dois loops reconectam sozinhos depois.
@@ -67,6 +68,7 @@ pub async fn run_control_plane_link(
 
     tokio::join!(
         client.clone().run_sync_loop(route_table, shutdown_rx.clone()),
+        client.clone().run_commands_loop(sessions.clone(), shutdown_rx.clone()),
         client.run_session_events_loop(sessions, events_rx, shutdown_rx),
     );
     wake_bridge.abort();

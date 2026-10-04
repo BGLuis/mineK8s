@@ -95,10 +95,50 @@ describe('DevicesService', () => {
         expect.anything(),
         'kick BadActor Dispositivo banido da rede',
       );
-      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledTimes(2);
+      // Uma única revogação por IP no Gateway, que derruba as sessões em todos os servidores
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledTimes(1);
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith({
+        server_id: '',
+        client_ip: '100.64.0.45',
+        minecraft_nick: '',
+        reason_message: '§cDispositivo banido da rede privada pelo administrador.',
+      });
 
       // Removeu o nó da Tailnet Cloud API
       expect(mockTailscaleCloudDriver.deleteDevice).toHaveBeenCalledWith('node-ts-999');
+    });
+
+    it('sem IP registrado, revoga as sessões do dono pelo nickname em todos os servidores', async () => {
+      mockDeviceRepo.findOne.mockResolvedValue({
+        id: 'dev-no-ip',
+        node_id: 'node-ts-1',
+        node_ip: null,
+        status: 'ACTIVE',
+        user: { id: 'user-1', minecraft_nick: 'BadActor' },
+      });
+      mockServerRepo.find.mockResolvedValue([{ id: 'srv-survival' }]);
+
+      await service.revokeDevice('dev-no-ip');
+
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({ server_id: '', client_ip: '', minecraft_nick: 'BadActor' }),
+      );
+    });
+
+    it('com o Gateway fora do ar o ban continua e o nó sai da Tailnet', async () => {
+      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(new Error('Gateway is not connected'));
+      mockDeviceRepo.findOne.mockResolvedValue({
+        id: 'dev-target-2',
+        node_id: 'node-ts-2',
+        node_ip: '100.64.0.46',
+        status: 'ACTIVE',
+        user: { id: 'user-1', minecraft_nick: 'BadActor' },
+      });
+      mockServerRepo.find.mockResolvedValue([]);
+
+      await service.revokeDevice('dev-target-2');
+
+      expect(mockTailscaleCloudDriver.deleteDevice).toHaveBeenCalledWith('node-ts-2');
     });
   });
 

@@ -90,18 +90,22 @@ export class DevicesService {
         } catch (rconErr: any) {
           this.logger.debug(`RCON kick bypass no servidor ${server.id}: ${rconErr.message}`);
         }
+      }
 
-        // Envia revoke via IPC para o Gateway
-        try {
-          await this.gatewayIpcService.revokePlayerSession({
-            server_id: server.id,
-            client_ip: device.node_ip || '',
-            minecraft_nick: device.user.minecraft_nick,
-            reason_message: banMessage,
-          });
-        } catch (ipcErr: any) {
-          this.logger.debug(`IPC revoke bypass no servidor ${server.id}: ${ipcErr.message}`);
-        }
+      // O Gateway derruba de uma vez todas as sessões do IP do dispositivo, em qualquer servidor.
+      // Sem IP registrado, cai para as sessões do nickname do dono em todos os servidores.
+      try {
+        const revoked = await this.gatewayIpcService.revokePlayerSession({
+          server_id: '',
+          client_ip: device.node_ip || '',
+          minecraft_nick: device.node_ip ? '' : device.user.minecraft_nick,
+          reason_message: banMessage,
+        });
+        this.logger.log(
+          `Ban de rede do dispositivo ${device.id}: ${revoked.terminated_connections_count} sessão(ões) derrubada(s) no Gateway`,
+        );
+      } catch (ipcErr: any) {
+        this.logger.warn(`Falha ao revogar as sessões do dispositivo ${device.id} no Gateway: ${ipcErr.message}`);
       }
     }
 

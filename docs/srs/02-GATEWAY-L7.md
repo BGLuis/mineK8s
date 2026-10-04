@@ -114,6 +114,10 @@ O binário só fala com o Control Plane quando `CONTROL_PLANE_GRPC_URL` está de
 | Rotas | `GetInitialRoutingSnapshot` + `StreamRouteUpdates` | Snapshot ao conectar e a cada reconexão; depois `UPSERT`/`DELETE`/`STATUS_CHANGE`. Mudança de política, manutenção e auto-wake só chega por `UPSERT`. |
 | Sessões | `StreamSessionEvents` | `CONNECTED`/`DISCONNECTED` por sessão. A cada (re)conexão o backlog é descartado e as sessões abertas são reanunciadas como `CONNECTED`, porque o Control Plane esquece tudo quando o stream cai. |
 | Auto-wake | `StreamSessionEvents` | Login em rota `STOPPED` com `auto_wake` publica `WAKE_REQUESTED`; o Control Plane sobe o pod. |
+| Revogação de sessões | `StreamCommands` | O Gateway abre e mantém o stream; o Control Plane envia `GatewayCommand` (Smart Kick por nick, ban de rede por IP) e o Gateway responde com `GatewayCommandResult` do mesmo `command_id`, com a contagem real de sessões derrubadas (inclusive 0). Sem stream aberto, ou sem resposta em 5 s, o Control Plane devolve erro ao chamador; o comando nunca é enfileirado. |
+| Identidade | `ResolvePlayerIdentity` | Em cada login no listener privado o Gateway consulta o WhoIs do `tailscaled` (`TAILSCALE_SOCKET_PATH`, padrão `/run/tailscale/tailscaled.sock` com fallback para `/var/run/tailscale/tailscaled.sock`) e pede ao Control Plane o usuário correspondente (role, grupos e nickname). Sem WhoIs local, o Control Plane resolve só pelo IP. Sem resposta do Control Plane, vale apenas a identidade do WhoIs local. |
+
+**Fail-closed:** se nenhuma fonte resolve o IP, ou o Control Plane não conhece o dispositivo, o login é recusado em rotas `GROUP`, `INDIVIDUAL` e `MAINTENANCE`. Rotas `PUBLIC` e `INTERNET` não dependem de identidade e continuam abertas. A política de acesso e a checagem anti-impersonation só rodam no listener privado.
 
 Chamadas simples têm prazo de 10 s por requisição; os streams não têm prazo e usam keepalive HTTP/2 (30 s). Um timeout no canal cancelaria os streams a cada 10 s.
 

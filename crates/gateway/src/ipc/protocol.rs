@@ -94,6 +94,24 @@ pub enum SessionEventType {
 }
 
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GatewayCommand {
+    #[prost(string, tag = "1")]
+    pub command_id: String,
+    #[prost(message, optional, tag = "2")]
+    pub revoke_session: Option<RevokeSessionRequest>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GatewayCommandResult {
+    #[prost(string, tag = "1")]
+    pub command_id: String,
+    #[prost(message, optional, tag = "2")]
+    pub revoke_session: Option<RevokeSessionResponse>,
+    #[prost(string, tag = "3")]
+    pub error: String,
+}
+
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RevokeSessionRequest {
     #[prost(string, tag = "1")]
     pub server_id: String,

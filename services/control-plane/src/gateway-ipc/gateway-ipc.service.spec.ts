@@ -1,6 +1,13 @@
-import { firstValueFrom, take } from 'rxjs';
+import { BadGatewayException, ServiceUnavailableException } from '@nestjs/common';
+import { Subject, firstValueFrom, take } from 'rxjs';
 
-import { RouteAction, RouteUpdateEvent, SessionEventType } from './gateway-ipc.interfaces';
+import {
+  GatewayCommand,
+  GatewayCommandResult,
+  RouteAction,
+  RouteUpdateEvent,
+  SessionEventType,
+} from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
 import { PlayerSessionsService } from './player-sessions.service';
 
@@ -290,17 +297,104 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     });
   });
 
-  describe('RevokePlayerSession (Smart Kick)', () => {
-    it('deve responder à requisição de revogação de sessão', async () => {
-      const resp = await service.revokePlayerSession({
-        server_id: 'server-uuid-1',
-        client_ip: '100.64.0.15',
-        minecraft_nick: 'LucasCraft',
-        reason_message: 'Banido da sessão',
+  describe('Comandos de revogação enviados ao Gateway (Smart Kick, ban de rede)', () => {
+    const request = {
+      server_id: 'server-uuid-1',
+      client_ip: '',
+      minecraft_nick: 'LucasCraft',
+      reason_message: 'Banido da sessão',
+    };
+
+    /** Gateway simulado: guarda os comandos recebidos e responde pelo stream de resultados. */
+    function connectGateway() {
+      const results$ = new Subject<GatewayCommandResult>();
+      const received: GatewayCommand[] = [];
+      const subscription = service.openCommandStream(results$).subscribe((command) => received.push(command));
+      return { results$, received, disconnect: () => subscription.unsubscribe() };
+    }
+
+    afterEach(() => jest.useRealTimers());
+
+    it('sem Gateway conectado falha explicitamente em vez de reportar sucesso', async () => {
+      await expect(service.revokePlayerSession(request)).rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('envia o comando ao Gateway e devolve a contagem real de sessões derrubadas', async () => {
+      const gateway = connectGateway();
+
+      const pending = service.revokePlayerSession(request);
+      expect(gateway.received).toHaveLength(1);
+      expect(gateway.received[0].revoke_session).toEqual(request);
+      gateway.results$.next({
+        command_id: gateway.received[0].command_id,
+        revoke_session: { session_found: true, terminated_connections_count: 3 },
       });
 
-      expect(resp.session_found).toBe(true);
-      expect(resp.terminated_connections_count).toBe(1);
+      await expect(pending).resolves.toEqual({ session_found: true, terminated_connections_count: 3 });
+    });
+
+    it('nenhuma sessão derrubada vira 0 e session_found falso, mesmo com o proto omitindo campos zerados', async () => {
+      const gateway = connectGateway();
+
+      const pending = service.revokePlayerSession(request);
+      gateway.results$.next({ command_id: gateway.received[0].command_id, revoke_session: {} });
+
+      await expect(pending).resolves.toEqual({ session_found: false, terminated_connections_count: 0 });
+    });
+
+    it('correlaciona cada resposta ao seu comando, mesmo fora de ordem', async () => {
+      const gateway = connectGateway();
+
+      const first = service.revokePlayerSession({ ...request, minecraft_nick: 'First' });
+      const second = service.revokePlayerSession({ ...request, minecraft_nick: 'Second' });
+      gateway.results$.next({
+        command_id: gateway.received[1].command_id,
+        revoke_session: { terminated_connections_count: 2 },
+      });
+      gateway.results$.next({
+        command_id: gateway.received[0].command_id,
+        revoke_session: { terminated_connections_count: 1 },
+      });
+
+      await expect(first).resolves.toMatchObject({ terminated_connections_count: 1 });
+      await expect(second).resolves.toMatchObject({ terminated_connections_count: 2 });
+    });
+
+    it('repassa o erro com que o Gateway recusou o comando', async () => {
+      const gateway = connectGateway();
+
+      const pending = service.revokePlayerSession(request);
+      gateway.results$.next({ command_id: gateway.received[0].command_id, error: 'client_ip inválido: x' });
+
+      await expect(pending).rejects.toThrow(BadGatewayException);
+      await expect(pending).rejects.toThrow('client_ip inválido: x');
+    });
+
+    it('falha por timeout quando o Gateway não responde', async () => {
+      jest.useFakeTimers();
+      connectGateway();
+
+      const pending = service.revokePlayerSession(request);
+      const assertion = expect(pending).rejects.toThrow('did not answer');
+      await jest.advanceTimersByTimeAsync(5001);
+
+      await assertion;
+    });
+
+    it('falha o comando em andamento quando o Gateway desconecta, e a chamada seguinte já acusa o Gateway ausente', async () => {
+      const gateway = connectGateway();
+
+      const pending = service.revokePlayerSession(request);
+      gateway.disconnect();
+
+      await expect(pending).rejects.toThrow(ServiceUnavailableException);
+      await expect(service.revokePlayerSession(request)).rejects.toThrow('Gateway is not connected');
+    });
+
+    it('ignora resultados sem comando pendente', async () => {
+      const gateway = connectGateway();
+
+      expect(() => gateway.results$.next({ command_id: 'desconhecido', revoke_session: {} })).not.toThrow();
     });
   });
 
