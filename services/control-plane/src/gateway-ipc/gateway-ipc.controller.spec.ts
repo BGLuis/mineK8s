@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 
 import { RouteAction, RouteUpdateEvent } from './gateway-ipc.interfaces';
 import { GatewayIpcController } from './gateway-ipc.controller';
@@ -36,7 +36,8 @@ describe('GatewayIpcController', () => {
           auto_wake: false,
         }),
       ),
-      handleSessionEvent: jest.fn(),
+      handleSessionEvent: jest.fn(async () => undefined),
+      handleSessionStreamClosed: jest.fn(),
       revokePlayerSession: jest.fn(async () => ({
         session_found: true,
         terminated_connections_count: 1,
@@ -87,6 +88,39 @@ describe('GatewayIpcController', () => {
         done();
       },
     });
+  });
+
+  it('só responde ao RPC quando o Gateway encerra o fluxo, e processa todos os eventos até lá', () => {
+    const incoming$ = new Subject<any>();
+    const responses: unknown[] = [];
+    let completed = false;
+    controller.streamSessionEvents(incoming$).subscribe({
+      next: (response) => responses.push(response),
+      complete: () => (completed = true),
+    });
+
+    incoming$.next({ event_type: 0, server_id: 'srv-1', minecraft_nick: 'Steve' });
+    incoming$.next({ event_type: 0, server_id: 'srv-1', minecraft_nick: 'Alex' });
+    expect(responses).toEqual([]);
+    expect(completed).toBe(false);
+    expect(mockIpcService.handleSessionEvent).toHaveBeenCalledTimes(2);
+
+    incoming$.complete();
+    expect(responses).toEqual([{}]);
+    expect(completed).toBe(true);
+  });
+
+  it('descarta as sessões conhecidas quando o stream de eventos do Gateway termina ou falha', () => {
+    const closing$ = new Subject<any>();
+    controller.streamSessionEvents(closing$).subscribe();
+
+    closing$.complete();
+    expect(mockIpcService.handleSessionStreamClosed).toHaveBeenCalledTimes(1);
+
+    const failing$ = new Subject<any>();
+    controller.streamSessionEvents(failing$).subscribe({ error: () => undefined });
+    failing$.error(new Error('conexão perdida'));
+    expect(mockIpcService.handleSessionStreamClosed).toHaveBeenCalledTimes(2);
   });
 
   it('deve delegar revokePlayerSession', async () => {

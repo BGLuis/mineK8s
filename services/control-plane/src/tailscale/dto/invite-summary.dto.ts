@@ -39,6 +39,22 @@ export class InviteSummaryDto {
   @ApiProperty({ type: [String], example: ['c2b06f8d-99fc-4c3b-a71e-32e5ef574f3b'] })
   serverIds: string[];
 
+  @ApiProperty({
+    type: [String],
+    required: false,
+    description: 'Nomes dos servidores do convite; preenchido na validação pública do token',
+    example: ['Survival dos Amigos'],
+  })
+  serverNames?: string[];
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Nickname do administrador que emitiu o convite',
+    example: 'AdminSteve',
+  })
+  createdBy?: string | null;
+
   @ApiProperty({ example: '2026-09-29T12:00:00.000Z' })
   createdAt: Date;
 }

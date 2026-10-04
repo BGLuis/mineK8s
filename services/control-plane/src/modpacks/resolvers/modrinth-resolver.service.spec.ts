@@ -86,7 +86,7 @@ describe('ModrinthResolverService (RF-STO-11, Critério de Aceite)', () => {
   });
 
   it('deve validar o formato do modrinth.index.json e rejeitar json inválido', () => {
-    expect(() => resolver.parseIndex({ game: 'othergame', files: [] })).toThrow(/jogo incompatível/);
-    expect(() => resolver.parseIndex({ game: 'minecraft' })).toThrow(/campo "files" ausente/);
+    expect(() => resolver.parseIndex({ game: 'othergame', files: [] })).toThrow(/incompatible game/);
+    expect(() => resolver.parseIndex({ game: 'minecraft' })).toThrow(/"files" field missing/);
   });
 });

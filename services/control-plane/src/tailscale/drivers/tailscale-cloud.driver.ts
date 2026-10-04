@@ -76,7 +76,7 @@ export class TailscaleCloudDriver {
       return response;
     }
 
-    throw new Error(`Falha após ${retries} tentativas na API Cloud: ${endpoint}`);
+    throw new Error(`Failed after ${retries} attempts on the Cloud API: ${endpoint}`);
   }
 
   /**
@@ -85,7 +85,7 @@ export class TailscaleCloudDriver {
   public async getDevices(): Promise<TailscaleCloudDevice[]> {
     const resp = await this.requestWithRetry(`/api/v2/tailnet/${this.tailnet}/devices`);
     if (!resp.ok) {
-      throw new Error(`Erro ao listar dispositivos na Cloud API (${resp.status}): ${await resp.text()}`);
+      throw new Error(`Error listing devices on the Cloud API (${resp.status}): ${await resp.text()}`);
     }
     const data = (await resp.json()) as { devices?: TailscaleCloudDevice[] };
     return data.devices || [];
@@ -142,7 +142,7 @@ export class TailscaleCloudDriver {
     });
 
     if (!resp.ok) {
-      throw new Error(`Erro ao gerar AuthKey na Cloud API (${resp.status}): ${await resp.text()}`);
+      throw new Error(`Error generating AuthKey on the Cloud API (${resp.status}): ${await resp.text()}`);
     }
 
     const data = (await resp.json()) as { key: string; id: string; expires: string; capabilities: any };
@@ -172,7 +172,7 @@ export class TailscaleCloudDriver {
       headers: { Accept: 'application/json' },
     });
     if (!resp.ok) {
-      throw new Error(`Erro ao buscar ACL na Cloud API (${resp.status}): ${await resp.text()}`);
+      throw new Error(`Error fetching ACL on the Cloud API (${resp.status}): ${await resp.text()}`);
     }
     return await resp.json();
   }

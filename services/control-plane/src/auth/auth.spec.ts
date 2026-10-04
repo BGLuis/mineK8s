@@ -103,7 +103,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
         email: 'admin@minek8s.local',
       });
 
-      expect(result.message).toContain('sucesso');
+      expect(result.message).toContain('successfully');
       expect(result.user.minecraft_nick).toBe('SuperAdmin');
       expect(result.user.role).toBe('ADMIN');
       expect(result.access_token).toBeDefined();

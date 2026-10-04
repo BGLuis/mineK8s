@@ -1,0 +1,340 @@
+/*
+ * Design tokens for the mineK8s SPA (docs/design/UI-SPEC.md).
+ * This is the only file allowed to contain hex colors.
+ */
+
+@theme static {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-bg-canvas: #1e1e1e;
+  --color-bg-sunken: #141210;
+  --color-surface-default: #3e3937;
+  --color-surface-hover: #514d4b;
+  --color-surface-input: #282828;
+  --color-surface-overlay: #000000;
+  --color-border-strong: #141210;
+  --color-border-default: #66615f;
+  --color-border-focus: #f5cf5d;
+  --color-text-primary: #ffffff;
+  --color-text-muted: #b5b0ae;
+  --color-text-disabled: #8a8582;
+  --color-text-inverse: #000000;
+  --color-action-neutral: #3e3937;
+  --color-action-light: #cec1c1;
+  --color-action-primary: #477a4e;
+  --color-action-danger: #a63d2b;
+  --color-action-info: #4c6cc9;
+  --color-action-warning: #f5cf5d;
+  --color-action-accent: #a93aa6;
+  --color-status-success: #7cc383;
+  --color-status-warning: #f5cf5d;
+  --color-status-danger: #f59a8f;
+  --color-status-info: #8fa8f0;
+  --color-status-accent: #d98fd6;
+  --color-status-neutral: #b5b0ae;
+  --color-scene-sky: #5b7fd6;
+  --color-scene-sky-light: #8fb0ee;
+  --color-scene-grass: #558c47;
+  --color-scene-grass-dark: #3f6b35;
+  --color-scene-dirt: #9a6a43;
+  --color-scene-dirt-dark: #7a5236;
+  --color-scene-cloud: #ffffff;
+
+  --font-display: 'Tiny5', ui-monospace, monospace;
+  --font-body: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'VT323', ui-monospace, monospace;
+
+  --radius-*: initial;
+  --radius-none: 0;
+
+  --breakpoint-md: 768px;
+}
+
+:root {
+  color-scheme: dark;
+
+  --bevel-neutral-hi: #66615f;
+  --bevel-neutral-lo: #514d4b;
+  --bevel-neutral-drop: #252525;
+  --bevel-light-hi: #afa5a1;
+  --bevel-light-lo: #c0b2ac;
+  --bevel-light-drop: #6d6d6d;
+  --bevel-primary-hi: #68926e;
+  --bevel-primary-lo: #58865e;
+  --bevel-primary-drop: #27432b;
+  --bevel-danger-hi: #b66051;
+  --bevel-danger-lo: #ae4e3e;
+  --bevel-danger-drop: #5b2218;
+  --bevel-info-hi: #6c86d3;
+  --bevel-info-lo: #5c79ce;
+  --bevel-info-drop: #2a3b6f;
+  --bevel-warning-hi: #d4b760;
+  --bevel-warning-lo: #c5aa5a;
+  --bevel-warning-drop: #7a6a3e;
+  --bevel-accent-hi: #b85db6;
+  --bevel-accent-lo: #b14cae;
+  --bevel-accent-drop: #5d205b;
+  --bevel-panel-hi: #514d4b;
+  --bevel-panel-lo: #36322f;
+  --bevel-panel-drop: #141210;
+  --bevel-sunken-hi: #141210;
+  --bevel-sunken-lo: #3a3634;
+  --bevel-pressed: #1e1e1e;
+
+  --bevel-size: 4px;
+  --bevel-drop: 8px;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 24px;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--color-bg-canvas);
+  }
+
+  *,
+  *::before,
+  *::after {
+    border-radius: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-action-warning);
+    color: var(--color-text-inverse);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    font-weight: 400;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  .bevel-neutral,
+  .bevel-light,
+  .bevel-primary,
+  .bevel-danger,
+  .bevel-info,
+  .bevel-warning,
+  .bevel-accent,
+  .bevel-panel {
+    border: 2px solid var(--color-border-strong);
+  }
+
+  .bevel-neutral {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-neutral-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-neutral-lo),
+      0 var(--bevel-drop) 0 var(--bevel-neutral-drop);
+  }
+  .bevel-light {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-light-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-light-lo),
+      0 var(--bevel-drop) 0 var(--bevel-light-drop);
+  }
+  .bevel-primary {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-primary-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-primary-lo),
+      0 var(--bevel-drop) 0 var(--bevel-primary-drop);
+  }
+  .bevel-danger {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-danger-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-danger-lo),
+      0 var(--bevel-drop) 0 var(--bevel-danger-drop);
+  }
+  .bevel-info {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-info-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-info-lo),
+      0 var(--bevel-drop) 0 var(--bevel-info-drop);
+  }
+  .bevel-warning {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-warning-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-warning-lo),
+      0 var(--bevel-drop) 0 var(--bevel-warning-drop);
+  }
+  .bevel-accent {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-accent-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-accent-lo),
+      0 var(--bevel-drop) 0 var(--bevel-accent-drop);
+  }
+  .bevel-panel {
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-panel-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-panel-lo),
+      0 var(--bevel-drop) 0 var(--bevel-panel-drop);
+  }
+  .bevel-sunken {
+    border: 2px solid var(--color-border-strong);
+    box-shadow:
+      inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-sunken-hi),
+      inset calc(var(--bevel-size) * -1) calc(var(--bevel-size) * -1) 0 var(--bevel-sunken-lo);
+  }
+  .bevel-pressed {
+    border: 2px solid var(--color-border-strong);
+    box-shadow: inset var(--bevel-size) var(--bevel-size) 0 var(--bevel-pressed);
+  }
+
+  /* A highlighted border must not be combined with inset bevels: the inset would cover it. */
+  .border-selected {
+    border: 4px solid var(--color-border-focus);
+    box-shadow: 0 var(--bevel-drop) 0 var(--bevel-panel-drop);
+  }
+
+  .t-display-xl,
+  .t-display-lg,
+  .t-title-md,
+  .t-title-sm,
+  .t-button-md,
+  .t-button-sm,
+  .t-label-md {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-variant-ligatures: none;
+    -webkit-font-smoothing: none;
+  }
+  .t-display-xl {
+    font-size: 48px;
+    line-height: 56px;
+  }
+  .t-display-lg {
+    font-size: 32px;
+    line-height: 40px;
+  }
+  .t-title-md {
+    font-size: 24px;
+    line-height: 32px;
+  }
+  .t-title-sm {
+    font-size: 20px;
+    line-height: 28px;
+  }
+  .t-button-md {
+    font-size: 20px;
+    line-height: 24px;
+  }
+  .t-button-sm {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .t-label-md {
+    font-size: 16px;
+    line-height: 24px;
+  }
+
+  .t-body-lg {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .t-body-md {
+    font-family: var(--font-body);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .t-body-strong {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .t-caption {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.2px;
+  }
+
+  .t-mono-console,
+  .t-mono-sm {
+    font-family: var(--font-mono);
+    font-weight: 400;
+    font-variant-ligatures: none;
+    -webkit-font-smoothing: none;
+  }
+  .t-mono-console {
+    font-size: 20px;
+    line-height: 24px;
+  }
+  .t-mono-sm {
+    font-size: 18px;
+    line-height: 20px;
+  }
+
+  /* Reserves room for the hard drop shadow so neighbours do not overlap it. */
+  .has-drop {
+    padding-bottom: var(--bevel-drop);
+  }
+
+  .pixelated {
+    image-rendering: pixelated;
+    shape-rendering: crispEdges;
+  }
+}
+
+@keyframes mc-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes mc-toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

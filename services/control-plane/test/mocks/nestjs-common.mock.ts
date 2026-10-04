@@ -20,6 +20,7 @@ export const Req = () => (_target: any, _key: string, _idx: number) => {};
 export const Res = () => (_target: any, _key: string, _idx: number) => {};
 export const Headers = () => (_target: any, _key: string, _idx: number) => {};
 export const Header = (_name: string, _value: string) => (_target: any, _key?: string, desc?: any) => desc || _target;
+export const Catch = (..._types: any[]) => (target: any) => target;
 export const SetMetadata = (_key: any, _val: any) => (_target: any, _keyName?: string, desc?: any) => desc || _target;
 
 export class Logger {
@@ -36,6 +37,9 @@ export class HttpException extends Error {
   }
   getStatus() {
     return this.status;
+  }
+  getResponse() {
+    return this.response;
   }
 }
 
@@ -66,6 +70,18 @@ export class ConflictException extends HttpException {
 export class UnauthorizedException extends HttpException {
   constructor(message = 'Unauthorized') {
     super(message, 401);
+  }
+}
+
+export class BadGatewayException extends HttpException {
+  constructor(message = 'Bad Gateway') {
+    super(message, 502);
+  }
+}
+
+export class ServiceUnavailableException extends HttpException {
+  constructor(message = 'Service Unavailable') {
+    super(message, 503);
   }
 }
 

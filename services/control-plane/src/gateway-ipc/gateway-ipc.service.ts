@@ -11,6 +11,8 @@ import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
+import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
+import { PlayerSessionsService } from './player-sessions.service';
 import {
   Empty,
   ResolvePlayerRequest,
@@ -45,6 +47,8 @@ export class GatewayIpcService {
     private readonly identityProvider?: NetworkIdentityProvider,
     @Optional()
     private readonly k8sService?: KubernetesService,
+    @Optional()
+    private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
   /**
@@ -77,38 +81,54 @@ export class GatewayIpcService {
     const routes: RouteUpdateEvent[] = [];
 
     for (const server of servers) {
-      const serverGroups = await this.serverGroupRepository.find({
-        where: { server_id: server.id },
-      });
-      const userAccesses = await this.userServerAccessRepository.find({
-        where: { server_id: server.id },
-      });
-
-      const allowedGroupIds = serverGroups.map((sg) => sg.group_id);
-      const allowedUserIds = userAccesses.map((ua) => ua.user_id);
-
-      const targetPort = 25565;
-      const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
-
-      routes.push({
-        action: RouteAction.UPSERT,
-        server_id: server.id,
-        subdomain: server.subdomain,
-        target_ip_port: `${targetHost}:${targetPort}`,
-        status: String(server.state || 'STOPPED').toUpperCase(),
-        access_policy: server.access_policy || 'GROUP',
-        allowed_group_ids: allowedGroupIds,
-        allowed_user_ids: allowedUserIds,
-        proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
-        game_type: server.game_type || 'MINECRAFT',
-        routing_model: server.routing_model || 'VirtualHost',
-        listen_port: server.allocated_port || 25565,
-        auto_wake: server.auto_wake !== false,
-      });
+      routes.push(await this.buildUpsertEvent(server));
     }
 
     this.logger.log(`Snapshot inicial construído com sucesso: ${routes.length} rotas enviadas ao Gateway`);
     return { routes };
+  }
+
+  /**
+   * Reenvia ao Gateway a rota completa do servidor (política, grupos, usuários, auto-wake).
+   * STATUS_CHANGE só atualiza estado e destino, então mudanças de configuração precisam de UPSERT.
+   */
+  async publishRoute(serverId: string): Promise<void> {
+    const server = await this.serverRepository.findOne({
+      where: { id: serverId },
+      relations: ['minecraft_settings'],
+    });
+    if (!server) {
+      return;
+    }
+    this.broadcastRouteUpdate(await this.buildUpsertEvent(server));
+  }
+
+  private async buildUpsertEvent(server: Server): Promise<RouteUpdateEvent> {
+    const serverGroups = await this.serverGroupRepository.find({
+      where: { server_id: server.id },
+    });
+    const userAccesses = await this.userServerAccessRepository.find({
+      where: { server_id: server.id },
+    });
+
+    const targetPort = 25565;
+    const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
+
+    return {
+      action: RouteAction.UPSERT,
+      server_id: server.id,
+      subdomain: server.subdomain,
+      target_ip_port: `${targetHost}:${targetPort}`,
+      status: String(server.state || 'STOPPED').toUpperCase(),
+      access_policy: effectiveAccessPolicy(server),
+      allowed_group_ids: serverGroups.map((sg) => sg.group_id),
+      allowed_user_ids: userAccesses.map((ua) => ua.user_id),
+      proxy_protocol: Boolean((server.minecraft_settings as any)?.proxy_protocol),
+      game_type: server.game_type || 'MINECRAFT',
+      routing_model: server.routing_model || 'VirtualHost',
+      listen_port: server.allocated_port || 25565,
+      auto_wake: server.auto_wake !== false,
+    };
   }
 
   /**
@@ -192,9 +212,22 @@ export class GatewayIpcService {
       `Evento de sessão recebido do Gateway: [${event.event_type}] user=${event.minecraft_nick} server=${event.server_id} ip=${event.client_ip}`,
     );
 
-    if (event.event_type === SessionEventType.WAKE_REQUESTED) {
-      await this.handleWakeRequest(event.server_id);
+    switch (event.event_type) {
+      case SessionEventType.WAKE_REQUESTED:
+        await this.handleWakeRequest(event.server_id);
+        break;
+      case SessionEventType.CONNECTED:
+        this.playerSessions?.connected(event);
+        break;
+      case SessionEventType.DISCONNECTED:
+        this.playerSessions?.disconnected(event);
+        break;
     }
+  }
+
+  /** Com o stream fechado o Gateway não reporta mais nada; descarta o estado até ele reenviar as sessões abertas. */
+  handleSessionStreamClosed(): void {
+    this.playerSessions?.clearAll();
   }
 
   /**

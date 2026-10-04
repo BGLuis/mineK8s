@@ -2,6 +2,7 @@ import { firstValueFrom, take } from 'rxjs';
 
 import { RouteAction, RouteUpdateEvent, SessionEventType } from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
+import { PlayerSessionsService } from './player-sessions.service';
 
 describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let service: GatewayIpcService;
@@ -11,6 +12,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let mockUserServerAccessRepo: any;
   let mockUserGroupRepo: any;
   let mockK8sService: any;
+  let playerSessions: PlayerSessionsService;
 
   beforeEach(() => {
     mockServerRepo = {
@@ -89,6 +91,8 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       stopServer: jest.fn().mockResolvedValue(undefined),
     };
 
+    playerSessions = new PlayerSessionsService();
+
     service = new GatewayIpcService(
       mockServerRepo,
       mockUserRepo,
@@ -97,6 +101,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       mockUserGroupRepo,
       undefined,
       mockK8sService,
+      playerSessions,
     );
   });
 
@@ -124,6 +129,87 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       expect(r2.routing_model).toBe('DedicatedPort');
       expect(r2.listen_port).toBe(7777);
       expect(r2.status).toBe('STOPPED');
+    });
+  });
+
+  describe('publishRoute: mudanças de configuração chegam ao Gateway como UPSERT', () => {
+    const baseServer = {
+      id: 'server-uuid-1',
+      subdomain: 'survival',
+      state: 'READY',
+      access_policy: 'GROUP',
+      is_maintenance: false,
+      auto_wake: true,
+      game_type: 'MINECRAFT',
+      routing_model: 'VirtualHost',
+      allocated_port: 25565,
+      minecraft_settings: null,
+    };
+
+    it('envia a política configurada com os grupos e usuários permitidos', async () => {
+      mockServerRepo.findOne = jest.fn(async () => baseServer);
+      const emitted = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.publishRoute('server-uuid-1');
+
+      const event = await emitted;
+      expect(event.action).toBe(RouteAction.UPSERT);
+      expect(event.access_policy).toBe('GROUP');
+      expect(event.allowed_group_ids).toEqual(['group-vip']);
+    });
+
+    it('is_maintenance vira a política MAINTENANCE, que o Gateway já nega a não-admins', async () => {
+      mockServerRepo.findOne = jest.fn(async () => ({ ...baseServer, is_maintenance: true }));
+      const emitted = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.publishRoute('server-uuid-1');
+
+      expect((await emitted).access_policy).toBe('MAINTENANCE');
+    });
+
+    it('ignora servidor inexistente sem emitir evento', async () => {
+      mockServerRepo.findOne = jest.fn(async () => null);
+      const spy = jest.spyOn(service, 'broadcastRouteUpdate');
+
+      await service.publishRoute('nope');
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Sessões de jogadores a partir dos eventos do Gateway', () => {
+    const sessionEvent = (type: SessionEventType, sessionId: string, nick: string) => ({
+      event_type: type,
+      session_id: sessionId,
+      server_id: 'server-uuid-1',
+      client_ip: '100.64.0.2',
+      minecraft_nick: nick,
+      timestamp_epoch_ms: Date.now(),
+      reason: '',
+    });
+
+    it('CONNECTED aumenta a contagem e DISCONNECTED diminui', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's1', 'Steve'));
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's2', 'Alex'));
+      expect(playerSessions.count('server-uuid-1')).toBe(2);
+
+      await service.handleSessionEvent(sessionEvent(SessionEventType.DISCONNECTED, 's1', 'Steve'));
+
+      expect(playerSessions.count('server-uuid-1')).toBe(1);
+    });
+
+    it('ACCESS_DENIED não vira sessão ativa', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.ACCESS_DENIED, 's1', 'Intruso'));
+
+      expect(playerSessions.count('server-uuid-1')).toBe(0);
+    });
+
+    it('descarta as sessões quando o stream do Gateway fecha, para o Gateway reenviá-las ao reconectar', async () => {
+      await service.handleSessionEvent(sessionEvent(SessionEventType.CONNECTED, 's1', 'Steve'));
+
+      service.handleSessionStreamClosed();
+
+      expect(playerSessions.count('server-uuid-1')).toBe(0);
     });
   });
 

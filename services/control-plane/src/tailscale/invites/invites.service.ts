@@ -7,12 +7,13 @@ import {
   BadGatewayException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
 import { Invite } from '../../database/entities/invite.entity';
 import { InviteGroup } from '../../database/entities/invite-group.entity';
 import { InviteServer } from '../../database/entities/invite-server.entity';
+import { Server } from '../../database/entities/server.entity';
 import { User } from '../../database/entities/user.entity';
 import { UserGroup } from '../../database/entities/user-group.entity';
 import { UserServerAccess } from '../../database/entities/user-server-access.entity';
@@ -48,6 +49,8 @@ export class InvitesService {
     @InjectRepository(TailscaleDevice)
     private readonly deviceRepo: Repository<TailscaleDevice>,
     private readonly tailscaleCloudDriver: TailscaleCloudDriver,
+    @InjectRepository(Server)
+    private readonly serverRepo: Repository<Server>,
   ) {}
 
   public setBaseUrl(url: string): void {
@@ -57,7 +60,7 @@ export class InvitesService {
   /**
    * Emite um novo convite multi-uso com permissões pré-vinculadas (RF-TS-03, RF-TS-06).
    */
-  async createInvite(dto: CreateInviteDto): Promise<InviteSummaryDto> {
+  async createInvite(dto: CreateInviteDto, createdBy?: string): Promise<InviteSummaryDto> {
     const token = crypto.randomBytes(16).toString('hex');
     const maxUses = dto.maxUses ?? 1;
     const expiresInDays = dto.expiresInDays ?? 7;
@@ -70,6 +73,7 @@ export class InvitesService {
       used_count: 0,
       expires_at: expiresAt,
       is_active: true,
+      created_by: createdBy ?? null,
     });
 
     const savedInvite = await this.inviteRepo.save(invite);
@@ -127,7 +131,7 @@ export class InvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException(`Convite com ID ${id} não encontrado`);
+      throw new NotFoundException(`Invite with ID ${id} not found`);
     }
 
     return this.toSummaryDto(
@@ -147,7 +151,7 @@ export class InvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException(`Convite com ID ${id} não encontrado`);
+      throw new NotFoundException(`Invite with ID ${id} not found`);
     }
 
     invite.is_active = false;
@@ -170,25 +174,31 @@ export class InvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException('Convite não encontrado ou token inválido');
+      throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'Invite not found or invalid token' });
     }
 
     const status = computeInviteStatus(invite);
     if (status === 'Revoked') {
-      throw new BadRequestException('Este convite foi revogado pelo administrador');
+      throw new BadRequestException({ code: 'INVITE_REVOKED', message: 'This invite has been revoked by the administrator' });
     }
     if (status === 'Expired') {
-      throw new BadRequestException('Este convite expirou');
+      throw new BadRequestException({ code: 'INVITE_EXPIRED', message: 'This invite has expired' });
     }
     if (status === 'Depleted') {
-      throw new ConflictException('O limite de utilizações deste convite foi atingido');
+      throw new ConflictException({ code: 'INVITE_DEPLETED', message: 'The usage limit of this invite has been reached' });
     }
 
-    return this.toSummaryDto(
-      invite,
-      (invite.invite_groups || []).map((g) => g.group_id),
-      (invite.invite_servers || []).map((s) => s.server_id),
-    );
+    const serverIds = (invite.invite_servers || []).map((s) => s.server_id);
+    const servers = serverIds.length > 0 ? await this.serverRepo.find({ where: { id: In(serverIds) } }) : [];
+
+    return {
+      ...this.toSummaryDto(
+        invite,
+        (invite.invite_groups || []).map((g) => g.group_id),
+        serverIds,
+      ),
+      serverNames: servers.map((s) => s.name),
+    };
   }
 
   /**
@@ -201,7 +211,7 @@ export class InvitesService {
     const nickValidation = validateNicknameFormat(dto.minecraftNick);
     if (!nickValidation.valid) {
       throw new BadRequestException(
-        `Formato de nickname inválido: ${nickValidation.reason}`,
+        `Invalid nickname format: ${nickValidation.reason}`,
       );
     }
 
@@ -219,16 +229,16 @@ export class InvitesService {
     if (updateResult.affected === 0) {
       const invite = await this.inviteRepo.findOne({ where: { token: dto.token } });
       if (!invite) {
-        throw new NotFoundException('Convite não encontrado ou token inválido');
+        throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'Invite not found or invalid token' });
       }
       const status = computeInviteStatus(invite);
       if (status === 'Revoked') {
-        throw new BadRequestException('Este convite foi revogado pelo administrador');
+        throw new BadRequestException({ code: 'INVITE_REVOKED', message: 'This invite has been revoked by the administrator' });
       }
       if (status === 'Expired') {
-        throw new BadRequestException('Este convite expirou');
+        throw new BadRequestException({ code: 'INVITE_EXPIRED', message: 'This invite has expired' });
       }
-      throw new ConflictException('O limite de utilizações deste convite foi atingido');
+      throw new ConflictException({ code: 'INVITE_DEPLETED', message: 'The usage limit of this invite has been reached' });
     }
 
     // Carrega o convite completo e suas permissões pré-vinculadas
@@ -238,7 +248,7 @@ export class InvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException('Convite não encontrado');
+      throw new NotFoundException('Invite not found');
     }
 
     // 3. Validação de Unicidade e Anti-Impersonation de Nickname (RF-TS-08, TS:328-332)
@@ -255,7 +265,7 @@ export class InvitesService {
         .where('id = :id', { id: invite.id })
         .execute();
 
-      throw new ConflictException('Nickname já registrado por outro jogador');
+      throw new ConflictException('Nickname already registered by another player');
     }
 
     // 4. Criação do Usuário e Vínculos de Permissões Pré-Atribuídas (RF-TS-03)
@@ -316,7 +326,7 @@ export class InvitesService {
       await this.userRepo.delete({ id: user.id });
 
       throw new BadGatewayException(
-        'Falha ao provisionar credencial de rede na Tailscale Cloud. A cota do convite foi preservada.',
+        'Failed to provision a network credential on Tailscale Cloud. The invite quota was preserved.',
       );
     }
 
@@ -339,7 +349,7 @@ export class InvitesService {
       tailcatTunnel: {
         serverAddress: 'survival.mine.lan:25565',
         instructions:
-          'Para usuários sem privilégios de Administrador, execute o executável tailcat para conectar via 127.0.0.1:25565.',
+          'Users without Administrator privileges must run the tailcat executable to connect via 127.0.0.1:25565.',
       },
       expiresAt: authKeyResult.expires
         ? authKeyResult.expires.toISOString()
@@ -364,6 +374,7 @@ export class InvitesService {
       joinUrl: `${this.baseUrl}/join?token=${invite.token}`,
       groupIds,
       serverIds,
+      createdBy: invite.created_by,
       createdAt: invite.created_at,
     };
   }

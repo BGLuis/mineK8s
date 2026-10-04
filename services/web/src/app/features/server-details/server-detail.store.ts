@@ -1,0 +1,122 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { EMPTY, Subject, catchError, exhaustMap, filter, merge, switchMap, tap } from 'rxjs';
+
+import { MockApi } from '../../core/api/mock-api';
+import { ServerAccessPolicy, ServerDetail, ServerRuntimeStats } from '../../core/api/models';
+import { ServersApi } from '../../core/api/servers.api';
+import { ServersSocket } from '../../core/realtime/servers-socket';
+import { LifecycleAction, ServerLifecycle } from '../dashboard/server-lifecycle';
+import { liveRefresh } from '../dashboard/live-refresh';
+
+const POLL_MS = 5_000;
+
+export type DetailLoadState = 'loading' | 'ready' | 'error' | 'not-found';
+
+/**
+ * State of the open server, shared by the header and the Visão geral / Console tabs.
+ * Provided by ServerDetailsPage, so it lives and dies with the route.
+ */
+@Injectable()
+export class ServerDetailStore {
+  private readonly api = inject(ServersApi);
+  private readonly mock = inject(MockApi);
+  private readonly lifecycle = inject(ServerLifecycle);
+  private readonly socket = inject(ServersSocket);
+
+  private readonly id = signal<string | null>(null);
+  private readonly refresh$ = new Subject<void>();
+
+  readonly serverId = this.id.asReadonly();
+  readonly server = signal<ServerDetail | null>(null);
+  readonly loadState = signal<DetailLoadState>('loading');
+  /** True when the last poll failed but an older copy of the server is still on screen. */
+  readonly stale = signal(false);
+  readonly stats = signal<ServerRuntimeStats | null>(null);
+  /**
+   * GET /api/servers/:id does not return access_policy yet, so this is only known after a
+   * publish/unpublish in this session (or once the API starts sending it).
+   */
+  readonly accessPolicy = signal<ServerAccessPolicy | null>(null);
+  readonly busy = computed(() => {
+    const id = this.id();
+    return id !== null && this.lifecycle.busy().has(id);
+  });
+
+  constructor() {
+    toObservable(this.id)
+      .pipe(
+        filter((id): id is string => id !== null),
+        switchMap((id) =>
+          merge(
+            liveRefresh(this.socket.signals(), POLL_MS, (event) => event.id === id),
+            this.refresh$,
+          ).pipe(exhaustMap(() => this.fetch(id))),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe();
+  }
+
+  watch(id: string): void {
+    if (this.id() === id) {
+      return;
+    }
+    this.server.set(null);
+    this.stats.set(null);
+    this.accessPolicy.set(null);
+    this.stale.set(false);
+    this.loadState.set('loading');
+    this.id.set(id);
+  }
+
+  refresh(): void {
+    this.refresh$.next();
+  }
+
+  async run(action: LifecycleAction): Promise<void> {
+    const server = this.server();
+    if (server && (await this.lifecycle.run(action, server))) {
+      this.refresh();
+    }
+  }
+
+  private fetch(id: string) {
+    return this.api.get(id).pipe(
+      tap((server) => {
+        this.server.set(server);
+        this.stale.set(false);
+        this.loadState.set('ready');
+        const policy = (server as { access_policy?: ServerAccessPolicy }).access_policy;
+        if (policy) {
+          this.accessPolicy.set(policy);
+        }
+        this.syncStats(id, server);
+      }),
+      catchError((error: unknown) => {
+        if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.server.set(null);
+          this.loadState.set('not-found');
+        } else if (this.server()) {
+          this.stale.set(true);
+        } else {
+          this.loadState.set('error');
+        }
+        return EMPTY;
+      }),
+    );
+  }
+
+  /** Runtime stats are mocked and only meaningful while the server is running. */
+  private syncStats(id: string, server: ServerDetail): void {
+    if (server.state !== 'READY') {
+      this.stats.set(null);
+    } else if (this.stats() === null) {
+      this.mock.serverRuntimeStats(id).subscribe({
+        next: (stats) => this.id() === id && this.stats.set(stats),
+        error: () => undefined,
+      });
+    }
+  }
+}

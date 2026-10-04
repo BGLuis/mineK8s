@@ -17,6 +17,7 @@ describe('InvitesService', () => {
   let mockUserServerAccessRepo: any;
   let mockDeviceRepo: any;
   let mockTailscaleCloudDriver: any;
+  let mockServerRepo: any;
 
   beforeEach(() => {
     mockInviteRepo = {
@@ -68,6 +69,8 @@ describe('InvitesService', () => {
       })),
     };
 
+    mockServerRepo = { find: jest.fn(async () => []) };
+
     service = new InvitesService(
       mockInviteRepo,
       mockInviteGroupRepo,
@@ -77,6 +80,7 @@ describe('InvitesService', () => {
       mockUserServerAccessRepo,
       mockDeviceRepo,
       mockTailscaleCloudDriver,
+      mockServerRepo,
     );
     service.setBaseUrl('https://mine.example.ts.net:3001');
   });
@@ -142,6 +146,62 @@ describe('InvitesService', () => {
       expect(result.joinUrl).toContain(`/join?token=${result.token}`);
       expect(mockInviteGroupRepo.save).toHaveBeenCalledTimes(1);
       expect(mockInviteServerRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('deve registrar o nickname do administrador que emitiu o convite', async () => {
+      const result = await service.createInvite({ name: 'Turma do Discord' }, 'AdminSteve');
+
+      expect(mockInviteRepo.create).toHaveBeenCalledWith(expect.objectContaining({ created_by: 'AdminSteve' }));
+      expect(result.createdBy).toBe('AdminSteve');
+    });
+  });
+
+  describe('validateToken: dados para a tela /join', () => {
+    it('deve devolver os nomes dos servidores e quem convidou, sem expor dados além do resumo', async () => {
+      mockInviteRepo.findOne.mockResolvedValueOnce({
+        id: 'inv-1',
+        token: 'tok',
+        name: 'Turma',
+        max_uses: 5,
+        used_count: 0,
+        expires_at: new Date(Date.now() + 100000),
+        is_active: true,
+        created_by: 'AdminSteve',
+        created_at: new Date(),
+        invite_groups: [],
+        invite_servers: [{ server_id: 'srv-1' }, { server_id: 'srv-2' }],
+      });
+      mockServerRepo.find.mockResolvedValueOnce([
+        { id: 'srv-1', name: 'Survival', rcon_password: 'segredo' },
+        { id: 'srv-2', name: 'Creative' },
+      ]);
+
+      const result = await service.validateToken('tok');
+
+      expect(result.serverNames).toEqual(['Survival', 'Creative']);
+      expect(result.createdBy).toBe('AdminSteve');
+      expect(JSON.stringify(result)).not.toContain('segredo');
+    });
+
+    it('não consulta servidores quando o convite não tem nenhum vinculado', async () => {
+      mockInviteRepo.findOne.mockResolvedValueOnce({
+        id: 'inv-1',
+        token: 'tok',
+        name: 'Turma',
+        max_uses: 5,
+        used_count: 0,
+        expires_at: new Date(Date.now() + 100000),
+        is_active: true,
+        created_by: null,
+        created_at: new Date(),
+        invite_groups: [],
+        invite_servers: [],
+      });
+
+      const result = await service.validateToken('tok');
+
+      expect(result.serverNames).toEqual([]);
+      expect(mockServerRepo.find).not.toHaveBeenCalled();
     });
   });
 

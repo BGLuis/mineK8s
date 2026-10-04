@@ -6,7 +6,7 @@ export class UpdateDomainDto {
   @MinLength(2)
   @MaxLength(63)
   @Matches(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/, {
-    message: 'domain must be a valid RFC 1123 label (lowercase alphanumeric and hyphens, no adjacent hyphens)',
+    message: 'Domain must contain only lowercase letters, numbers and hyphens, without a leading or trailing hyphen',
   })
   domain: string;
 }

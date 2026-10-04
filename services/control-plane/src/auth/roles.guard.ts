@@ -28,7 +28,7 @@ export class RolesGuard implements CanActivate {
 
     if (!user || !requiredRoles.includes(user.role)) {
       throw new ForbiddenException(
-        `Permissão insuficiente: Esta operação exige uma das seguintes funções: [${requiredRoles.join(', ')}]`,
+        `Insufficient permission: this operation requires one of the following roles: [${requiredRoles.join(', ')}]`,
       );
     }
 

@@ -9,6 +9,7 @@ import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
+import { GATEWAY_GRPC_LOADER_OPTIONS } from './gateway-ipc/grpc-loader-options';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -75,6 +76,7 @@ async function bootstrap() {
     options: {
       package: 'minekubernetes.gateway.v1',
       protoPath,
+      loader: GATEWAY_GRPC_LOADER_OPTIONS,
       url: `${configService.grpc.host}:${configService.grpc.port}`,
     },
   });

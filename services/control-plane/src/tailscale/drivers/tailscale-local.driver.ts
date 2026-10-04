@@ -78,7 +78,7 @@ export class TailscaleLocalDriver {
               resolve(identity);
             } catch (err: any) {
               reject(
-                new Error(`Falha ao decodificar JSON do WhoIs: ${err.message}`),
+                new Error(`Failed to decode WhoIs JSON: ${err.message}`),
               );
             }
           });
@@ -98,7 +98,7 @@ export class TailscaleLocalDriver {
         ) {
           return reject(
             new LocalSocketUnavailableException(
-              `Socket local Tailscale não disponível em ${this.socketPath} (${err.code}): ${err.message}`,
+              `Local Tailscale socket not available at ${this.socketPath} (${err.code}): ${err.message}`,
               err.code,
             ),
           );

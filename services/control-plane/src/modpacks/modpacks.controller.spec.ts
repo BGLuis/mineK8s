@@ -1,36 +1,79 @@
+import { BadRequestException } from '@nestjs/common';
 import { ModpacksController } from './modpacks.controller';
 import { ModpackInstallerService } from './modpack-installer.service';
+import { ModpackCatalogService } from './modpack-catalog.service';
 
 describe('ModpacksController (RF-ARQ-18)', () => {
   let controller: ModpacksController;
   let mockInstallerService: any;
+  let mockCatalogService: any;
 
   beforeEach(() => {
     mockInstallerService = {
       installModpack: jest.fn().mockResolvedValue({
         taskId: 'task-modpack-123',
         status: 'QUEUED',
-        message: 'Instalação de modpack iniciada em segundo plano',
+        message: 'Modpack installation started in the background',
       }),
     };
+    mockCatalogService = {
+      search: jest.fn().mockResolvedValue({ total: 0, offset: 0, limit: 20, results: [] }),
+      getVersions: jest.fn().mockResolvedValue([]),
+    };
 
-    controller = new ModpacksController(mockInstallerService as ModpackInstallerService);
+    controller = new ModpacksController(
+      mockInstallerService as ModpackInstallerService,
+      mockCatalogService as ModpackCatalogService,
+    );
   });
 
-  it('GET /api/modpacks/search deve filtrar catálogo por texto e plataforma (RF-ARQ-18)', async () => {
-    const res = await controller.searchModpacks('precision', 10, 'modrinth');
+  it('GET /api/modpacks/search delega ao catálogo real com paginação e fonte normalizada', async () => {
+    await controller.searchModpacks('all the mods', 10, 'MODRINTH', 20);
 
-    expect(res.total).toBe(1);
-    expect(res.results[0].id).toBe('fabric-precision-pack');
-    expect(res.results[0].source).toBe('MODRINTH');
+    expect(mockCatalogService.search).toHaveBeenCalledWith({
+      query: 'all the mods',
+      limit: 10,
+      offset: 20,
+      source: 'modrinth',
+    });
   });
 
-  it('GET /api/modpacks/:id/versions deve retornar lista de versões disponíveis (RF-ARQ-18)', async () => {
-    const versions = await controller.getVersions('fabric-precision-pack');
+  it('GET /api/modpacks/search rejeita fonte desconhecida em vez de ignorá-la', async () => {
+    await expect(controller.searchModpacks('x', 10, 'ftb')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(mockCatalogService.search).not.toHaveBeenCalled();
+  });
 
-    expect(versions.length).toBeGreaterThan(0);
-    expect(versions[0].gameVersion).toBe('1.20.1');
-    expect(versions[0].loader).toBe('fabric');
+  it('GET /api/modpacks/search repassa ordenação e filtros normalizados', async () => {
+    await controller.searchModpacks(undefined, undefined, undefined, undefined, 'Downloads', '1.20.1', 'Fabric', 'Adventure');
+
+    expect(mockCatalogService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sort: 'downloads',
+        gameVersion: '1.20.1',
+        loader: 'fabric',
+        category: 'adventure',
+      }),
+    );
+  });
+
+  it.each([
+    ['sort', [undefined, undefined, undefined, undefined, 'newest']],
+    ['loader', [undefined, undefined, undefined, undefined, undefined, undefined, 'liteloader']],
+    ['gameVersion', [undefined, undefined, undefined, undefined, undefined, '1.20"],["x']],
+    ['category', [undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'a b']],
+  ])('GET /api/modpacks/search rejeita %s inválido em vez de ignorá-lo', async (_name, args) => {
+    await expect((controller.searchModpacks as any)(...args)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(mockCatalogService.search).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/modpacks/:id/versions delega ao catálogo com a fonte informada pela SPA', async () => {
+    await controller.getVersions('AANobbMI', 'modrinth');
+
+    expect(mockCatalogService.getVersions).toHaveBeenCalledWith('AANobbMI', 'modrinth');
   });
 
   it('POST /api/servers/:id/modpack/install deve delegar para o instalador e retornar 202 Accepted', async () => {

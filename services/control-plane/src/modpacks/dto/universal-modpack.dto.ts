@@ -21,6 +21,29 @@ export class UniversalModpackDto {
 
   @ApiProperty({ description: 'Total de downloads acumulados' })
   downloads: number;
+
+  @ApiPropertyOptional({ description: 'Versão do Minecraft mais recente suportada' })
+  gameVersion?: string;
+
+  @ApiPropertyOptional({ description: 'Loader do modpack (fabric, forge, neoforge, quilt)' })
+  loader?: string;
+
+  @ApiPropertyOptional({ description: 'Data da última atualização do modpack' })
+  dateModified?: Date;
+}
+
+export class ModpackSearchResponseDto {
+  @ApiProperty({ description: 'Total de resultados nas fontes consultadas, ignorando a paginação' })
+  total: number;
+
+  @ApiProperty({ description: 'Deslocamento aplicado à busca' })
+  offset: number;
+
+  @ApiProperty({ description: 'Tamanho máximo da página' })
+  limit: number;
+
+  @ApiProperty({ type: [UniversalModpackDto] })
+  results: UniversalModpackDto[];
 }
 
 export class ModpackVersionDto {

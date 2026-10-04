@@ -11,6 +11,7 @@ import { KubernetesModule } from '@k8s/k8s.module';
 
 import { GatewayIpcController } from './gateway-ipc.controller';
 import { GatewayIpcService } from './gateway-ipc.service';
+import { PlayerSessionsService } from './player-sessions.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { GatewayIpcService } from './gateway-ipc.service';
     KubernetesModule,
   ],
   controllers: [GatewayIpcController],
-  providers: [GatewayIpcService],
-  exports: [GatewayIpcService],
+  providers: [GatewayIpcService, PlayerSessionsService],
+  exports: [GatewayIpcService, PlayerSessionsService],
 })
 export class GatewayIpcModule {}

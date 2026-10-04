@@ -11,7 +11,7 @@ export class ClaimInviteDto {
     example: 'd9b73f8a0e2c418fb263914a87e50c4f',
   })
   @IsString()
-  @MinLength(16, { message: 'Token de convite inválido ou muito curto' })
+  @MinLength(16, { message: 'Invalid or too short invite token' })
   token: string;
 
   @ApiProperty({
@@ -21,17 +21,17 @@ export class ClaimInviteDto {
     example: 'Lucas Henrique',
   })
   @IsString()
-  @Length(2, 100, { message: 'O nome real deve conter entre 2 e 100 caracteres' })
+  @Length(2, 100, { message: 'Real name must be between 2 and 100 characters' })
   realName: string;
 
   @ApiProperty({
-    description: 'Nickname Vanilla do Minecraft (RF-ARQ-21, 2-16 alfanuméricos ou underline)',
-    pattern: '^[a-zA-Z0-9_]{2,16}$',
+    description: 'Nickname Vanilla do Minecraft (RF-ARQ-21, C-06: 3-16 alfanuméricos ou underline)',
+    pattern: '^[a-zA-Z0-9_]{3,16}$',
     example: 'LucasCraft',
   })
   @IsString()
-  @Matches(/^[a-zA-Z0-9_]{2,16}$/, {
-    message: 'O nickname deve conter de 2 a 16 caracteres alfanuméricos ou sublinhado',
+  @Matches(/^[a-zA-Z0-9_]{3,16}$/, {
+    message: 'Nickname must contain 3 to 16 alphanumeric characters or underscores',
   })
   minecraftNick: string;
 }

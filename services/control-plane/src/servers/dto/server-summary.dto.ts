@@ -18,4 +18,5 @@ export class ServerSummaryDto {
   updated_at: Date;
   replicas?: number;
   ready_replicas?: number;
+  players_online: number;
 }

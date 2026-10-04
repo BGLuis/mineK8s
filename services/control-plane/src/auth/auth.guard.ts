@@ -57,6 +57,6 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    throw new UnauthorizedException('Acesso negado: Credencial ausente ou inválida');
+    throw new UnauthorizedException('Access denied: missing or invalid credential');
   }
 }

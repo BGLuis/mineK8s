@@ -50,7 +50,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() dto: SubscribeToTaskDto,
   ) {
     if (!dto?.taskId) {
-      return { status: 'error', message: 'taskId obrigatório' };
+      return { status: 'error', message: 'taskId is required' };
     }
 
     const room = `task:${dto.taskId}`;
