@@ -15,7 +15,7 @@ pub use connection::{ClientConnection, HandshakeResult};
 pub use error::{GatewayError, Result};
 pub use identity::{
     is_tailscale_ip, is_valid_minecraft_nickname, validate_minecraft_nickname, AccessDecision, AccessDecisionEngine,
-    NicknameDecision, TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity,
+    IdentityLookup, IdentityResolver, NicknameDecision, PlayerIdentity, TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity,
 };
 pub use ipc::{GatewayIpcClient, RouteAction, RouteUpdateEvent};
 pub use limiter::ConnectionRateLimiter;

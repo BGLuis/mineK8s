@@ -57,7 +57,8 @@ server.addService(gatewayService, {
   },
   ResolvePlayerIdentity: (call, callback) => {
     const req = call.request;
-    if (req.tailscale_user_id === 'user-e2e-123') {
+    // O WhoIs real devolve o ID do usuário Tailscale como número: 1001 e 2002 são os ids dos casos de login.
+    if (req.tailscale_user_id === 'user-e2e-123' || req.tailscale_user_id === '1001') {
       callback(null, {
         found: true,
         user_id: 'usr-e2e-real',
@@ -66,6 +67,27 @@ server.addService(gatewayService, {
         group_ids: ['grp-e2e'],
         is_active: true,
         is_mojang_verified: true,
+      });
+    } else if (req.tailscale_user_id === '2002') {
+      callback(null, {
+        found: true,
+        user_id: 'usr-player-1',
+        minecraft_nick: 'PlayerOne',
+        role: 'PLAYER',
+        group_ids: ['grp-e2e'],
+        is_active: true,
+        is_mojang_verified: false,
+      });
+    } else if (!req.tailscale_user_id && !req.node_id && req.client_ip === '127.0.0.1') {
+      // Fallback do Gateway quando o tailscaled local não responde: só chega o IP de origem.
+      callback(null, {
+        found: true,
+        user_id: 'usr-ip-only',
+        minecraft_nick: 'IpOnly',
+        role: 'PLAYER',
+        group_ids: [],
+        is_active: true,
+        is_mojang_verified: false,
       });
     } else {
       callback(null, { found: false });

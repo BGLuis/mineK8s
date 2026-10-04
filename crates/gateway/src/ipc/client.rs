@@ -134,6 +134,23 @@ impl GatewayIpcClient {
         })
     }
 
+    /// Cria o cliente sem conectar: o canal conecta na primeira chamada e reconecta sozinho.
+    /// Serve a quem precisa de um cliente antes de o Control Plane estar no ar.
+    pub fn connect_lazy(endpoint: impl Into<String>) -> Result<Self, tonic::transport::Error> {
+        let endpoint_str = endpoint.into();
+        let channel = Endpoint::from_shared(endpoint_str.clone())?
+            .connect_timeout(Duration::from_secs(5))
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
+            .keep_alive_while_idle(true)
+            .connect_lazy();
+
+        Ok(Self {
+            endpoint: endpoint_str,
+            client: GatewayControlServiceClient::new(channel),
+        })
+    }
+
     /// Retorna o endpoint configurado para conexão gRPC.
     pub fn endpoint(&self) -> &str {
         &self.endpoint

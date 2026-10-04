@@ -10,8 +10,9 @@ use crate::connection::{ClientConnection, HandshakeResult};
 use crate::error::{GatewayError, Result};
 use crate::identity::{
     is_tailscale_ip, validate_minecraft_nickname, AccessDecision, AccessDecisionEngine,
-    NicknameDecision, TailscaleLocalWhoIs,
+    IdentityLookup, IdentityResolver, NicknameDecision, TailscaleLocalWhoIs,
 };
+use crate::ipc::GatewayIpcClient;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use minecraft_protocol::error::ProtocolError;
@@ -29,7 +30,7 @@ pub struct GatewayServer {
     status_cache: StatusCache,
     session_manager: SessionManager,
     metrics: Arc<GatewayMetrics>,
-    whois: Option<TailscaleLocalWhoIs>,
+    identity: IdentityResolver,
     wake_sender: Option<mpsc::UnboundedSender<String>>,
 }
 
@@ -45,13 +46,19 @@ impl GatewayServer {
             status_cache: StatusCache::default(),
             session_manager: SessionManager::default(),
             metrics: Arc::new(GatewayMetrics::new()),
-            whois: None,
+            identity: IdentityResolver::new(),
             wake_sender: None,
         }
     }
 
     pub fn with_whois(mut self, whois: TailscaleLocalWhoIs) -> Self {
-        self.whois = Some(whois);
+        self.identity = self.identity.with_whois(whois);
+        self
+    }
+
+    /// Fonte autoritativa de role, grupos e nickname (ResolvePlayerIdentity, RF-TS-14).
+    pub fn with_identity_control_plane(mut self, client: GatewayIpcClient) -> Self {
+        self.identity = self.identity.with_control_plane(client);
         self
     }
 
@@ -186,7 +193,7 @@ impl GatewayServer {
         let status_cache = self.status_cache.clone();
         let session_manager = self.session_manager.clone();
         let metrics = Arc::clone(&self.metrics);
-        let whois = self.whois.clone();
+        let identity = self.identity.clone();
         let wake_sender = self.wake_sender.clone();
 
         tokio::spawn(async move {
@@ -200,7 +207,7 @@ impl GatewayServer {
                 status_cache,
                 session_manager,
                 metrics,
-                whois,
+                identity,
                 wake_sender,
             )
             .await
@@ -220,7 +227,7 @@ impl GatewayServer {
         status_cache: StatusCache,
         session_manager: SessionManager,
         metrics: Arc<GatewayMetrics>,
-        whois: Option<TailscaleLocalWhoIs>,
+        identity: IdentityResolver,
         wake_sender: Option<mpsc::UnboundedSender<String>>,
     ) -> Result<()> {
         let start_time = Instant::now();
@@ -381,18 +388,16 @@ impl GatewayServer {
                     return Self::send_login_disconnect(conn, "§cEste servidor não aceita conexões públicas.").await;
                 }
 
-                // 3. Validação de WhoIs, Anti-Impersonation e Avaliação de Acesso Zero-Trust (apenas no listener privado)
+                // 3. Identidade, Anti-Impersonation e política de acesso Zero-Trust (apenas no listener privado).
+                // Fail-closed: sem identidade resolvida só passam rotas PUBLIC/INTERNET, que não dependem de
+                // identidade tailnet. Qualquer outra política exige saber quem é o jogador.
                 if !is_public {
-                    if let Some(whois_driver) = &whois {
-                        if let Ok(Some(whois_id)) = whois_driver.query_whois(&client_ip.to_string()).await {
-                            let registered_nick = if !whois_id.display_name.is_empty() {
-                                &whois_id.display_name
-                            } else {
-                                &whois_id.login_name
-                            };
-
+                    let identity_required =
+                        !matches!(route.access_policy, AccessPolicy::Public | AccessPolicy::Internet);
+                    match identity.resolve(client_ip).await {
+                        IdentityLookup::Resolved(player) => {
                             // Validação de Anti-Impersonation (< 50ms)
-                            match AccessDecisionEngine::evaluate_nickname(&login_start.username, registered_nick) {
+                            match AccessDecisionEngine::evaluate_nickname(&login_start.username, &player.registered_nick) {
                                 NicknameDecision::Impersonation { registered_nick } => {
                                     warn!(
                                         declared = %login_start.username,
@@ -412,13 +417,11 @@ impl GatewayServer {
                             }
 
                             // Avaliação de Política de Acesso (PUBLIC, GROUP, INDIVIDUAL, MAINTENANCE, ADMIN bypass)
-                            let is_admin = whois_id.tags.iter().any(|t| t == "tag:mc-gateway" || t == "autogroup:admin");
-                            let user_role = if is_admin { "ADMIN" } else { "PLAYER" };
                             let decision = AccessDecisionEngine::evaluate_access(
-                                &whois_id.user_id,
-                                user_role,
-                                &whois_id.tags,
-                                true,
+                                &player.user_id,
+                                &player.role,
+                                &player.group_ids,
+                                player.is_active,
                                 &route,
                             );
 
@@ -432,6 +435,28 @@ impl GatewayServer {
                                 return Self::send_login_disconnect(conn, reason).await;
                             }
                         }
+                        IdentityLookup::Unregistered if identity_required => {
+                            warn!(
+                                user = %login_start.username,
+                                server = %route.name,
+                                client_ip = %client_ip,
+                                "Login rejeitado: dispositivo não registrado no Control Plane"
+                            );
+                            return Self::send_login_disconnect(conn, "§cSeu dispositivo não está registrado nesta rede.").await;
+                        }
+                        IdentityLookup::Unavailable if identity_required => {
+                            warn!(
+                                user = %login_start.username,
+                                server = %route.name,
+                                client_ip = %client_ip,
+                                "Login rejeitado: identidade não resolvida (WhoIs local e Control Plane indisponíveis)"
+                            );
+                            return Self::send_login_disconnect(
+                                conn,
+                                "§cNão foi possível verificar sua identidade. Tente novamente em instantes.",
+                            ).await;
+                        }
+                        IdentityLookup::Unregistered | IdentityLookup::Unavailable => {}
                     }
                 }
 
