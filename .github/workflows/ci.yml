@@ -47,6 +47,8 @@ jobs:
               - 'proto/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
+              # test_ipc_grpc_live_e2e starts a Node mock gRPC server using these dependencies.
+              - 'services/control-plane/package-lock.json'
               - '.github/workflows/ci.yml'
             workflows:
               - '.github/**'
@@ -118,12 +120,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # test_ipc_grpc_live_e2e spawns tests/fixtures/mock_grpc_server.js with
+      # NODE_PATH=services/control-plane/node_modules, so the gateway tests need those dependencies.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/control-plane/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: services/control-plane
       # rustup, cargo, clippy and rustfmt are preinstalled on the runner image.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Advisory until the existing findings are fixed (154 rustfmt diffs, 2 clippy errors in
-      # gateway). Drop continue-on-error once `cargo fmt --check` and clippy are clean.
+      # Advisory until the existing findings are fixed (rustfmt diffs and clippy errors in gateway;
+      # the clippy count grows with the runner's newer toolchain). Drop continue-on-error once clean.
       - run: cargo fmt --all --check
         continue-on-error: true
       - run: cargo clippy --locked --all-targets -- -D warnings
@@ -134,7 +145,8 @@ jobs:
     name: workflows
     needs: changes
     if: contains(fromJSON(needs.changes.outputs.packages), 'workflows')
-    runs-on: ubuntu-slim
+    # zizmor-action runs zizmor from a Docker image, which ubuntu-slim has no daemon for.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read # checkout
