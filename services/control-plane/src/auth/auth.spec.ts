@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { AppConfigService } from '@config/app-config.service';
@@ -8,6 +13,7 @@ import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { JwtService } from './jwt.service';
 import { RolesGuard } from './roles.guard';
+import { TrustedProxyService } from './trusted-proxy.service';
 
 describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
   let jwtService: JwtService;
@@ -15,6 +21,8 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
   let authGuard: AuthGuard;
   let rolesGuard: RolesGuard;
   let reflector: Reflector;
+  let trustedProxies: TrustedProxyService;
+  let tailscaleDriver: { queryWhoIs: jest.Mock };
 
   const mockUsers: User[] = [];
   const mockUserRepository = {
@@ -57,8 +65,17 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
     mockUsers.length = 0;
     reflector = new Reflector();
     jwtService = new JwtService(mockConfigService);
-    authService = new AuthService(mockUserRepository, jwtService, mockConfigService);
-    authGuard = new AuthGuard(reflector, jwtService, authService);
+    tailscaleDriver = { queryWhoIs: jest.fn(async () => null) };
+    authService = new AuthService(
+      mockUserRepository,
+      jwtService,
+      mockConfigService,
+      tailscaleDriver as any,
+    );
+    trustedProxies = new TrustedProxyService({
+      authTrustedProxyIps: ['10.0.0.5'],
+    } as AppConfigService);
+    authGuard = new AuthGuard(reflector, jwtService, authService, trustedProxies);
     rolesGuard = new RolesGuard(reflector);
   });
 
@@ -144,22 +161,79 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('should generate JWT on valid login', async () => {
-      mockUsers.push({
-        id: 'u-1',
-        minecraft_nick: 'Alex',
-        role: 'PLAYER',
-      } as User);
+    it('should link the first admin to the Tailscale account it is bootstrapped from', async () => {
+      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '4242' });
+      authService.setBootstrapTokenForTesting('token-1');
 
-      const res = await authService.login({ minecraft_nick: 'Alex' });
-      expect(res.access_token).toBeDefined();
-      expect(res.user.minecraft_nick).toBe('Alex');
+      const result = await authService.bootstrapAdmin(
+        { bootstrap_token: 'token-1', minecraft_nick: 'SuperAdmin' },
+        '100.101.102.103',
+      );
+
+      expect(tailscaleDriver.queryWhoIs).toHaveBeenCalledWith('100.101.102.103');
+      expect(result.user.tailscale_user_id).toBe('4242');
     });
 
-    it('should throw on login with unknown user', async () => {
-      await expect(
-        authService.login({ minecraft_nick: 'UnknownPlayer' }),
-      ).rejects.toThrow(UnauthorizedException);
+    it('should still bootstrap the admin, unlinked, when WhoIs is unavailable', async () => {
+      tailscaleDriver.queryWhoIs.mockRejectedValue(new Error('socket missing'));
+      authService.setBootstrapTokenForTesting('token-1');
+
+      const result = await authService.bootstrapAdmin(
+        { bootstrap_token: 'token-1', minecraft_nick: 'SuperAdmin' },
+        '100.101.102.103',
+      );
+
+      expect(result.user.tailscale_user_id).toBeNull();
+    });
+  });
+
+  describe('AuthService.createSession (#91: identity from WhoIs, never from the request)', () => {
+    const admin = { id: 'u-admin', minecraft_nick: 'Boss', role: 'ADMIN', tailscale_user_id: '4242' } as User;
+
+    beforeEach(() => mockUsers.push(admin));
+
+    it('issues a JWT for the account linked to the Tailscale user that owns the IP', async () => {
+      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '4242' });
+
+      const session = await authService.createSession('100.101.102.103');
+
+      expect(tailscaleDriver.queryWhoIs).toHaveBeenCalledWith('100.101.102.103');
+      expect(session.user).toBe(admin);
+      expect(jwtService.verify(session.access_token)).toMatchObject({ sub: 'u-admin', role: 'ADMIN' });
+    });
+
+    it('refuses an address that is not on the tailnet', async () => {
+      tailscaleDriver.queryWhoIs.mockResolvedValue(null);
+
+      await expect(authService.createSession('203.0.113.9')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('refuses a Tailscale user with no linked account', async () => {
+      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '9999' });
+
+      await expect(authService.createSession('100.101.102.103')).rejects.toThrow(
+        /No account is linked/,
+      );
+    });
+
+    it('refuses an identity without a user id instead of matching unlinked accounts', async () => {
+      mockUsers.push({ id: 'u-unlinked', minecraft_nick: 'NoLink', role: 'ADMIN', tailscale_user_id: null } as User);
+      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '' });
+
+      await expect(authService.createSession('100.101.102.103')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('fails closed with 503 when the Tailscale daemon cannot be asked', async () => {
+      tailscaleDriver.queryWhoIs.mockRejectedValue(new Error('ENOENT'));
+
+      await expect(authService.createSession('100.101.102.103')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('refuses when no client address could be determined', async () => {
+      await expect(authService.createSession(null)).rejects.toThrow(UnauthorizedException);
+      expect(tailscaleDriver.queryWhoIs).not.toHaveBeenCalled();
     });
   });
 
@@ -219,29 +293,60 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
       expect(req.user.minecraft_nick).toBe('Steve');
     });
 
-    it('should permit access with valid Tailscale identity header', async () => {
-      mockUsers.push({
-        id: 'ts-user-id',
-        minecraft_nick: 'TailscaleAdmin',
-        tailscale_user_id: 'ts-12345',
-        role: 'ADMIN',
-      } as User);
-
-      const req: any = {
-        headers: {
-          'x-tailscale-user': 'ts-12345',
-        },
-      };
-      reflector.getAllAndOverride = jest.fn(() => false);
-      const ctx: any = {
-        getHandler: () => {},
-        getClass: () => {},
-        switchToHttp: () => ({ getRequest: () => req }),
+    describe('x-tailscale-user header (#91)', () => {
+      const guardRequest = (peer: string | undefined) => {
+        const req: any = {
+          headers: { 'x-tailscale-user': 'ts-12345' },
+          socket: { remoteAddress: peer },
+        };
+        reflector.getAllAndOverride = jest.fn(() => false);
+        const ctx: any = {
+          getHandler: () => {},
+          getClass: () => {},
+          switchToHttp: () => ({ getRequest: () => req }),
+        };
+        return { req, ctx };
       };
 
-      const canActivate = await authGuard.canActivate(ctx);
-      expect(canActivate).toBe(true);
-      expect(req.user.minecraft_nick).toBe('TailscaleAdmin');
+      beforeEach(() => {
+        mockUsers.push({
+          id: 'ts-user-id',
+          minecraft_nick: 'TailscaleAdmin',
+          tailscale_user_id: 'ts-12345',
+          role: 'ADMIN',
+        } as User);
+      });
+
+      it('is honored when it arrives from a trusted proxy', async () => {
+        const { req, ctx } = guardRequest('10.0.0.5');
+
+        await expect(authGuard.canActivate(ctx)).resolves.toBe(true);
+        expect(req.user.minecraft_nick).toBe('TailscaleAdmin');
+      });
+
+      it('is ignored when forged by a client outside the trusted proxies', async () => {
+        const { ctx } = guardRequest('203.0.113.9');
+
+        await expect(authGuard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+      });
+
+      it('is ignored when the peer address is unknown', async () => {
+        const { ctx } = guardRequest(undefined);
+
+        await expect(authGuard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+      });
+
+      it('is ignored by default, when no proxy is configured', async () => {
+        authGuard = new AuthGuard(
+          reflector,
+          jwtService,
+          authService,
+          new TrustedProxyService({ authTrustedProxyIps: [] } as unknown as AppConfigService),
+        );
+        const { ctx } = guardRequest('10.0.0.5');
+
+        await expect(authGuard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+      });
     });
   });
 

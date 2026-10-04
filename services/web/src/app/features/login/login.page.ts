@@ -2,13 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { AuthApi } from '../../core/api';
 import { AuthSession } from '../../core/auth';
 import {
   McBanner,
   McButton,
   McLegalFooter,
-  McNoApiTag,
   McPanel,
   McTextField,
   McVoxelScene,
@@ -27,7 +25,6 @@ import { safeRedirect } from './login.logic';
     McBanner,
     McButton,
     McLegalFooter,
-    McNoApiTag,
     McPanel,
     McTextField,
     McVoxelScene,
@@ -73,7 +70,6 @@ import { safeRedirect } from './login.logic';
                 >
                   {{ vpnBusy() ? 'Verificando…' : 'Entrar como admin' }}
                 </mc-button>
-                <mc-no-api-tag detail="WhoIs pelo IP (hoje confia em cabeçalho)" />
                 @if (vpnError()) {
                   <mc-banner tone="danger" title="Não foi possível entrar pela VPN">
                     {{ vpnError() }}
@@ -132,10 +128,9 @@ import { safeRedirect } from './login.logic';
   `,
 })
 export class LoginPage {
-  private readonly api = inject(AuthApi);
   private readonly session = inject(AuthSession);
   private readonly router = inject(Router);
-  /** Read once: a 401 from the identity probe makes the interceptor navigate to a bare /login. */
+  /** Read once: a 401 from the session request makes the interceptor navigate to a bare /login. */
   private readonly target = safeRedirect(inject(ActivatedRoute).snapshot.queryParamMap.get('redirect'));
 
   protected readonly nickHelp = NICK_HELP;
@@ -157,20 +152,16 @@ export class LoginPage {
   protected signInWithVpn(): void {
     this.vpnError.set('');
     this.vpnBusy.set(true);
-    this.api.me().subscribe({
+    this.session.login().subscribe({
       next: (user) => {
         if (user.role !== 'ADMIN') {
+          this.session.logout();
           this.vpnBusy.set(false);
           this.vpnError.set('Esta conta não é de administrador. Peça acesso a quem administra o painel.');
           return;
         }
         this.identity.set(user.minecraft_nick);
-        // The guards need a JWT, and the only issuer is POST /api/auth/token. The nick comes from
-        // the verified identity above, not from user input. Remove once WhoIs issues the session.
-        this.session.login(user.minecraft_nick).subscribe({
-          next: () => void this.router.navigateByUrl(this.target),
-          error: (error: unknown) => this.failVpn(error),
-        });
+        void this.router.navigateByUrl(this.target);
       },
       error: (error: unknown) => this.failVpn(error),
     });
@@ -204,7 +195,9 @@ export class LoginPage {
     this.vpnError.set(
       status === 401 || status === 403 || status === undefined
         ? 'Não identificamos você pela VPN. Conecte o Tailscale neste aparelho ou use o primeiro acesso abaixo.'
-        : apiErrorMessage(error, 'Tente de novo em instantes.'),
+        : status === 503
+          ? 'O servidor não conseguiu consultar o Tailscale. Tente de novo em instantes.'
+          : apiErrorMessage(error, 'Tente de novo em instantes.'),
     );
   }
 }

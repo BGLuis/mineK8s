@@ -521,11 +521,6 @@ export interface BootstrapRequest {
   real_name?: string;
 }
 
-export interface LoginRequest {
-  minecraft_nick: string;
-  tailscale_user_id?: string;
-}
-
 export interface TokenResponse {
   access_token: string;
   user: User;

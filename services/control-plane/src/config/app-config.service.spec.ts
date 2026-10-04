@@ -81,4 +81,21 @@ describe('AppConfigModule & Schema Validation', () => {
     ]);
     expect(appConfig.kubernetes.namespace).toBe('minekubernetes');
   });
+
+  it('should trust no proxy for identity headers unless AUTH_TRUSTED_PROXY_IPS is set', () => {
+    const base = {
+      DB_USER: 'minek8s',
+      DB_PASSWORD: 'secretpassword',
+      DB_NAME: 'minekubernetes',
+      JWT_SECRET: 'this_is_a_valid_jwt_secret_with_at_least_32_characters',
+    };
+
+    const unset = appConfigSchema.validate(base).value;
+    expect(new AppConfigService(new ConfigService(unset)).authTrustedProxyIps).toEqual([]);
+
+    const configured = new AppConfigService(
+      new ConfigService({ ...base, AUTH_TRUSTED_PROXY_IPS: '127.0.0.1, 10.0.0.0/24' }),
+    );
+    expect(configured.authTrustedProxyIps).toEqual(['127.0.0.1', '10.0.0.0/24']);
+  });
 });

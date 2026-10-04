@@ -15,6 +15,7 @@ import { Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { authenticateSocket } from '../common/ws-auth';
 import { JwtService } from '../auth/jwt.service';
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
@@ -66,6 +67,7 @@ export class TerminalGateway
     private readonly logStreamer: K8sLogStreamerService,
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
+    private readonly trustedProxies: TrustedProxyService,
   ) {}
 
   /**
@@ -274,6 +276,6 @@ export class TerminalGateway
   }
 
   private authenticateClient(client: any): Promise<User | null> {
-    return authenticateSocket(client, this.authService, this.jwtService);
+    return authenticateSocket(client, this.authService, this.jwtService, this.trustedProxies);
   }
 }

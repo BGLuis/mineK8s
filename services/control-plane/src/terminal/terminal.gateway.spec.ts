@@ -7,6 +7,7 @@ import { ConsoleDriver } from '../console/console-driver.interface';
 import { K8sLogStreamerService } from '../logging/k8s-log-streamer.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '../auth/jwt.service';
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { TerminalGateway } from './terminal.gateway';
 
 describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', () => {
@@ -108,6 +109,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       mockLogStreamer,
       mockAuthService,
       mockJwtService,
+      new TrustedProxyService({ authTrustedProxyIps: ['10.0.0.5'] } as any),
     );
 
     mockSocketServer = {
@@ -135,9 +137,10 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       expect(mockClient.disconnect).not.toHaveBeenCalled();
     });
 
-    it('should authenticate client with x-tailscale-user header', async () => {
+    it('should authenticate client with x-tailscale-user header from a trusted proxy', async () => {
       const mockClient: any = {
         handshake: {
+          address: '10.0.0.5',
           headers: { 'x-tailscale-user': 'admin@tailscale' },
         },
         data: {},
@@ -149,6 +152,24 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
 
       expect(mockClient.data.user).toBe(testAdminUser);
       expect(mockClient.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('should reject a forged x-tailscale-user header from a client outside the trusted proxies', async () => {
+      const mockClient: any = {
+        handshake: {
+          address: '203.0.113.9',
+          headers: { 'x-tailscale-user': 'admin@tailscale' },
+        },
+        data: {},
+        disconnect: jest.fn(),
+        emit: jest.fn(),
+      };
+
+      await gateway.handleConnection(mockClient);
+
+      expect(mockClient.data.user).toBeUndefined();
+      expect(mockClient.emit).toHaveBeenCalledWith('unauthorized', expect.any(Object));
+      expect(mockClient.disconnect).toHaveBeenCalled();
     });
 
     it('should reject connection when token is invalid or missing', async () => {

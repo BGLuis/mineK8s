@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { AuthService } from './auth.service';
 import { JwtService } from './jwt.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { TrustedProxyService } from './trusted-proxy.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,6 +17,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly authService: AuthService,
+    private readonly trustedProxies: TrustedProxyService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -45,9 +47,9 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    // 2. Tailscale Zero-Trust Identity Header (injected by trusted proxy or local WhoIs)
+    // 2. Tailscale identity header: anyone can type it, so it only counts when a trusted proxy sent it.
     const tailscaleUserHeader = request.headers['x-tailscale-user'];
-    if (tailscaleUserHeader) {
+    if (tailscaleUserHeader && this.trustedProxies.isTrusted(request.socket?.remoteAddress)) {
       const user = await this.authService.validateTailscaleUser(
         String(tailscaleUserHeader),
       );

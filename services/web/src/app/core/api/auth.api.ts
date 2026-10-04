@@ -2,9 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ApiClient } from './api-client';
-import { BootstrapRequest, BootstrapResponse, LoginRequest, TokenResponse, User } from './models';
+import { BootstrapRequest, BootstrapResponse, TokenResponse, User } from './models';
 
-/** auth.controller.ts, `api/auth`. `bootstrap` and `token` are public. */
+/** auth.controller.ts, `api/auth`. `bootstrap` and `session` are public. */
 @Injectable({ providedIn: 'root' })
 export class AuthApi {
   private readonly api = inject(ApiClient);
@@ -13,8 +13,9 @@ export class AuthApi {
     return this.api.post('/api/auth/bootstrap', dto);
   }
 
-  token(dto: LoginRequest): Observable<TokenResponse> {
-    return this.api.post('/api/auth/token', dto);
+  /** The control plane identifies the caller by the IP the request comes from (Tailscale WhoIs). */
+  session(): Observable<TokenResponse> {
+    return this.api.post('/api/auth/session');
   }
 
   me(): Observable<User> {

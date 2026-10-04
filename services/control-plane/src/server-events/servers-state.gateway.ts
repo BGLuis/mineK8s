@@ -7,6 +7,7 @@ import {
 
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '../auth/jwt.service';
+import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { authenticateSocket } from '../common/ws-auth';
 
 export interface ServerStateEvent {
@@ -34,11 +35,17 @@ export class ServersStateGateway implements OnGatewayConnection {
   constructor(
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
+    private readonly trustedProxies: TrustedProxyService,
   ) {}
 
   async handleConnection(client: any): Promise<void> {
     try {
-      const user = await authenticateSocket(client, this.authService, this.jwtService);
+      const user = await authenticateSocket(
+        client,
+        this.authService,
+        this.jwtService,
+        this.trustedProxies,
+      );
       if (user?.role !== 'ADMIN') {
         client.emit('unauthorized', { message: 'Missing or invalid credentials' });
         client.disconnect?.();

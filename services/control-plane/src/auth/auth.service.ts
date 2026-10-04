@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,8 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { AppConfigService } from '@config/app-config.service';
 import { User } from '@database/entities/user.entity';
 
+import { TailscaleLocalDriver } from '../tailscale/drivers/tailscale-local.driver';
 import { BootstrapAdminDTO } from './dto/bootstrap-admin.dto';
-import { LoginDTO } from './dto/login.dto';
 import { JwtService } from './jwt.service';
 
 @Injectable()
@@ -26,6 +27,7 @@ export class AuthService implements OnModuleInit {
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
     private readonly configService: AppConfigService,
+    private readonly tailscaleDriver: TailscaleLocalDriver,
   ) {}
 
   async onModuleInit() {
@@ -70,7 +72,7 @@ export class AuthService implements OnModuleInit {
     this.activeBootstrapToken = token;
   }
 
-  async bootstrapAdmin(dto: BootstrapAdminDTO) {
+  async bootstrapAdmin(dto: BootstrapAdminDTO, clientIp: string | null = null) {
     if (!this.activeBootstrapToken || this.activeBootstrapToken !== dto.bootstrap_token) {
       throw new UnauthorizedException('Invalid or expired bootstrap token');
     }
@@ -86,6 +88,7 @@ export class AuthService implements OnModuleInit {
       minecraft_nick: dto.minecraft_nick,
       email: dto.email || null,
       real_name: dto.real_name || null,
+      tailscale_user_id: await this.findTailscaleUserId(clientIp),
       role: 'ADMIN',
     });
 
@@ -107,13 +110,19 @@ export class AuthService implements OnModuleInit {
     };
   }
 
-  async login(dto: LoginDTO) {
-    const user = await this.userRepository.findOne({
-      where: { minecraft_nick: dto.minecraft_nick },
-    });
+  /**
+   * Opens a panel session for whoever the Tailscale daemon says owns `clientIp`. The identity
+   * comes from the network, never from the request body.
+   */
+  async createSession(clientIp: string | null) {
+    const identity = clientIp ? await this.queryWhoIs(clientIp) : null;
+    if (!identity?.userId) {
+      throw new UnauthorizedException('This address does not belong to the tailnet');
+    }
 
+    const user = await this.validateTailscaleUser(identity.userId);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials: user not found');
+      throw new UnauthorizedException('No account is linked to this Tailscale identity');
     }
 
     const token = this.jwtService.sign({
@@ -136,5 +145,29 @@ export class AuthService implements OnModuleInit {
     return this.userRepository.findOne({
       where: { tailscale_user_id: tailscaleUserId },
     });
+  }
+
+  private async queryWhoIs(clientIp: string) {
+    try {
+      return await this.tailscaleDriver.queryWhoIs(clientIp);
+    } catch (err) {
+      this.logger.warn(`Tailscale WhoIs failed for ${clientIp}: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Tailscale identity lookup is unavailable');
+    }
+  }
+
+  /** Links the first admin to the Tailscale account it is bootstrapped from, so the VPN login works. */
+  private async findTailscaleUserId(clientIp: string | null): Promise<string | null> {
+    if (!clientIp) {
+      return null;
+    }
+    try {
+      return (await this.tailscaleDriver.queryWhoIs(clientIp))?.userId || null;
+    } catch (err) {
+      this.logger.warn(
+        `Admin bootstrapped without a Tailscale link, WhoIs failed for ${clientIp}: ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 }

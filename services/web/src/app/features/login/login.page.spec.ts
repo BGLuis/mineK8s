@@ -53,48 +53,80 @@ describe('LoginPage', () => {
 
   afterEach(() => http.verify());
 
-  it('signs in through the VPN identity and returns to the page the user wanted', async () => {
+  it('signs in through the VPN identity with no body and returns to the page the user wanted', async () => {
     const { fixture, el } = await setup('/access');
 
     button(el, 'Entrar como admin').click();
-    http.expectOne('/api/auth/me').flush(admin);
-    http.expectOne('/api/auth/token').flush({ access_token: 'jwt', user: admin });
+    const req = http.expectOne('/api/auth/session');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    req.flush({ access_token: 'jwt', user: admin });
     await fixture.whenStable();
 
     expect(navigate).toHaveBeenCalledWith('/access');
+    expect(sessionStorage.getItem('mc.access_token')).toBe('jwt');
+  });
+
+  it('never sends a nickname to sign in: the identity comes from the network', async () => {
+    const { el } = await setup();
+    type(el, 'Seu nick', 'luis_dev');
+
+    button(el, 'Entrar como admin').click();
+
+    expect(JSON.stringify(http.expectOne('/api/auth/session').request.body)).not.toContain('luis_dev');
+    http.expectNone('/api/auth/token');
+  });
+
+  it('no longer flags the VPN login as mocked', async () => {
+    const { el } = await setup();
+
+    expect(el.querySelector('mc-no-api-tag')).toBeNull();
   });
 
   it('ignores a redirect that points outside the app', async () => {
     const { fixture, el } = await setup('https://evil.example');
 
     button(el, 'Entrar como admin').click();
-    http.expectOne('/api/auth/me').flush(admin);
-    http.expectOne('/api/auth/token').flush({ access_token: 'jwt', user: admin });
+    http.expectOne('/api/auth/session').flush({ access_token: 'jwt', user: admin });
     await fixture.whenStable();
 
     expect(navigate).toHaveBeenCalledWith('/');
   });
 
-  it('refuses a VPN identity that is not an admin and never asks for a token', async () => {
+  it('refuses a VPN identity that is not an admin and does not keep its session', async () => {
     const { fixture, el } = await setup();
 
     button(el, 'Entrar como admin').click();
-    http.expectOne('/api/auth/me').flush({ ...admin, role: 'PLAYER' });
+    http.expectOne('/api/auth/session').flush({ access_token: 'jwt', user: { ...admin, role: 'PLAYER' } });
     await fixture.whenStable();
 
     expect(el.textContent).toContain('não é de administrador');
     expect(navigate).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('mc.access_token')).toBeNull();
   });
 
   it('explains when the VPN does not identify the visitor', async () => {
     const { fixture, el } = await setup();
 
     button(el, 'Entrar como admin').click();
-    http.expectOne('/api/auth/me').flush({}, { status: 401, statusText: 'Unauthorized' });
+    http.expectOne('/api/auth/session').flush({}, { status: 401, statusText: 'Unauthorized' });
     await fixture.whenStable();
 
     expect(el.textContent).toContain('Não identificamos você pela VPN');
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('says Tailscale could not be reached when the control plane cannot ask it', async () => {
+    const { fixture, el } = await setup();
+
+    button(el, 'Entrar como admin').click();
+    http
+      .expectOne('/api/auth/session')
+      .flush({ message: 'Tailscale identity lookup is unavailable' }, { status: 503, statusText: 'Service Unavailable' });
+    await fixture.whenStable();
+
+    expect(el.textContent).toContain('não conseguiu consultar o Tailscale');
+    expect(el.textContent).not.toContain('identity lookup');
   });
 
   it('does not send the bootstrap request when the nick has 2 characters', async () => {

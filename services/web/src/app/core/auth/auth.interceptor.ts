@@ -7,7 +7,7 @@ import { AuthSession } from './auth-session';
 import { TokenStore } from './token-store';
 
 const PUBLIC_PATHS = [
-  '/api/auth/token',
+  '/api/auth/session',
   '/api/auth/bootstrap',
   '/api/tailscale/claim',
   '/api/tailscale/invites/validate/',

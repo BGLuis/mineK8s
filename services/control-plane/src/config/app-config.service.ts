@@ -54,6 +54,11 @@ export class AppConfigService {
     return configured.length > 0 ? configured : [this.appUrl];
   }
 
+  /** Peers allowed to vouch for X-Forwarded-For and X-Tailscale-User. Empty (trust nobody) unless configured. */
+  get authTrustedProxyIps(): string[] {
+    return this.parseCsv(this.config.get<string>('AUTH_TRUSTED_PROXY_IPS'));
+  }
+
   get enableSwagger(): boolean {
     return this.config.get<boolean>('ENABLE_SWAGGER', true);
   }
