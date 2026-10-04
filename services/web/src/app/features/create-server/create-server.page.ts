@@ -25,7 +25,6 @@ import {
   McChoiceTile,
   McIcon,
   McModpackCard,
-  McNoApiTag,
   McProgress,
   McRamSlider,
   McStatusChip,
@@ -74,7 +73,6 @@ const SEARCH_LIMIT = 10;
     McChoiceTile,
     McIcon,
     McModpackCard,
-    McNoApiTag,
     McProgress,
     McRamSlider,
     McStatusChip,
@@ -187,10 +185,9 @@ const SEARCH_LIMIT = 10;
               <div>
                 <div class="mb-2 flex flex-wrap items-center gap-3">
                   <h3 id="profile-label" class="t-label-md">Tipo de servidor</h3>
-                  <mc-no-api-tag detail="Purpur" />
                 </div>
                 <div
-                  class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6"
+                  class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
                   role="radiogroup"
                   aria-labelledby="profile-label"
                 >
@@ -217,7 +214,6 @@ const SEARCH_LIMIT = 10;
                 <div class="space-y-4">
                   <div class="flex flex-wrap items-center gap-3">
                     <h3 class="t-label-md">Buscar modpack</h3>
-                    <mc-no-api-tag detail="catálogo real (hoje é lista fixa)" />
                   </div>
 
                   <div class="flex flex-wrap items-end gap-4">

@@ -39,6 +39,7 @@ export interface ProfileOption {
 export const PROFILE_OPTIONS: readonly ProfileOption[] = [
   { value: 'VANILLA', label: 'Vanilla', description: 'Oficial da Mojang', icon: 'grid' },
   { value: 'PAPER', label: 'Paper', description: 'Plugins e desempenho', icon: 'sword' },
+  { value: 'PURPUR', label: 'Purpur', description: 'Paper com mais ajustes', icon: 'settings' },
   { value: 'FABRIC', label: 'Fabric', description: 'Mods leves', icon: 'plant' },
   { value: 'FORGE', label: 'Forge', description: 'Mods clássicos', icon: 'pickaxe' },
   { value: 'NEOFORGE', label: 'NeoForge', description: 'Mods modernos', icon: 'hook' },

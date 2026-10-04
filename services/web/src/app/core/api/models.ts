@@ -15,7 +15,7 @@ export type ServerState =
 
 export type ServerAccessPolicy = 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET';
 
-export type ServerType = 'PAPER' | 'VANILLA' | 'FABRIC' | 'FORGE' | 'NEOFORGE';
+export type ServerType = 'PAPER' | 'PURPUR' | 'VANILLA' | 'FABRIC' | 'FORGE' | 'NEOFORGE';
 
 export type UserRole = 'ADMIN' | 'PLAYER';
 
@@ -237,6 +237,9 @@ export interface Modpack {
   author?: string;
   iconUrl?: string;
   downloads: number;
+  gameVersion?: string;
+  loader?: string;
+  dateModified?: string;
 }
 
 export interface ModpackSearchResponse {

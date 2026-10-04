@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 import { Modpack, ModpackVersion } from '../../core/api/models';
 import {
+  PROFILE_OPTIONS,
   WizardState,
   buildCreateServerDto,
   createServerErrorMessage,
@@ -68,6 +69,11 @@ describe('buildCreateServerDto', () => {
       access_policy: 'INDIVIDUAL',
     });
     expect(dto.modpack_id).toBeUndefined();
+  });
+
+  it('offers Purpur and sends it as server_type', () => {
+    expect(PROFILE_OPTIONS.map((option) => option.value)).toContain('PURPUR');
+    expect(buildCreateServerDto(state({ profile: 'PURPUR' })).server_type).toBe('PURPUR');
   });
 
   it('takes loader, game version and modpack_id from the chosen modpack version', () => {

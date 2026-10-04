@@ -4,7 +4,6 @@ import { ServerSummary } from '../../core/api/models';
 import { ButtonVariant, McButton } from '../button/button';
 import { IconName } from '../icon/icon-registry';
 import { McIcon } from '../icon/icon';
-import { McNoApiTag } from '../no-api-tag/no-api-tag';
 import { McStatusChip } from '../status-chip/status-chip';
 import { McVoxelScene } from '../voxel-scene/voxel-scene';
 
@@ -107,7 +106,7 @@ export function sceneVariant(id: string): number {
 @Component({
   selector: 'mc-server-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McButton, McIcon, McNoApiTag, McStatusChip, McVoxelScene],
+  imports: [McButton, McIcon, McStatusChip, McVoxelScene],
   host: { class: 'block h-full has-drop box-border' },
   template: `
     <article
@@ -139,9 +138,6 @@ export function sceneVariant(id: string): number {
           <li>{{ typeLabel() }} {{ server().game_version }}</li>
           <li>{{ memoryLabel() }}</li>
         </ul>
-        @if (players()) {
-          <mc-no-api-tag detail="jogadores" />
-        }
         <div class="mt-auto flex gap-3 pt-1">
           <mc-button
             class="flex-1"
