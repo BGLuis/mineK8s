@@ -1,7 +1,6 @@
 use std::time::Duration;
 use bytes::BytesMut;
 use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tracing::debug;
 
@@ -15,7 +14,7 @@ use crate::connection::ClientConnection;
 use crate::error::{GatewayError, Result};
 use crate::motd::cache::StatusCache;
 use crate::motd::synthetic::build_synthetic_status;
-use crate::routing::{CachedServerRoute, ServerInstanceStatus};
+use crate::routing::{CachedServerRoute, ServerInstanceStatus, UpstreamAddr};
 
 /// Trata a sequência completa do Server List Ping (Status Request -> Status Response -> Ping Request -> Pong Response).
 pub async fn handle_status_ping(
@@ -87,7 +86,7 @@ async fn resolve_status_json(
             }
 
             // Tentar consultar JVM upstream com timeout curto (2 segundos)
-            if let Some(target) = r.target_addr {
+            if let Some(target) = r.target_addr.as_ref() {
                 if let Ok(Ok(upstream_json)) = timeout(Duration::from_secs(2), query_upstream_status(target, &r.subdomain)).await {
                     status_cache.set(&r.server_id, upstream_json.clone());
                     return upstream_json;
@@ -106,8 +105,8 @@ async fn resolve_status_json(
 }
 
 /// Dispara consulta de Status ping para uma instância backend JVM interna.
-async fn query_upstream_status(target: std::net::SocketAddr, hostname: &str) -> Result<String> {
-    let mut upstream = TcpStream::connect(target).await?;
+async fn query_upstream_status(target: &UpstreamAddr, hostname: &str) -> Result<String> {
+    let mut upstream = target.connect().await?;
 
     // 1. Enviar Handshake (NextState = Status)
     let handshake = HandshakePacket {
@@ -135,7 +134,8 @@ async fn query_upstream_status(target: std::net::SocketAddr, hostname: &str) -> 
     upstream.write_all(&wire).await?;
 
     // 3. Ler Status Response
-    let mut conn = ClientConnection::new(upstream, target);
+    let upstream_addr = upstream.peer_addr()?;
+    let mut conn = ClientConnection::new(upstream, upstream_addr);
     let (raw_res, _) = conn.read_raw_packet_streaming().await?;
     if raw_res.packet_id != StatusResponsePacket::PACKET_ID {
         return Err(GatewayError::InvalidState("Esperado StatusResponse do upstream".into()));

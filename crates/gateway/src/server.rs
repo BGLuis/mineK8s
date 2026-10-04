@@ -263,7 +263,7 @@ impl GatewayServer {
                     warn!(peer = %peer_addr, "Rota dedicada rejeitada em listener público: política não é INTERNET");
                     return Err(GatewayError::InvalidState("Rota dedicada não permitida em listener público".into()));
                 }
-                if let Some(target_addr) = dedicated_route.target_addr {
+                if let Some(target_addr) = dedicated_route.target_addr.as_ref() {
                     metrics
                         .connections_total
                         .with_label_values(&["dedicated-port", "accepted"])
@@ -273,7 +273,18 @@ impl GatewayServer {
                         target = %target_addr,
                         "Iniciando forward L4 dedicado direto (sem parser)"
                     );
-                    let mut upstream = TcpStream::connect(target_addr).await?;
+                    let mut upstream = match target_addr.connect().await {
+                        Ok(upstream) => upstream,
+                        Err(err) => {
+                            warn!(
+                                server = %dedicated_route.name,
+                                target = %target_addr,
+                                error = %err,
+                                "Falha ao conectar no upstream da rota dedicada"
+                            );
+                            return Err(err);
+                        }
+                    };
                     let _ = copy_bidirectional(&mut stream, &mut upstream).await;
                     return Ok(());
                 } else {

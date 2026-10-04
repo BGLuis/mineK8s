@@ -54,7 +54,7 @@ async fn start_gateway(
         subdomain: HOST.into(),
         listener_port: addr.port(),
         routing_model: RoutingModel::VirtualHost,
-        target_addr: Some(upstream_addr),
+        target_addr: Some(upstream_addr.into()),
         status: ServerInstanceStatus::Ready,
         proxy_protocol_upstream: false,
         max_players: 20,

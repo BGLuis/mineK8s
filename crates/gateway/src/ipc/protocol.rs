@@ -1,4 +1,6 @@
-use crate::routing::{AccessPolicy, CachedServerRoute, RoutingModel, ServerInstanceStatus};
+use tracing::warn;
+
+use crate::routing::{AccessPolicy, CachedServerRoute, RoutingModel, ServerInstanceStatus, UpstreamAddr};
 
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RouteUpdateEvent {
@@ -31,12 +33,28 @@ pub struct RouteUpdateEvent {
 }
 
 impl RouteUpdateEvent {
+    /// `None` para destino vazio (servidor dormente) ou malformado; este último é logado porque
+    /// deixa a rota sem upstream.
+    pub fn parse_target(&self) -> Option<UpstreamAddr> {
+        if self.target_ip_port.is_empty() {
+            return None;
+        }
+        match self.target_ip_port.parse() {
+            Ok(target) => Some(target),
+            Err(reason) => {
+                warn!(
+                    server_id = %self.server_id,
+                    target = %self.target_ip_port,
+                    %reason,
+                    "IPC: destino da rota inválido, rota ficará sem upstream"
+                );
+                None
+            }
+        }
+    }
+
     pub fn to_cached_route(&self) -> CachedServerRoute {
-        let target_addr = if self.target_ip_port.is_empty() {
-            None
-        } else {
-            self.target_ip_port.parse().ok()
-        };
+        let target_addr = self.parse_target();
 
         CachedServerRoute {
             server_id: self.server_id.clone(),

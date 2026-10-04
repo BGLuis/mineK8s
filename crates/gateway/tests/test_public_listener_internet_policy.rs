@@ -65,7 +65,7 @@ async fn test_public_listener_routes_internet_world_via_srv_target() {
         subdomain: "survival".into(),
         listener_port: 25565,
         routing_model: RoutingModel::VirtualHost,
-        target_addr: Some(upstream_addr),
+        target_addr: Some(upstream_addr.into()),
         status: ServerInstanceStatus::Ready,
         access_policy: AccessPolicy::Internet, // RF-CF-01: Política INTERNET
         ..Default::default()
