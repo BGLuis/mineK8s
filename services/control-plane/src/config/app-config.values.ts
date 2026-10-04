@@ -82,3 +82,9 @@ export class HealthBotConfig {
   ) {}
 }
 
+export class ModpackCatalogConfig {
+  constructor(
+    public readonly cacheTtlMs: number = 60000,
+    public readonly requestTimeoutMs: number = 8000,
+  ) {}
+}

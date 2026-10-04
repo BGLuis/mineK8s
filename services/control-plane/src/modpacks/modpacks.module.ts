@@ -10,6 +10,7 @@ import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
 import { CurseForgeResolverService } from './resolvers/curseforge-resolver.service';
 import { ModpackConfigInjectorService } from './config/modpack-config-injector.service';
 import { SkinsProvisionerService } from './skins/skins-provisioner.service';
+import { ModpackCatalogService } from './modpack-catalog.service';
 import { ModpackInstallerService } from './modpack-installer.service';
 import { ModpacksController } from './modpacks.controller';
 
@@ -27,6 +28,7 @@ import { ModpacksController } from './modpacks.controller';
     SkinsProvisionerService,
     ModpackConfigInjectorService,
     ModpackInstallerService,
+    ModpackCatalogService,
   ],
   exports: [
     CasStorageService,

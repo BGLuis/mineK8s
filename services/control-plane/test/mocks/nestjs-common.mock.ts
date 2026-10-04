@@ -73,6 +73,18 @@ export class UnauthorizedException extends HttpException {
   }
 }
 
+export class BadGatewayException extends HttpException {
+  constructor(message = 'Bad Gateway') {
+    super(message, 502);
+  }
+}
+
+export class ServiceUnavailableException extends HttpException {
+  constructor(message = 'Service Unavailable') {
+    super(message, 503);
+  }
+}
+
 export class ValidationPipe {
   constructor(public options?: any) {}
 }
