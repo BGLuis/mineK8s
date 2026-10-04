@@ -43,14 +43,6 @@ type Step = 'confirm' | 'result' | null;
           Qualquer pessoa com Minecraft original poderá encontrar o endereço. Para proteger o mundo,
           o servidor passa a exigir contas oficiais: online-mode=true é forçado e jogadores piratas
           deixam de entrar. Convidados da VPN continuam entrando normalmente.
-          @if (store.accessPolicy() === null) {
-            <p class="t-caption mt-3">
-              Este mundo já está publicado?
-              <button type="button" class="underline" (click)="forceUnpublish.set(true)">
-                Despublicar
-              </button>
-            </p>
-          }
         </mc-dialog>
       }
     } @else if (step() === 'result') {
@@ -92,16 +84,12 @@ export class McPublishDialog {
   readonly busy = signal(false);
   private trigger: HTMLElement | null = null;
 
-  /** GET /api/servers/:id does not report access_policy, so after a reload "published" is unknown. */
-  protected readonly forceUnpublish = signal(false);
-
   protected unpublishing(): boolean {
-    return this.forceUnpublish() || this.store.accessPolicy() === 'INTERNET';
+    return this.store.accessPolicy() === 'INTERNET';
   }
 
   open(): void {
     this.trigger = document.activeElement as HTMLElement | null;
-    this.forceUnpublish.set(false);
     this.step.set('confirm');
   }
 

@@ -20,6 +20,7 @@ const server = (id: string, name: string, state: ServerState): ServerSummary => 
   allocated_memory_mb: 4096,
   allocated_port: null,
   state,
+  access_policy: 'GROUP',
   is_maintenance: false,
   auto_wake: true,
   sleep_timeout_minutes: 15,

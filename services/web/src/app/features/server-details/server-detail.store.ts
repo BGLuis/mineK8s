@@ -34,10 +34,7 @@ export class ServerDetailStore {
   /** True when the last poll failed but an older copy of the server is still on screen. */
   readonly stale = signal(false);
   readonly stats = signal<ServerRuntimeStats | null>(null);
-  /**
-   * GET /api/servers/:id does not return access_policy yet, so this is only known after a
-   * publish/unpublish in this session (or once the API starts sending it).
-   */
+  /** Seeded from GET /api/servers/:id and updated right away after a publish/unpublish. */
   readonly accessPolicy = signal<ServerAccessPolicy | null>(null);
   readonly busy = computed(() => {
     const id = this.id();
@@ -88,10 +85,7 @@ export class ServerDetailStore {
         this.server.set(server);
         this.stale.set(false);
         this.loadState.set('ready');
-        const policy = (server as { access_policy?: ServerAccessPolicy }).access_policy;
-        if (policy) {
-          this.accessPolicy.set(policy);
-        }
+        this.accessPolicy.set(server.access_policy);
         this.syncStats(id, server);
       }),
       catchError((error: unknown) => {
