@@ -1,8 +1,10 @@
 import { INestApplication } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 
+import { AuthGuard } from '../src/auth/auth.guard';
 import { AuthService } from '../src/auth/auth.service';
 import { JwtService } from '../src/auth/jwt.service';
 import { TrustedProxyService } from '../src/auth/trusted-proxy.service';
@@ -38,6 +40,8 @@ describe('Socket.IO namespaces: origin and handshake authentication (#92)', () =
         TerminalGateway,
         ServersStateGateway,
         TrustedProxyService,
+        // app.module installs it globally, so it also runs on every gateway message.
+        { provide: APP_GUARD, useClass: AuthGuard },
         {
           provide: AuthService,
           useValue: {

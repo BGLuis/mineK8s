@@ -40,7 +40,11 @@ describeWithDatabase('users.tailscale_user_id único contra Postgres real', () =
   });
 
   it('a migração aborta listando os duplicados, sem tocar neles, e passa depois de resolvidos', async () => {
-    await ds.undoLastMigration();
+    // Undoes the newer migrations as well, so the test does not depend on this one being the last.
+    const applied = () => ds.query(`SELECT 1 FROM "migrations" WHERE "name" = 'UniqueUserTailscaleId1710000000005'`);
+    while ((await applied()).length > 0) {
+      await ds.undoLastMigration();
+    }
     await users.save([
       users.create({ minecraft_nick: 'Steve', tailscale_user_id: '1001' }),
       users.create({ minecraft_nick: 'Alex', tailscale_user_id: '1001' }),

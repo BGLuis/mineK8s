@@ -69,7 +69,8 @@ export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModu
    * Helper to resolve the internal cluster DNS host for a server.
    */
   getProbeHost(server: Server): string {
-    if (this.configService.isTest) {
+    // Same rule as RconConnectionPool: with the mock driver the game server runs on this host.
+    if (this.configService.isTest || this.configService.kubernetes.useMockDriver) {
       return '127.0.0.1';
     }
     return `mc-${server.subdomain}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
