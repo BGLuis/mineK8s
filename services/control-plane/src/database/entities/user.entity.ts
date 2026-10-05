@@ -29,6 +29,7 @@ export class User {
   @Column({ type: 'varchar', length: 16, unique: true })
   minecraft_nick: string;
 
+  @Index('uq_users_tailscale_user_id', { unique: true, where: '"tailscale_user_id" IS NOT NULL' })
   @Column({ type: 'varchar', length: 100, nullable: true })
   tailscale_user_id: string | null;
 
