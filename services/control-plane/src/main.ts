@@ -21,6 +21,9 @@ async function bootstrap() {
   const logger = app.get(Logger);
   app.useLogger(logger);
 
+  // As PID 1 in a container, Node ignores SIGTERM unless something listens for it.
+  app.enableShutdownHooks();
+
   // Unhandled promise rejections
   process.on('unhandledRejection', (reason) => {
     logger.error(
