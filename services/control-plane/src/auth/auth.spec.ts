@@ -15,6 +15,9 @@ import { JwtService } from './jwt.service';
 import { RolesGuard } from './roles.guard';
 import { TrustedProxyService } from './trusted-proxy.service';
 
+const personalDevice = (userId: string) => ({ userId, isOwner: true, tags: [] as string[] });
+const taggedDevice = (userId: string) => ({ userId, isOwner: false, tags: ['tag:server'] });
+
 describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
   let jwtService: JwtService;
   let authService: AuthService;
@@ -162,7 +165,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
     });
 
     it('should link the first admin to the Tailscale account it is bootstrapped from', async () => {
-      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '4242' });
+      tailscaleDriver.queryWhoIs.mockResolvedValue(personalDevice('4242'));
       authService.setBootstrapTokenForTesting('token-1');
 
       const result = await authService.bootstrapAdmin(
@@ -172,6 +175,18 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
 
       expect(tailscaleDriver.queryWhoIs).toHaveBeenCalledWith('100.101.102.103');
       expect(result.user.tailscale_user_id).toBe('4242');
+    });
+
+    it('should bootstrap the admin unlinked from a tagged device, whose owner is shared by every tagged node (#136)', async () => {
+      tailscaleDriver.queryWhoIs.mockResolvedValue(taggedDevice('77'));
+      authService.setBootstrapTokenForTesting('token-1');
+
+      const result = await authService.bootstrapAdmin(
+        { bootstrap_token: 'token-1', minecraft_nick: 'SuperAdmin' },
+        '100.101.102.103',
+      );
+
+      expect(result.user.tailscale_user_id).toBeNull();
     });
 
     it('should still bootstrap the admin, unlinked, when WhoIs is unavailable', async () => {
@@ -193,13 +208,20 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
     beforeEach(() => mockUsers.push(admin));
 
     it('issues a JWT for the account linked to the Tailscale user that owns the IP', async () => {
-      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '4242' });
+      tailscaleDriver.queryWhoIs.mockResolvedValue(personalDevice('4242'));
 
       const session = await authService.createSession('100.101.102.103');
 
       expect(tailscaleDriver.queryWhoIs).toHaveBeenCalledWith('100.101.102.103');
       expect(session.user).toBe(admin);
       expect(jwtService.verify(session.access_token)).toMatchObject({ sub: 'u-admin', role: 'ADMIN' });
+    });
+
+    it('refuses a tagged device even when its shared owner id is linked to an admin (#136)', async () => {
+      mockUsers.push({ id: 'u-tagged', minecraft_nick: 'Tagged', role: 'ADMIN', tailscale_user_id: '77' } as User);
+      tailscaleDriver.queryWhoIs.mockResolvedValue(taggedDevice('77'));
+
+      await expect(authService.createSession('100.101.102.200')).rejects.toThrow(/Tagged devices cannot open/);
     });
 
     it('refuses an address that is not on the tailnet', async () => {
@@ -209,7 +231,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
     });
 
     it('refuses a Tailscale user with no linked account', async () => {
-      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '9999' });
+      tailscaleDriver.queryWhoIs.mockResolvedValue(personalDevice('9999'));
 
       await expect(authService.createSession('100.101.102.103')).rejects.toThrow(
         /No account is linked/,
@@ -218,7 +240,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
 
     it('refuses an identity without a user id instead of matching unlinked accounts', async () => {
       mockUsers.push({ id: 'u-unlinked', minecraft_nick: 'NoLink', role: 'ADMIN', tailscale_user_id: null } as User);
-      tailscaleDriver.queryWhoIs.mockResolvedValue({ userId: '' });
+      tailscaleDriver.queryWhoIs.mockResolvedValue(personalDevice(''));
 
       await expect(authService.createSession('100.101.102.103')).rejects.toThrow(UnauthorizedException);
     });

@@ -23,6 +23,7 @@ import { TailscaleLocalDriver } from '../src/tailscale/drivers/tailscale-local.d
 describe('Panel session over HTTP (#91)', () => {
   const ADMIN_TS_ID = '4242';
   const VPN_ADDRESS = '100.101.102.103';
+  const TAGGED_NODE_ADDRESS = '100.101.102.200';
   const admin = {
     id: 'u-admin',
     minecraft_nick: 'AdminSteve',
@@ -36,7 +37,16 @@ describe('Panel session over HTTP (#91)', () => {
   let currentVpnPeer: string;
 
   async function start(trustedProxyIps: string[]) {
-    whoIs = jest.fn(async (ip: string) => (ip === currentVpnPeer ? { userId: ADMIN_TS_ID } : null));
+    whoIs = jest.fn(async (ip: string) => {
+      if (ip === currentVpnPeer) {
+        return { userId: ADMIN_TS_ID, isOwner: true, tags: [] };
+      }
+      // Tagged nodes all report the same "tagged-devices" owner; here it is (wrongly) linked to the admin.
+      if (ip === TAGGED_NODE_ADDRESS) {
+        return { userId: ADMIN_TS_ID, isOwner: false, tags: ['tag:server'] };
+      }
+      return null;
+    });
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
@@ -154,6 +164,20 @@ describe('Panel session over HTTP (#91)', () => {
 
       expect(session.status).toBe(200);
       expect(whoIs).toHaveBeenCalledWith(VPN_ADDRESS);
+    });
+
+    it('a tagged device gets 401 and no token, even with its owner id linked to the admin (#136)', async () => {
+      currentVpnPeer = VPN_ADDRESS;
+      await start(['127.0.0.1']);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/session')
+        .set('x-forwarded-for', TAGGED_NODE_ADDRESS);
+
+      expect(whoIs).toHaveBeenCalledWith(TAGGED_NODE_ADDRESS);
+      expect(res.status).toBe(401);
+      expect(JSON.stringify(res.body)).toContain('Tagged devices cannot open a panel session');
+      expect(res.body.access_token).toBeUndefined();
     });
 
     it('accepts x-tailscale-user from a trusted proxy', async () => {
