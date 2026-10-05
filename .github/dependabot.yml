@@ -40,3 +40,15 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /services/control-plane
+      - /crates/gateway
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      base-images:
+        patterns: ["*"]

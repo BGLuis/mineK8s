@@ -37,3 +37,27 @@ git checkout legacy
 2. **Ciclo de Vida Declarativo:** Máquina de estados com sondas desacopladas (*Startup*, *Readiness* e *Liveness/Watchdog*), suporte a *Scale-to-Zero* (hibernação por inatividade) e *Graceful Shutdown* (`save-all flush` + `stop`).
 3. **Comunicação Segura de Processos:** Protocolo binário RCON direto sobre soquetes TCP persistentes, eliminando interpolação de comandos em shells e vetores de RCE.
 4. **Armazenamento de Alta Performance:** Volumes locais dedicados NVMe/local-path com rotinas de backup e restauração atômica.
+
+---
+
+## 🐳 Imagens de container
+
+As duas imagens são construídas a partir da raiz do repositório (o `.dockerignore` é uma allowlist):
+
+```bash
+docker build -f services/control-plane/Dockerfile -t minekubernetes/control-plane .   # API + SPA + gRPC
+docker build -f crates/gateway/Dockerfile -t minekubernetes/gateway .                 # Gateway L7
+```
+
+Ambas rodam como `nonroot` (UID 65532) sobre distroless, sem shell.
+
+**Control plane** (`3000` API e SPA, `50051` gRPC do gateway). Com `NODE_ENV=production` (padrão da imagem) o boot **não** aplica migrações; rode-as antes de cada versão nova, por exemplo num init container:
+
+```bash
+docker run --rm --env-file .env minekubernetes/control-plane \
+  services/control-plane/node_modules/typeorm/cli.js migration:run -d services/control-plane/dist/database/data-source.js
+```
+
+O `admin:link` fica em `services/control-plane/dist/cli/admin-link.js` (mesmo formato de argumentos de `services/control-plane/README.md`). Defina `NODE_OPTIONS=--max-old-space-size=<~75% do limite de memória em MiB>`: o V8 dimensiona o heap pelo limite do cgroup sem folga e o kernel mata o processo antes do GC reagir. Em repouso usa ~115 MiB; `512Mi` com `--max-old-space-size=384` é um ponto de partida. Os diretórios de escrita padrão (`/app/storage/servers`, `/backups`, `/cache`) já pertencem ao UID 65532.
+
+**Gateway** (`25565` Minecraft, `9090` `/metrics` e `/healthz`). Precisa do socket do `tailscaled` montado em `TAILSCALE_SOCKET_PATH` e de `CONTROL_PLANE_GRPC_URL` (por exemplo `http://control-plane:50051`). Em repouso usa ~1,5 MiB. A imagem declara `STOPSIGNAL SIGINT` porque o binário só encerra com Ctrl+C.
