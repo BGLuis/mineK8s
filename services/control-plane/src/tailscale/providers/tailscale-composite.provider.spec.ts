@@ -64,6 +64,23 @@ describe('TailscaleCompositeProvider (RF-TS-05, RF-TS-14)', () => {
     expect(elapsedCache).toBeLessThan(1); // Latência de cache em memória < 1ms
   });
 
+  it('consulta o IPv6 inteiro, sem a porta, na LocalAPI e no fallback (#130)', async () => {
+    localDriver.queryWhoIs.mockRejectedValueOnce(
+      new LocalSocketUnavailableException('Socket local não encontrado', 'ENOENT'),
+    );
+    cloudDriver.findDeviceByIp.mockResolvedValueOnce(mockIdentity);
+
+    await provider.resolveIdentity('[fd7a:115c:a1e0::d338:4809]:51234');
+
+    expect(localDriver.queryWhoIs).toHaveBeenCalledWith('fd7a:115c:a1e0::d338:4809');
+    expect(cloudDriver.findDeviceByIp).toHaveBeenCalledWith('fd7a:115c:a1e0::d338:4809');
+  });
+
+  it('não pergunta a ninguém por um endereço sem IP legível (#130)', async () => {
+    expect(await provider.resolveIdentity('fd7a')).toBeNull();
+    expect(localDriver.queryWhoIs).not.toHaveBeenCalled();
+  });
+
   it('deve acionar fallback transparente para CloudDriver quando LocalDriver lançar ENOENT (Critério de Aceite)', async () => {
     // Simula ENOENT (socket local não existe ou daemon fora do ar)
     localDriver.queryWhoIs.mockRejectedValueOnce(

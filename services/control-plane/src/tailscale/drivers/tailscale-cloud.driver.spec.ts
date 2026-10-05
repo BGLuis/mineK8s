@@ -52,6 +52,47 @@ describe('TailscaleCloudDriver (RF-TS-05, RF-TS-14)', () => {
     expect(notFound).toBeNull();
   });
 
+  describe('fallback de identidade (#130)', () => {
+    beforeEach(() => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          devices: [
+            {
+              id: '92960230385',
+              nodeId: 'nd4Jzj81et11CNTRL',
+              name: 'steve-pc',
+              user: 'steve@mine.lan',
+              addresses: ['100.68.72.9', 'fd7a:115c:a1e0::d338:4809'],
+            },
+          ],
+        }),
+      } as any);
+    });
+
+    it.each(['fd7a:115c:a1e0::d338:4809', '[fd7a:115c:a1e0::d338:4809]:25565', '100.68.72.9:51234', '::ffff:100.68.72.9'])(
+      'encontra o dispositivo pelo endereço %s',
+      async (address) => {
+        const identity = await driver.findDeviceByIp(address);
+
+        expect(identity?.nodeId).toBe('nd4Jzj81et11CNTRL');
+      },
+    );
+
+    it('não põe o login name no userId, que é casado com o ID numérico de users.tailscale_user_id', async () => {
+      const identity = await driver.findDeviceByIp('100.68.72.9');
+
+      expect(identity?.userId).toBe('');
+      expect(identity?.loginName).toBe('steve@mine.lan');
+    });
+
+    it('não consulta a API para um endereço sem IP legível', async () => {
+      expect(await driver.findDeviceByIp('fd7a')).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   it('deve gerar chave pré-autenticada com tags e expiração', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

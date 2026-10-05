@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
+import { parseClientAddress } from '../identity/client-address';
 import { NetworkIdentity, PreAuthKeyResult } from '../identity/network-identity-provider.interface';
 
 export interface TailscaleCloudDevice {
@@ -95,8 +96,11 @@ export class TailscaleCloudDriver {
    * Encontra um dispositivo pelo endereço IP atribuído na Tailnet.
    */
   public async findDeviceByIp(ip: string): Promise<NetworkIdentity | null> {
+    const cleanIp = parseClientAddress(ip);
+    if (!cleanIp) {
+      return null;
+    }
     const devices = await this.getDevices();
-    const cleanIp = ip.split(':')[0];
 
     const match = devices.find((d) => d.addresses && d.addresses.includes(cleanIp));
     if (!match) {
@@ -104,7 +108,10 @@ export class TailscaleCloudDriver {
     }
 
     return {
-      userId: match.user || '',
+      // `user` here is the login name, while users.tailscale_user_id holds the numeric ID from the LocalAPI WhoIs.
+      // Nothing confirms the Users API `id` is that same number, so the user stays unknown and callers fall back
+      // to the node ID, which both APIs report as the same stable ID.
+      userId: '',
       loginName: match.user || '',
       displayName: match.name || '',
       nodeId: match.nodeId || match.id,
