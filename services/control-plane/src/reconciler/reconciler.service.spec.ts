@@ -96,6 +96,23 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
     );
   });
 
+  describe('host do probe', () => {
+    const server = { subdomain: 'survival' } as Server;
+
+    it('usa o DNS do Service no cluster', () => {
+      mockConfigService.isTest = false;
+
+      expect(reconciler.getProbeHost(server)).toBe('mc-survival.minekubernetes.svc.cluster.local');
+    });
+
+    it('usa 127.0.0.1 com o driver k8s simulado, o mesmo host que o pool RCON usa', () => {
+      mockConfigService.isTest = false;
+      mockConfigService.kubernetes.useMockDriver = true;
+
+      expect(reconciler.getProbeHost(server)).toBe('127.0.0.1');
+    });
+  });
+
   describe('Acceptance Criterion: Apagar um Deployment à mão é corrigido no próximo ciclo (RF-ARQ-25)', () => {
     it('should detect manually deleted deployment and auto-heal by reprovisioning it', async () => {
       const server: Server = {
