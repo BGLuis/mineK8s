@@ -218,4 +218,22 @@ describe('RconClient (RF-RCON-03, RF-RCON-04, RF-RCON-05, RF-RCON-06, RF-RCON-15
 
     client.destroy();
   });
+
+  it('destroy settles a connect that is still in flight, so its caller is not left waiting forever', async () => {
+    // A socket that never connects nor fails, like a DNS lookup that is still pending.
+    const stalledSocket = new net.Socket();
+    jest.spyOn(stalledSocket, 'connect').mockImplementation(() => stalledSocket);
+    const client = new RconClient({
+      serverId: 'srv-stalled',
+      host: 'mc-stalled.minekubernetes.svc.cluster.local',
+      port: 25575,
+      password,
+      createSocket: () => stalledSocket,
+    });
+
+    const connecting = client.connect();
+    client.destroy();
+
+    await expect(connecting).rejects.toThrow('RconClient destroyed');
+  });
 });
