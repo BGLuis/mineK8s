@@ -39,6 +39,7 @@ __pycache__/
 Thumbs.db
 
 # ─── Kubernetes / Terraform local state ──────────────────────────────────────
+k8s/site.env
 *.tfstate
 *.tfstate.*
 .terraform/
