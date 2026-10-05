@@ -83,6 +83,18 @@ describe('JoinPage', () => {
     expect(el.textContent).toContain('Acesso a 2 servidores · 3 usos restantes · expira em 09/10');
   });
 
+  it('shows markup in the invite name as text, never as elements (#94)', async () => {
+    const { fixture, el } = await setup('tok');
+
+    http
+      .expectOne('/api/tailscale/invites/validate/tok')
+      .flush({ ...invite, name: '<script>alert(1)</script><img src=x onerror=alert(2)>' });
+    await fixture.whenStable();
+
+    expect(el.textContent).toContain('<script>alert(1)</script><img src=x onerror=alert(2)>');
+    expect(el.querySelector('script, img')).toBeNull();
+  });
+
   it('names the servers and who invited when the backend provides them', async () => {
     const { fixture, el } = await setup('tok');
 

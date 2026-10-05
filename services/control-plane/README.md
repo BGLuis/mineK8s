@@ -4,6 +4,12 @@ API NestJS e orquestrador. A especificação está em `docs/srs/` (autenticaçã
 
 ## Operação
 
+### Painel web (SPA)
+
+O control plane serve o build de produção de `services/web` na mesma porta da API (`PORT`): os arquivos do build como estão e o `index.html` para qualquer outro GET fora de `/api`, `/socket.io` e `/healthz`, o que inclui o link de convite `/join?token=...`. Gere o build com `npm run build` em `services/web`. Por padrão o diretório é `../web/dist/web/browser` relativo a `dist/`; em outro layout, aponte `WEB_DIST_DIR` para a pasta que contém o `index.html`. Sem build, o boot avisa no log e sobe só a API.
+
+A CSP (`src/common/spa-static.ts`) só aceita scripts da própria origem e nunca inline, por isso o build de produção não usa o `inlineCritical` do Angular, que carrega o CSS por um `<script>` inline.
+
 ### Vincular um usuário existente ao Tailscale (`admin:link`)
 
 O painel abre sessão por `POST /api/auth/session`, que consulta o WhoIs do tailscaled local para o IP de origem e procura o usuário com `users.tailscale_user_id` igual ao ID devolvido. Só o `POST /api/auth/bootstrap` grava esse campo. Admins criados antes do #126, admins adicionados depois do bootstrap e jogadores que precisem do painel ficam com o campo nulo e recebem `401 No account is linked to this Tailscale identity`. O comando abaixo grava o vínculo.

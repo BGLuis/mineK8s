@@ -3,17 +3,19 @@ import * as path from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
 import { AppModule } from './app.module';
 import { AllowedOriginsIoAdapter } from './common/allowed-origins.io-adapter';
+import { serveSpa, SPA_HELMET_OPTIONS } from './common/spa-static';
 import { AppConfigService } from './config/app-config.service';
 import { GATEWAY_GRPC_LOADER_OPTIONS } from './gateway-ipc/grpc-loader-options';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   // Pino logger setup
   const logger = app.get(Logger);
@@ -31,7 +33,14 @@ async function bootstrap() {
   const configService = app.get(AppConfigService);
 
   // Security headers via Helmet
-  app.use(helmet());
+  app.use(helmet(SPA_HELMET_OPTIONS));
+
+  const webDistDir = configService.webDistDir ?? path.resolve(__dirname, '../../web/dist/web/browser');
+  if (serveSpa(app, webDistDir)) {
+    logger.log(`Serving the web SPA from ${webDistDir}`);
+  } else {
+    logger.warn(`No SPA build at ${webDistDir} (set WEB_DIST_DIR); serving the API only`);
+  }
 
   // CORS configuration
   app.enableCors({

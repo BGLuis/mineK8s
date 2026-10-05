@@ -23,7 +23,6 @@ import { TailscalePostureService } from './posture/tailscale-posture.service';
 import { InvitesService } from './invites/invites.service';
 import { DevicesService } from './devices/devices.service';
 import { TailscaleController } from './tailscale.controller';
-import { JoinPortalController } from './portal/join-portal.controller';
 
 @Module({
   imports: [
@@ -41,7 +40,7 @@ import { JoinPortalController } from './portal/join-portal.controller';
     ConsoleModule,
     GatewayIpcModule,
   ],
-  controllers: [TailscaleController, JoinPortalController],
+  controllers: [TailscaleController],
   providers: [
     TailscalePostureService,
     TailscaleLocalDriver,

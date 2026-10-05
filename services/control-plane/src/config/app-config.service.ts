@@ -59,6 +59,11 @@ export class AppConfigService {
     return this.parseCsv(this.config.get<string>('AUTH_TRUSTED_PROXY_IPS'));
   }
 
+  /** Directory with the services/web production build (the one holding index.html). */
+  get webDistDir(): string | undefined {
+    return this.config.get<string>('WEB_DIST_DIR') || undefined;
+  }
+
   get enableSwagger(): boolean {
     return this.config.get<boolean>('ENABLE_SWAGGER', true);
   }
