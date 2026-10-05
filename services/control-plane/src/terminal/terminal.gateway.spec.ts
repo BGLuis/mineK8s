@@ -206,7 +206,9 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
         serverId: testServer.id,
         lines: [{ id: '1', timestamp: '12:00:00', level: 'INFO', message: 'World loaded' }],
       });
-      expect(result?.data.lines).toHaveLength(1);
+      // A returned { event, data } would be re-emitted by Nest and reach the SPA twice.
+      expect(result).toBeUndefined();
+      expect(mockClient.emit).toHaveBeenCalledTimes(1);
     });
 
     it('should deny PLAYER without server access from joining terminal', async () => {
@@ -245,8 +247,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
         testServer,
         'weather clear',
       );
-      expect(result?.data?.output).toBe('Executed: weather clear');
-      expect(result?.data?.durationMs).toBeGreaterThanOrEqual(0);
+      expect(result).toBeUndefined();
 
       // Critério de aceite: Comando pelo WebSocket gera linha em server_audit_logs
       expect(mockAuditRepo.save).toHaveBeenCalledWith(
@@ -260,9 +261,11 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
         }),
       );
 
+      expect(mockClient.emit).toHaveBeenCalledTimes(1);
       expect(mockClient.emit).toHaveBeenCalledWith('command_output', expect.objectContaining({
         command: 'weather clear',
         output: 'Executed: weather clear',
+        durationMs: expect.any(Number),
       }));
     });
   });

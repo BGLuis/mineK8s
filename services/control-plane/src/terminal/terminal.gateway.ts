@@ -131,16 +131,9 @@ export class TerminalGateway
     const buffer = this.logStreamer.getBuffer(serverId);
     const history = buffer.getHistory();
 
-    const response = {
-      event: 'log_history',
-      data: {
-        serverId,
-        lines: history,
-      },
-    };
-
-    client.emit('log_history', response.data);
-    return response;
+    // Emitted here and not returned: Nest re-emits a returned { event, data } to the client, which
+    // would deliver it twice.
+    client.emit('log_history', { serverId, lines: history });
   }
 
   /**
@@ -209,10 +202,6 @@ export class TerminalGateway
     };
 
     client.emit('command_output', responseData);
-    return {
-      event: 'command_output',
-      data: responseData,
-    };
   }
 
   /** Janela deslizante por socket (SRS 03): comandos recusados não ocupam vaga. */
