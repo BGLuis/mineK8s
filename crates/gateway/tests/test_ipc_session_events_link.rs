@@ -20,8 +20,14 @@ impl MockControlPlane {
     fn start() -> Self {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let mut child = Command::new("node")
-            .env("NODE_PATH", format!("{}/../../services/control-plane/node_modules", manifest_dir))
-            .arg(format!("{}/tests/fixtures/mock_grpc_server.js", manifest_dir))
+            .env(
+                "NODE_PATH",
+                format!("{}/../../services/control-plane/node_modules", manifest_dir),
+            )
+            .arg(format!(
+                "{}/tests/fixtures/mock_grpc_server.js",
+                manifest_dir
+            ))
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -81,8 +87,12 @@ async fn test_link_syncs_routes_and_publishes_session_and_wake_events() {
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     // Uma sessão aberta antes do link existir deve ser anunciada assim que ele conectar.
-    let (early_id, _early_abort) =
-        sessions.register_session(ip, "e2e.mine.lan".into(), "srv-e2e-live".into(), "Early".into());
+    let (early_id, _early_abort) = sessions.register_session(
+        ip,
+        "e2e.mine.lan".into(),
+        "srv-e2e-live".into(),
+        "Early".into(),
+    );
 
     let link = tokio::spawn(run_control_plane_link(
         format!("http://127.0.0.1:{}", control_plane.port),
@@ -102,7 +112,10 @@ async fn test_link_syncs_routes_and_publishes_session_and_wake_events() {
 
     // O snapshot do Control Plane popula a tabela de rotas do Gateway.
     tokio::time::timeout(Duration::from_secs(5), async {
-        while route_table.lookup_virtual_host(25565, "e2e.mine.lan").is_none() {
+        while route_table
+            .lookup_virtual_host(25565, "e2e.mine.lan")
+            .is_none()
+        {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
     })
@@ -110,15 +123,28 @@ async fn test_link_syncs_routes_and_publishes_session_and_wake_events() {
     .expect("o snapshot deveria popular a tabela de rotas");
 
     // Sessões novas e encerradas viram CONNECTED / DISCONNECTED.
-    let (steve_id, _steve_abort) =
-        sessions.register_session(ip, "e2e.mine.lan".into(), "srv-e2e-live".into(), "Steve".into());
-    assert_eq!(control_plane.next_session_event(), "CONNECTED:srv-e2e-live:Steve:100.64.0.7");
+    let (steve_id, _steve_abort) = sessions.register_session(
+        ip,
+        "e2e.mine.lan".into(),
+        "srv-e2e-live".into(),
+        "Steve".into(),
+    );
+    assert_eq!(
+        control_plane.next_session_event(),
+        "CONNECTED:srv-e2e-live:Steve:100.64.0.7"
+    );
     sessions.remove_session(&steve_id);
-    assert_eq!(control_plane.next_session_event(), "DISCONNECTED:srv-e2e-live:Steve:100.64.0.7");
+    assert_eq!(
+        control_plane.next_session_event(),
+        "DISCONNECTED:srv-e2e-live:Steve:100.64.0.7"
+    );
 
     // O pedido de auto-wake do servidor vira WAKE_REQUESTED.
     wake_tx.send("srv-e2e-live".into()).unwrap();
-    assert_eq!(control_plane.next_session_event(), "WAKE_REQUESTED:srv-e2e-live::");
+    assert_eq!(
+        control_plane.next_session_event(),
+        "WAKE_REQUESTED:srv-e2e-live::"
+    );
 
     sessions.remove_session(&early_id);
     shutdown_tx.send(true).unwrap();

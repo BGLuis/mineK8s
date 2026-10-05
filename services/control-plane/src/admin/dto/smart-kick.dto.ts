@@ -2,7 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional, IsString } from 'class-validator';
 
 export class SmartKickDto {
-  @ApiProperty({ example: 'srv-survival-uuid', description: 'ID do servidor onde a sessão está ativa' })
+  @ApiProperty({
+    example: 'srv-survival-uuid',
+    description: 'ID do servidor onde a sessão está ativa',
+  })
   @IsString()
   serverId: string;
 

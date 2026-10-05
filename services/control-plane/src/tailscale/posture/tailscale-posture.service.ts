@@ -48,7 +48,9 @@ export class TailscalePostureService implements OnModuleInit {
    * Sem sobrescrever a política na nuvem em nenhuma hipótese.
    */
   async auditBootPosture(): Promise<PostureAuditReport> {
-    this.logger.log('Iniciando auditoria de postura de segurança da Tailnet (Zero-Trust RF-TS-13)...');
+    this.logger.log(
+      'Iniciando auditoria de postura de segurança da Tailnet (Zero-Trust RF-TS-13)...',
+    );
 
     const tailscaleConfig = this.configService.tailscale;
     let policy: RawTailscalePolicy;
@@ -60,7 +62,9 @@ export class TailscalePostureService implements OnModuleInit {
         policy = await this.fetchCloudAcl(tailscaleConfig.tailnetName, tailscaleConfig.apiKey);
         source = 'cloud_api';
         isLiveChecked = true;
-        this.logger.log(`ACL ativa obtida da Tailscale Cloud API para a tailnet: ${tailscaleConfig.tailnetName}`);
+        this.logger.log(
+          `ACL ativa obtida da Tailscale Cloud API para a tailnet: ${tailscaleConfig.tailnetName}`,
+        );
       } catch (err: any) {
         this.logger.warn(
           `Falha ao consultar Tailscale Cloud API (${err?.message || err}). Recorrendo ao arquivo canônico local.`,
@@ -68,7 +72,9 @@ export class TailscalePostureService implements OnModuleInit {
         policy = this.loadLocalCanonicalPolicy();
       }
     } else {
-      this.logger.log('Tailscale API Key não configurada. Avaliando política a partir do arquivo canônico local.');
+      this.logger.log(
+        'Tailscale API Key não configurada. Avaliando política a partir do arquivo canônico local.',
+      );
       policy = this.loadLocalCanonicalPolicy();
     }
 
@@ -83,7 +89,9 @@ export class TailscalePostureService implements OnModuleInit {
         this.logger.warn(`- [${finding.severity}] ${finding.description}`);
       }
     } else {
-      this.logger.log('✅ Postura de segurança da Tailnet: COMPLIANT (Regras Zero-Trust aplicadas).');
+      this.logger.log(
+        '✅ Postura de segurança da Tailnet: COMPLIANT (Regras Zero-Trust aplicadas).',
+      );
     }
 
     return report;
@@ -130,7 +138,8 @@ export class TailscalePostureService implements OnModuleInit {
             findings.push({
               severity: 'CRITICAL',
               ruleIndex: idx,
-              description: 'Broad universal wildcard detected: src ["*"] has unrestricted permission to dst ["*:*"].',
+              description:
+                'Broad universal wildcard detected: src ["*"] has unrestricted permission to dst ["*:*"].',
               rawRule: rule,
             });
             isVulnerable = true;
@@ -204,7 +213,9 @@ export class TailscalePostureService implements OnModuleInit {
       }
     }
 
-    const status = isVulnerable ? SecurityPostureStatus.VULNERABLE : SecurityPostureStatus.COMPLIANT;
+    const status = isVulnerable
+      ? SecurityPostureStatus.VULNERABLE
+      : SecurityPostureStatus.COMPLIANT;
 
     return {
       status,
@@ -226,7 +237,10 @@ export class TailscalePostureService implements OnModuleInit {
   /**
    * Simula a avaliação do tráfego para os testes declarativos do Tailscale huJSON.
    */
-  evaluatePolicyTests(rules: RawTailscaleAclRule[], tests: RawTailscalePolicyTest[]): PolicyTestOutcome[] {
+  evaluatePolicyTests(
+    rules: RawTailscaleAclRule[],
+    tests: RawTailscalePolicyTest[],
+  ): PolicyTestOutcome[] {
     const outcomes: PolicyTestOutcome[] = [];
 
     for (const test of tests) {
@@ -281,7 +295,8 @@ export class TailscalePostureService implements OnModuleInit {
       for (const dst of rule.dst || []) {
         const [ruleHost, rulePort] = this.parseTarget(dst);
 
-        const hostMatches = ruleHost === '*' || ruleHost === targetHost || this.isSubnetMatch(ruleHost, targetHost);
+        const hostMatches =
+          ruleHost === '*' || ruleHost === targetHost || this.isSubnetMatch(ruleHost, targetHost);
         const portMatches = rulePort === '*' || rulePort === targetPort;
 
         if (hostMatches && portMatches) {
@@ -330,7 +345,9 @@ export class TailscalePostureService implements OnModuleInit {
       }
     }
 
-    this.logger.warn('Nenhum arquivo local policy.hujson encontrado. Utilizando política canônica estática interna.');
+    this.logger.warn(
+      'Nenhum arquivo local policy.hujson encontrado. Utilizando política canônica estática interna.',
+    );
     return {
       tagOwners: {
         'tag:mc-gateway': ['autogroup:admin'],

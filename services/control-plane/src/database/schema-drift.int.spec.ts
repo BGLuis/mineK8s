@@ -1,6 +1,9 @@
 import { DataSource } from 'typeorm';
 
-import { createIntegrationDataSource, describeWithDatabase } from './testing/integration-datasource';
+import {
+  createIntegrationDataSource,
+  describeWithDatabase,
+} from './testing/integration-datasource';
 
 /**
  * Production runs with DB_SYNCHRONIZE=false, so a table exists only if a migration creates it. Backups failed with
@@ -23,7 +26,9 @@ describeWithDatabase('migrações cobrem todas as entidades', () => {
     );
     const existing = new Set(tables.map((t) => t.table_name));
 
-    const missing = ds.entityMetadatas.map((m) => m.tableName).filter((name) => !existing.has(name));
+    const missing = ds.entityMetadatas
+      .map((m) => m.tableName)
+      .filter((name) => !existing.has(name));
 
     expect(missing).toEqual([]);
   });

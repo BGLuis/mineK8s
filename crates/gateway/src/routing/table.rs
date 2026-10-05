@@ -1,6 +1,6 @@
+use dashmap::DashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use dashmap::DashMap;
 use tokio::sync::broadcast;
 
 use crate::routing::route::{CachedServerRoute, RouteKey, RoutingModel, ServerInstanceStatus};
@@ -85,7 +85,11 @@ impl RouteTable {
 
     /// Busca de rota para VirtualHost L7 por porta do listener e hostname.
     /// Se não encontrar a rota específica, recorre à busca por alvo SRV (RF-CF-05) ou servidor fallback padrão.
-    pub fn lookup_virtual_host(&self, listener_port: u16, hostname: &str) -> Option<CachedServerRoute> {
+    pub fn lookup_virtual_host(
+        &self,
+        listener_port: u16,
+        hostname: &str,
+    ) -> Option<CachedServerRoute> {
         let normalized = hostname.to_ascii_lowercase();
         let key = RouteKey::virtual_host(listener_port, &normalized);
         if let Some(route) = self.routes.get(&key) {
@@ -134,7 +138,9 @@ impl RouteTable {
         if let Some(key) = self.server_index.get(server_id) {
             if let Some(mut route) = self.routes.get_mut(key.value()) {
                 route.status = new_status;
-                let _ = self.status_broadcaster.send((server_id.to_string(), new_status));
+                let _ = self
+                    .status_broadcaster
+                    .send((server_id.to_string(), new_status));
                 return true;
             }
         }
@@ -159,7 +165,9 @@ impl RouteTable {
             if route.status == ServerInstanceStatus::Ready {
                 return Ok(route);
             }
-            if route.status == ServerInstanceStatus::Crashed || route.status == ServerInstanceStatus::Failed {
+            if route.status == ServerInstanceStatus::Crashed
+                || route.status == ServerInstanceStatus::Failed
+            {
                 return Err(HoldError::Failed(route.status));
             }
         } else {
@@ -183,7 +191,9 @@ impl RouteTable {
                             if let Some(ready_route) = self.get_by_server_id(server_id) {
                                 return Ok(ready_route);
                             }
-                        } else if status == ServerInstanceStatus::Crashed || status == ServerInstanceStatus::Failed {
+                        } else if status == ServerInstanceStatus::Crashed
+                            || status == ServerInstanceStatus::Failed
+                        {
                             return Err(HoldError::Failed(status));
                         }
                     }
@@ -217,7 +227,10 @@ impl RouteTable {
 
     /// Retorna todas as rotas atualmente carregadas na tabela.
     pub fn all_routes(&self) -> Vec<CachedServerRoute> {
-        self.routes.iter().map(|entry| entry.value().clone()).collect()
+        self.routes
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 
     /// Retorna a rota associada ao server_id se existir.

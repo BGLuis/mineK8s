@@ -1,6 +1,6 @@
+use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use dashmap::DashMap;
 
 pub struct CachedStatusEntry {
     pub json: String,

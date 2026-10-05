@@ -71,14 +71,9 @@ describe('AppConfigModule & Schema Validation', () => {
     expect(appConfig.port).toBe(3001);
     expect(appConfig.database.user).toBe('minek8s');
     expect(appConfig.database.port).toBe(5432);
-    expect(appConfig.jwt.secret).toBe(
-      'this_is_a_valid_jwt_secret_with_at_least_32_characters',
-    );
+    expect(appConfig.jwt.secret).toBe('this_is_a_valid_jwt_secret_with_at_least_32_characters');
     expect(appConfig.jwt.expiration).toBe('2d');
-    expect(appConfig.tailscale.trustedProxyIps).toEqual([
-      '127.0.0.1',
-      '100.64.0.1',
-    ]);
+    expect(appConfig.tailscale.trustedProxyIps).toEqual(['127.0.0.1', '100.64.0.1']);
     expect(appConfig.kubernetes.namespace).toBe('minekubernetes');
   });
 

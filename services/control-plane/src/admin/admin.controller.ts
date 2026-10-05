@@ -1,19 +1,5 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-} from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
@@ -36,7 +22,9 @@ export class AdminController {
   }
 
   @Get('users/:id/servers')
-  @ApiOperation({ summary: 'Listar os servidores que o usuário pode acessar (base do diálogo de Expulsar)' })
+  @ApiOperation({
+    summary: 'Listar os servidores que o usuário pode acessar (base do diálogo de Expulsar)',
+  })
   @ApiResponse({ status: 200, type: [AccessibleServerDto] })
   @ApiResponse({ status: 404, description: 'User not found' })
   async listAccessibleServers(@Param('id') id: string): Promise<AccessibleServerDto[]> {
@@ -69,10 +57,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Associar jogador a um grupo de permissões' })
   @ApiResponse({ status: 200, description: 'Jogador associado ao grupo' })
-  async addUserToGroup(
-    @Param('id') groupId: string,
-    @Body('userId') userId: string,
-  ) {
+  async addUserToGroup(@Param('id') groupId: string, @Body('userId') userId: string) {
     await this.adminService.addUserToGroup(groupId, userId);
     return { success: true };
   }
@@ -83,10 +68,7 @@ export class AdminController {
       'Remover jogador do grupo com disparo imediato de Smart Kick caso perca acesso a servidores ativos (RF-ARQ-20, RF-TS-09)',
   })
   @ApiResponse({ status: 200, description: 'Usuário removido e Smart Kick disparado' })
-  async removeUserFromGroup(
-    @Param('id') groupId: string,
-    @Param('userId') userId: string,
-  ) {
+  async removeUserFromGroup(@Param('id') groupId: string, @Param('userId') userId: string) {
     return this.adminService.removeUserFromGroup(groupId, userId);
   }
 
@@ -94,10 +76,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Associar servidor a um grupo de acesso' })
   @ApiResponse({ status: 200, description: 'Servidor associado ao grupo' })
-  async addServerToGroup(
-    @Param('id') groupId: string,
-    @Body('serverId') serverId: string,
-  ) {
+  async addServerToGroup(@Param('id') groupId: string, @Body('serverId') serverId: string) {
     await this.adminService.addServerToGroup(groupId, serverId);
     return { success: true };
   }
@@ -105,17 +84,16 @@ export class AdminController {
   @Delete('groups/:id/servers/:serverId')
   @ApiOperation({ summary: 'Desassociar servidor de um grupo de permissões' })
   @ApiResponse({ status: 200, description: 'Servidor desassociado do grupo' })
-  async removeServerFromGroup(
-    @Param('id') groupId: string,
-    @Param('serverId') serverId: string,
-  ) {
+  async removeServerFromGroup(@Param('id') groupId: string, @Param('serverId') serverId: string) {
     await this.adminService.removeServerFromGroup(groupId, serverId);
     return { success: true };
   }
 
   @Post('smart-kick')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Despachar Smart Kick manual para jogador em servidor ativo (RF-GW-15, RF-TS-09)' })
+  @ApiOperation({
+    summary: 'Despachar Smart Kick manual para jogador em servidor ativo (RF-GW-15, RF-TS-09)',
+  })
   @ApiResponse({ status: 200, description: 'Smart Kick executado com sucesso' })
   async smartKick(@Body() dto: SmartKickDto) {
     return this.adminService.smartKick(dto);

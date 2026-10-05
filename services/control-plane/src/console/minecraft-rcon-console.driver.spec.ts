@@ -48,9 +48,7 @@ describe('MinecraftRconConsoleDriver (RF-MG-05, Guarda L-08)', () => {
   });
 
   it('should return empty list when no players are online', async () => {
-    mockClient.sendCommand.mockResolvedValue(
-      'There are 0 of a max of 20 players online:',
-    );
+    mockClient.sendCommand.mockResolvedValue('There are 0 of a max of 20 players online:');
 
     const players = await driver.listPlayers(mockServer);
     expect(players).toEqual([]);

@@ -1,7 +1,7 @@
+use dashmap::DashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Instant;
-use dashmap::DashMap;
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 use uuid::Uuid;
@@ -46,7 +46,10 @@ impl SessionManager {
     }
 
     /// Passa a publicar CONNECTED/DISCONNECTED de cada sessão (consumido pelo cliente IPC do Control Plane).
-    pub fn with_event_sender(mut self, event_tx: mpsc::UnboundedSender<SessionLifecycleEvent>) -> Self {
+    pub fn with_event_sender(
+        mut self,
+        event_tx: mpsc::UnboundedSender<SessionLifecycleEvent>,
+    ) -> Self {
         self.event_tx = Some(event_tx);
         self
     }
@@ -64,7 +67,11 @@ impl SessionManager {
             .iter()
             .map(|entry| {
                 let handle = entry.value();
-                session_event(SessionEventType::Connected, handle, handle.connected_at_epoch_ms)
+                session_event(
+                    SessionEventType::Connected,
+                    handle,
+                    handle.connected_at_epoch_ms,
+                )
             })
             .collect()
     }
@@ -94,7 +101,11 @@ impl SessionManager {
                 if let Some(tx) = old_handle.abort_tx.take() {
                     let _ = tx.send(());
                 }
-                self.publish(session_event(SessionEventType::Disconnected, &old_handle, now_epoch_ms()));
+                self.publish(session_event(
+                    SessionEventType::Disconnected,
+                    &old_handle,
+                    now_epoch_ms(),
+                ));
             }
         }
 
@@ -109,7 +120,11 @@ impl SessionManager {
             abort_tx: Some(abort_tx),
         };
 
-        self.publish(session_event(SessionEventType::Connected, &handle, handle.connected_at_epoch_ms));
+        self.publish(session_event(
+            SessionEventType::Connected,
+            &handle,
+            handle.connected_at_epoch_ms,
+        ));
         self.sessions.insert(session_id, handle);
         self.nick_index.insert(nick_key, session_id);
 
@@ -120,8 +135,13 @@ impl SessionManager {
     pub fn remove_session(&self, session_id: &Uuid) -> Option<ActiveSessionHandle> {
         if let Some((_, handle)) = self.sessions.remove(session_id) {
             let nick_key = (handle.server_id.clone(), handle.minecraft_nick.clone());
-            self.nick_index.remove_if(&nick_key, |_, id| id == session_id);
-            self.publish(session_event(SessionEventType::Disconnected, &handle, now_epoch_ms()));
+            self.nick_index
+                .remove_if(&nick_key, |_, id| id == session_id);
+            self.publish(session_event(
+                SessionEventType::Disconnected,
+                &handle,
+                now_epoch_ms(),
+            ));
             Some(handle)
         } else {
             None
@@ -139,11 +159,7 @@ impl SessionManager {
     /// Executa o Smart Kick de sessões ativas do jogador (RF-GW-15, RF-TS-09).
     /// Se `server_id` for fornecido, revoga apenas a sessão naquele servidor.
     /// Se `server_id` for None, revoga todas as sessões ativas com o nickname (ex.: Ban de Rede).
-    pub fn revoke_player_sessions(
-        &self,
-        server_id: Option<&str>,
-        minecraft_nick: &str,
-    ) -> usize {
+    pub fn revoke_player_sessions(&self, server_id: Option<&str>, minecraft_nick: &str) -> usize {
         let mut terminated = 0;
         let mut sessions_to_kill = Vec::new();
 
@@ -283,7 +299,10 @@ mod tests {
 
         manager.remove_session(&session_id);
         let disconnected = rx.try_recv().expect("DISCONNECTED deve ser publicado");
-        assert_eq!(disconnected.event_type, SessionEventType::Disconnected as i32);
+        assert_eq!(
+            disconnected.event_type,
+            SessionEventType::Disconnected as i32
+        );
         assert_eq!(disconnected.session_id, session_id.to_string());
         assert!(rx.try_recv().is_err());
     }
@@ -294,11 +313,16 @@ mod tests {
         let manager = SessionManager::new().with_event_sender(tx);
         let ip: IpAddr = "100.64.0.7".parse().unwrap();
 
-        let (old_id, _old_abort) = manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
-        let (new_id, _new_abort) = manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
+        let (old_id, _old_abort) =
+            manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
+        let (new_id, _new_abort) =
+            manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
 
         let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
-        let kinds: Vec<_> = events.iter().map(|e| (e.event_type, e.session_id.clone())).collect();
+        let kinds: Vec<_> = events
+            .iter()
+            .map(|e| (e.event_type, e.session_id.clone()))
+            .collect();
         assert_eq!(
             kinds,
             vec![
@@ -313,8 +337,10 @@ mod tests {
     async fn test_connected_events_reannounce_only_open_sessions() {
         let manager = SessionManager::new();
         let ip: IpAddr = "100.64.0.7".parse().unwrap();
-        let (open_id, _a) = manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
-        let (closed_id, _b) = manager.register_session(ip, "s".into(), "srv-1".into(), "Alex".into());
+        let (open_id, _a) =
+            manager.register_session(ip, "s".into(), "srv-1".into(), "Steve".into());
+        let (closed_id, _b) =
+            manager.register_session(ip, "s".into(), "srv-1".into(), "Alex".into());
         manager.remove_session(&closed_id);
 
         let events = manager.connected_events();

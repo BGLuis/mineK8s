@@ -71,14 +71,16 @@ describe('TailscaleCloudDriver (RF-TS-05, RF-TS-14)', () => {
       } as any);
     });
 
-    it.each(['fd7a:115c:a1e0::d338:4809', '[fd7a:115c:a1e0::d338:4809]:25565', '100.68.72.9:51234', '::ffff:100.68.72.9'])(
-      'encontra o dispositivo pelo endereço %s',
-      async (address) => {
-        const identity = await driver.findDeviceByIp(address);
+    it.each([
+      'fd7a:115c:a1e0::d338:4809',
+      '[fd7a:115c:a1e0::d338:4809]:25565',
+      '100.68.72.9:51234',
+      '::ffff:100.68.72.9',
+    ])('encontra o dispositivo pelo endereço %s', async (address) => {
+      const identity = await driver.findDeviceByIp(address);
 
-        expect(identity?.nodeId).toBe('nd4Jzj81et11CNTRL');
-      },
-    );
+      expect(identity?.nodeId).toBe('nd4Jzj81et11CNTRL');
+    });
 
     it('não põe o login name no userId, que é casado com o ID numérico de users.tailscale_user_id', async () => {
       const identity = await driver.findDeviceByIp('100.68.72.9');

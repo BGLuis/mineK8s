@@ -76,7 +76,8 @@ describe('KubernetesService', () => {
 
     await service.applyDeployment(server, settings);
 
-    const container = driver.deployments.get('minekubernetes/mc-lobby').spec.template.spec.containers[0];
+    const container =
+      driver.deployments.get('minekubernetes/mc-lobby').spec.template.spec.containers[0];
     expect(container.args[0]).toContain('-Xmx6144M');
     expect(container.resources.limits.memory).toBe(`${6144 + 1536}Mi`);
     expect((await driver.getDeployment('mc-lobby', 'minekubernetes'))?.replicas).toBe(1);

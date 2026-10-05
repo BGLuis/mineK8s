@@ -4,7 +4,12 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { Server } from '@database/entities/server.entity';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 
-import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, KUBERNETES_DRIVER } from './k8s.interface';
+import {
+  IKubernetesDriver,
+  K8sDeploymentInfo,
+  K8sJobInfo,
+  KUBERNETES_DRIVER,
+} from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
 
 @Injectable()
@@ -19,11 +24,10 @@ export class KubernetesService {
     private readonly consoleDriver?: MinecraftRconConsoleDriver,
   ) {}
 
-  async provisionServer(
-    server: Server,
-    settings?: MinecraftServerSettings,
-  ): Promise<void> {
-    this.logger.log(`Provisioning Kubernetes resources for server [${server.name}] (${server.subdomain})...`);
+  async provisionServer(server: Server, settings?: MinecraftServerSettings): Promise<void> {
+    this.logger.log(
+      `Provisioning Kubernetes resources for server [${server.name}] (${server.subdomain})...`,
+    );
 
     // 1. Create Persistent Volume Claim
     const pvcManifest = ManifestBuilder.buildPVC(server, this.configService);
@@ -46,7 +50,9 @@ export class KubernetesService {
 
   /** Rewrites the Deployment from the current server record; replicas follow server.state. */
   async applyDeployment(server: Server, settings?: MinecraftServerSettings): Promise<void> {
-    this.logger.log(`Applying Deployment for [${server.subdomain}] with ${server.allocated_memory_mb} MiB heap...`);
+    this.logger.log(
+      `Applying Deployment for [${server.subdomain}] with ${server.allocated_memory_mb} MiB heap...`,
+    );
     await this.driver.replaceDeployment(
       ManifestBuilder.buildDeployment(server, settings, this.configService),
     );
@@ -63,7 +69,11 @@ export class KubernetesService {
 
   async stopServer(server: Server): Promise<void> {
     const isMinecraft = !server.game_type || server.game_type.toUpperCase() === 'MINECRAFT';
-    if (isMinecraft && this.consoleDriver && (server.state === 'READY' || server.state === 'STOPPING')) {
+    if (
+      isMinecraft &&
+      this.consoleDriver &&
+      (server.state === 'READY' || server.state === 'STOPPING')
+    ) {
       try {
         await this.consoleDriver.gracefulShutdown(server);
       } catch (err: any) {
@@ -80,7 +90,9 @@ export class KubernetesService {
   }
 
   async restartServer(server: Server): Promise<void> {
-    this.logger.log(`Restarting server [${server.subdomain}]: performing graceful stop and starting...`);
+    this.logger.log(
+      `Restarting server [${server.subdomain}]: performing graceful stop and starting...`,
+    );
     await this.stopServer(server);
     await this.startServer(server);
   }

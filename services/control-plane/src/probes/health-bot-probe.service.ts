@@ -128,7 +128,11 @@ export class HealthBotProbeService {
           // If login succeeded and server took longer to send spawn packet, still mark healthy
           finish(true, 'login_success');
         } else {
-          finish(false, 'failed', `Health Bot probe timed out after ${timeoutMs}ms (state: ${ConnectionState[currentState]})`);
+          finish(
+            false,
+            'failed',
+            `Health Bot probe timed out after ${timeoutMs}ms (state: ${ConnectionState[currentState]})`,
+          );
         }
       });
 

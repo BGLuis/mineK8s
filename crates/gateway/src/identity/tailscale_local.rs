@@ -1,8 +1,8 @@
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tracing::{debug, warn};
@@ -137,12 +137,18 @@ impl TailscaleLocalWhoIs {
 
     /// Consulta a LocalAPI do Tailscale daemon local via Unix Domain Socket (RF-GW-08, RF-TS-05).
     /// Executa em sub-milissegundos (< 5ms) sobre o socket local.
-    pub async fn query_whois(&self, client_ip: &str) -> Result<Option<WhoIsIdentity>, std::io::Error> {
+    pub async fn query_whois(
+        &self,
+        client_ip: &str,
+    ) -> Result<Option<WhoIsIdentity>, std::io::Error> {
         let clean_ip = client_ip.split(':').next().unwrap_or(client_ip);
 
         // 1. Checa cache local em memória (< 1ms)
         if let Some(cached) = self.cache.get(clean_ip) {
-            debug!(ip = clean_ip, "WhoIs resolvido a partir do cache em memória");
+            debug!(
+                ip = clean_ip,
+                "WhoIs resolvido a partir do cache em memória"
+            );
             return Ok(Some(cached));
         }
 

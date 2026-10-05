@@ -75,4 +75,3 @@ export const appConfigSchema = Joi.object({
   MODPACK_CATALOG_CACHE_TTL_MS: Joi.number().min(0).default(60000),
   MODPACK_CATALOG_TIMEOUT_MS: Joi.number().min(1000).default(8000),
 }).unknown(true);
-

@@ -40,7 +40,9 @@ export async function createIntegrationDataSource(schema: string): Promise<DataS
     await bootstrap.end();
   }
 
-  const entities = Object.values(entityModule).filter((value) => typeof value === 'function') as any[];
+  const entities = Object.values(entityModule).filter(
+    (value) => typeof value === 'function',
+  ) as any[];
   const dataSource = new DataSource({
     type: 'postgres',
     url: integrationDatabaseUrl,

@@ -34,7 +34,10 @@ describe('DevicesService', () => {
     };
 
     mockGatewayIpcService = {
-      revokePlayerSession: jest.fn(async () => ({ session_found: true, terminated_connections_count: 1 })),
+      revokePlayerSession: jest.fn(async () => ({
+        session_found: true,
+        terminated_connections_count: 1,
+      })),
     };
 
     service = new DevicesService(
@@ -126,7 +129,9 @@ describe('DevicesService', () => {
     });
 
     it('com o Gateway fora do ar o ban continua e o nó sai da Tailnet', async () => {
-      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(new Error('Gateway is not connected'));
+      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(
+        new Error('Gateway is not connected'),
+      );
       mockDeviceRepo.findOne.mockResolvedValue({
         id: 'dev-target-2',
         node_id: 'node-ts-2',

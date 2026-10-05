@@ -44,7 +44,10 @@ export class ServersFilesService {
     return serverDir;
   }
 
-  async listFiles(id: string, relPath: string = ''): Promise<{ path: string; files: FileItemDto[] }> {
+  async listFiles(
+    id: string,
+    relPath: string = '',
+  ): Promise<{ path: string; files: FileItemDto[] }> {
     const server = await this.getServer(id);
     const baseDir = this.getServerDataDir(server);
     const safePath = resolveSafePath(baseDir, relPath);

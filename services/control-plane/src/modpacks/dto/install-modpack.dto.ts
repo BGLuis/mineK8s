@@ -20,7 +20,9 @@ export class InstallModpackDto {
   @IsNotEmpty()
   versionId: string;
 
-  @ApiPropertyOptional({ description: 'URL opcional para download direto do arquivo .mrpack ou .zip' })
+  @ApiPropertyOptional({
+    description: 'URL opcional para download direto do arquivo .mrpack ou .zip',
+  })
   @IsOptional()
   @IsString()
   archiveUrl?: string;

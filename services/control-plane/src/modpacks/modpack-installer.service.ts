@@ -1,20 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  ConflictException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
-import {
-  ModpackTaskEntity,
-  ModpackTaskStatus,
-} from '@database/entities/modpack-task.entity';
+import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
 import { CurseForgeResolverService } from './resolvers/curseforge-resolver.service';
@@ -192,7 +183,8 @@ export class ModpackInstallerService {
       for (const f of resolvedFiles) {
         count++;
         const targetPath = path.join(modsDir, f.name);
-        const hashToQuery = f.hashes?.sha256 || f.hashes?.sha1 || this.casStorage.computeSha1(f.name);
+        const hashToQuery =
+          f.hashes?.sha256 || f.hashes?.sha1 || this.casStorage.computeSha1(f.name);
 
         const existsInCas = await this.casStorage.has(hashToQuery);
 
@@ -246,7 +238,9 @@ export class ModpackInstallerService {
         currentStep: 'Modpack installation completed successfully!',
       });
 
-      this.logger.log(`[RF-STO-11, RF-STO-12] Modpack [${dto.projectId}] instalado em [${server.subdomain}].`);
+      this.logger.log(
+        `[RF-STO-11, RF-STO-12] Modpack [${dto.projectId}] instalado em [${server.subdomain}].`,
+      );
     } catch (err: any) {
       this.logger.error(`Falha no pipeline de instalação do modpack: ${err.message}`);
       await this.updateTaskProgress(task, {

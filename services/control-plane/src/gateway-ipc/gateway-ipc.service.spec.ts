@@ -205,7 +205,9 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     });
 
     it('ACCESS_DENIED não vira sessão ativa', async () => {
-      await service.handleSessionEvent(sessionEvent(SessionEventType.ACCESS_DENIED, 's1', 'Intruso'));
+      await service.handleSessionEvent(
+        sessionEvent(SessionEventType.ACCESS_DENIED, 's1', 'Intruso'),
+      );
 
       expect(playerSessions.count('server-uuid-1')).toBe(0);
     });
@@ -303,14 +305,18 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     function connectGateway() {
       const results$ = new Subject<GatewayCommandResult>();
       const received: GatewayCommand[] = [];
-      const subscription = service.openCommandStream(results$).subscribe((command) => received.push(command));
+      const subscription = service
+        .openCommandStream(results$)
+        .subscribe((command) => received.push(command));
       return { results$, received, disconnect: () => subscription.unsubscribe() };
     }
 
     afterEach(() => jest.useRealTimers());
 
     it('sem Gateway conectado falha explicitamente em vez de reportar sucesso', async () => {
-      await expect(service.revokePlayerSession(request)).rejects.toThrow(ServiceUnavailableException);
+      await expect(service.revokePlayerSession(request)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
     });
 
     it('envia o comando ao Gateway e devolve a contagem real de sessões derrubadas', async () => {
@@ -324,7 +330,10 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
         revoke_session: { session_found: true, terminated_connections_count: 3 },
       });
 
-      await expect(pending).resolves.toEqual({ session_found: true, terminated_connections_count: 3 });
+      await expect(pending).resolves.toEqual({
+        session_found: true,
+        terminated_connections_count: 3,
+      });
     });
 
     it('nenhuma sessão derrubada vira 0 e session_found falso, mesmo com o proto omitindo campos zerados', async () => {
@@ -333,7 +342,10 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       const pending = service.revokePlayerSession(request);
       gateway.results$.next({ command_id: gateway.received[0].command_id, revoke_session: {} });
 
-      await expect(pending).resolves.toEqual({ session_found: false, terminated_connections_count: 0 });
+      await expect(pending).resolves.toEqual({
+        session_found: false,
+        terminated_connections_count: 0,
+      });
     });
 
     it('correlaciona cada resposta ao seu comando, mesmo fora de ordem', async () => {
@@ -358,7 +370,10 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       const gateway = connectGateway();
 
       const pending = service.revokePlayerSession(request);
-      gateway.results$.next({ command_id: gateway.received[0].command_id, error: 'client_ip inválido: x' });
+      gateway.results$.next({
+        command_id: gateway.received[0].command_id,
+        error: 'client_ip inválido: x',
+      });
 
       await expect(pending).rejects.toThrow(BadGatewayException);
       await expect(pending).rejects.toThrow('client_ip inválido: x');
@@ -382,13 +397,17 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       gateway.disconnect();
 
       await expect(pending).rejects.toThrow(ServiceUnavailableException);
-      await expect(service.revokePlayerSession(request)).rejects.toThrow('Gateway is not connected');
+      await expect(service.revokePlayerSession(request)).rejects.toThrow(
+        'Gateway is not connected',
+      );
     });
 
     it('ignora resultados sem comando pendente', async () => {
       const gateway = connectGateway();
 
-      expect(() => gateway.results$.next({ command_id: 'desconhecido', revoke_session: {} })).not.toThrow();
+      expect(() =>
+        gateway.results$.next({ command_id: 'desconhecido', revoke_session: {} }),
+      ).not.toThrow();
     });
   });
 

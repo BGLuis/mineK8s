@@ -41,7 +41,9 @@ export class ServerStateSubscriber implements EntitySubscriberInterface<Server> 
   }
 
   afterUpdate(event: UpdateEvent<Server>): void {
-    const changed = event.updatedColumns.some((column) => WATCHED_COLUMNS.includes(column.propertyName));
+    const changed = event.updatedColumns.some((column) =>
+      WATCHED_COLUMNS.includes(column.propertyName),
+    );
     if (!changed) {
       return;
     }
@@ -54,7 +56,7 @@ export class ServerStateSubscriber implements EntitySubscriberInterface<Server> 
   afterTransactionCommit(event: TransactionCommitEvent): void {
     const events = this.pending.get(event.queryRunner) ?? [];
     this.pending.delete(event.queryRunner);
-    events.forEach((serverEvent) => this.gateway.emitServerState(serverEvent));
+    for (const serverEvent of events) this.gateway.emitServerState(serverEvent);
   }
 
   afterTransactionRollback(event: TransactionRollbackEvent): void {

@@ -39,9 +39,10 @@ impl GatewayControlServiceClient {
         mut request: Request<Empty>,
     ) -> Result<tonic::Response<RoutingSnapshotResponse>, Status> {
         request.set_timeout(UNARY_TIMEOUT);
-        self.inner.ready().await.map_err(|e| {
-            Status::unknown(format!("GatewayControlService indisponível: {}", e))
-        })?;
+        self.inner
+            .ready()
+            .await
+            .map_err(|e| Status::unknown(format!("GatewayControlService indisponível: {}", e)))?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
             "/minekubernetes.gateway.v1.GatewayControlService/GetInitialRoutingSnapshot",
@@ -53,9 +54,10 @@ impl GatewayControlServiceClient {
         &mut self,
         request: Request<Empty>,
     ) -> Result<tonic::Response<tonic::Streaming<RouteUpdateEvent>>, Status> {
-        self.inner.ready().await.map_err(|e| {
-            Status::unknown(format!("GatewayControlService indisponível: {}", e))
-        })?;
+        self.inner
+            .ready()
+            .await
+            .map_err(|e| Status::unknown(format!("GatewayControlService indisponível: {}", e)))?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
             "/minekubernetes.gateway.v1.GatewayControlService/StreamRouteUpdates",
@@ -69,14 +71,17 @@ impl GatewayControlServiceClient {
         &mut self,
         events: ReceiverStream<SessionLifecycleEvent>,
     ) -> Result<tonic::Response<Empty>, Status> {
-        self.inner.ready().await.map_err(|e| {
-            Status::unknown(format!("GatewayControlService indisponível: {}", e))
-        })?;
+        self.inner
+            .ready()
+            .await
+            .map_err(|e| Status::unknown(format!("GatewayControlService indisponível: {}", e)))?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
             "/minekubernetes.gateway.v1.GatewayControlService/StreamSessionEvents",
         );
-        self.inner.client_streaming(Request::new(events), path, codec).await
+        self.inner
+            .client_streaming(Request::new(events), path, codec)
+            .await
     }
 
     /// Abre a chamada `StreamCommands`. A resposta (headers) só chega quando o Control Plane tem
@@ -85,14 +90,17 @@ impl GatewayControlServiceClient {
         &mut self,
         results: ReceiverStream<GatewayCommandResult>,
     ) -> Result<tonic::Response<tonic::Streaming<GatewayCommand>>, Status> {
-        self.inner.ready().await.map_err(|e| {
-            Status::unknown(format!("GatewayControlService indisponível: {}", e))
-        })?;
+        self.inner
+            .ready()
+            .await
+            .map_err(|e| Status::unknown(format!("GatewayControlService indisponível: {}", e)))?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
             "/minekubernetes.gateway.v1.GatewayControlService/StreamCommands",
         );
-        self.inner.streaming(Request::new(results), path, codec).await
+        self.inner
+            .streaming(Request::new(results), path, codec)
+            .await
     }
 
     pub async fn resolve_player_identity(
@@ -100,9 +108,10 @@ impl GatewayControlServiceClient {
         mut request: Request<ResolvePlayerRequest>,
     ) -> Result<tonic::Response<ResolvePlayerResponse>, Status> {
         request.set_timeout(UNARY_TIMEOUT);
-        self.inner.ready().await.map_err(|e| {
-            Status::unknown(format!("GatewayControlService indisponível: {}", e))
-        })?;
+        self.inner
+            .ready()
+            .await
+            .map_err(|e| Status::unknown(format!("GatewayControlService indisponível: {}", e)))?;
         let codec = ProstCodec::default();
         let path = PathAndQuery::from_static(
             "/minekubernetes.gateway.v1.GatewayControlService/ResolvePlayerIdentity",
@@ -182,7 +191,9 @@ impl GatewayIpcClient {
     }
 
     /// Abre stream contínuo de atualizações de rotas emitidas pelo Control Plane.
-    pub async fn subscribe_route_updates(&mut self) -> Result<tonic::Streaming<RouteUpdateEvent>, Status> {
+    pub async fn subscribe_route_updates(
+        &mut self,
+    ) -> Result<tonic::Streaming<RouteUpdateEvent>, Status> {
         let resp = self
             .client
             .stream_route_updates(Request::new(Empty {}))
@@ -203,7 +214,10 @@ impl GatewayIpcClient {
             client_ip: client_ip.to_string(),
         };
 
-        let resp = self.client.resolve_player_identity(Request::new(req)).await?;
+        let resp = self
+            .client
+            .resolve_player_identity(Request::new(req))
+            .await?;
         let inner = resp.into_inner();
         if inner.found {
             Ok(Some(inner))
@@ -282,7 +296,11 @@ impl GatewayIpcClient {
     ///
     /// Comando nenhum é enfileirado enquanto o stream está fora: quem o enviou recebe um erro do
     /// Control Plane, e um kick executado minutos depois derrubaria uma sessão legítima.
-    pub async fn run_commands_loop(self, sessions: SessionManager, mut shutdown_rx: watch::Receiver<bool>) {
+    pub async fn run_commands_loop(
+        self,
+        sessions: SessionManager,
+        mut shutdown_rx: watch::Receiver<bool>,
+    ) {
         info!("Iniciando canal de comandos com o Control Plane...");
         let mut client = self.client.clone();
 
@@ -432,7 +450,10 @@ pub fn apply_route_update_event(route_table: &RouteTable, event: RouteUpdateEven
             }
         }
         _ => {
-            warn!(action = event.action, "Ação de rota desconhecida recebida no IPC");
+            warn!(
+                action = event.action,
+                "Ação de rota desconhecida recebida no IPC"
+            );
         }
     }
 }

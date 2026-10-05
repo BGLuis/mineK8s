@@ -12,11 +12,7 @@ export interface ConsoleDriver {
   /**
    * Executa um comando textual direto no console do servidor.
    */
-  sendCommand(
-    server: Server,
-    command: string,
-    options?: CommandOptions,
-  ): Promise<string>;
+  sendCommand(server: Server, command: string, options?: CommandOptions): Promise<string>;
 
   /**
    * Obtém a lista de jogadores atualmente conectados.

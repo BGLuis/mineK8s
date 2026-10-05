@@ -67,8 +67,12 @@ pub async fn run_control_plane_link(
     info!(endpoint = %endpoint, "Conectado ao Control Plane via gRPC");
 
     tokio::join!(
-        client.clone().run_sync_loop(route_table, shutdown_rx.clone()),
-        client.clone().run_commands_loop(sessions.clone(), shutdown_rx.clone()),
+        client
+            .clone()
+            .run_sync_loop(route_table, shutdown_rx.clone()),
+        client
+            .clone()
+            .run_commands_loop(sessions.clone(), shutdown_rx.clone()),
         client.run_session_events_loop(sessions, events_rx, shutdown_rx),
     );
     wake_bridge.abort();

@@ -111,7 +111,10 @@ async fn test_dedicated_port_l4_forward_without_parser() {
     let client_task = tokio::spawn(async move {
         let mut stream = tokio::net::TcpStream::connect(gateway_addr).await.unwrap();
         // Envia payload que causaria erro fatal no parser Minecraft
-        stream.write_all(b"TERRARIA_RAW_BYTES_SEM_PARSER").await.unwrap();
+        stream
+            .write_all(b"TERRARIA_RAW_BYTES_SEM_PARSER")
+            .await
+            .unwrap();
 
         let mut reply = [0u8; 128];
         let n = stream.read(&mut reply).await.unwrap();

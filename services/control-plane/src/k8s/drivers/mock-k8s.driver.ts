@@ -66,10 +66,7 @@ export class MockKubernetesDriver implements IKubernetesDriver {
     this.logger.debug(`[MockK8s] Deleted Service: ${key}`);
   }
 
-  async deletePersistentVolumeClaim(
-    name: string,
-    namespace = 'minekubernetes',
-  ): Promise<void> {
+  async deletePersistentVolumeClaim(name: string, namespace = 'minekubernetes'): Promise<void> {
     const key = `${namespace}/${name}`;
     this.pvcs.delete(key);
     this.logger.debug(`[MockK8s] Deleted PVC: ${key}`);

@@ -11,11 +11,19 @@ export class ServerGroup {
   @PrimaryColumn({ type: 'uuid' })
   group_id: string;
 
-  @ManyToOne(() => Server, (server) => server.server_groups, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Server,
+    (server) => server.server_groups,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'server_id' })
   server: Server;
 
-  @ManyToOne(() => Group, (group) => group.server_groups, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Group,
+    (group) => group.server_groups,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'group_id' })
   group: Group;
 }

@@ -80,7 +80,9 @@ export class ServersController {
   }
 
   @Get(':id/players')
-  @ApiOperation({ summary: 'List players currently connected through the gateway, with session start' })
+  @ApiOperation({
+    summary: 'List players currently connected through the gateway, with session start',
+  })
   @ApiResponse({ status: 200, description: 'Online count, slot limit and sessions' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   async players(@Param('id') id: string) {
@@ -104,7 +106,9 @@ export class ServersController {
   }
 
   @Post(':id/restart')
-  @ApiOperation({ summary: 'Restart a running server with graceful shutdown (save-all, stop, start)' })
+  @ApiOperation({
+    summary: 'Restart a running server with graceful shutdown (save-all, stop, start)',
+  })
   @ApiResponse({ status: 200, description: 'Server restart initiated' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Server is not running' })
@@ -114,7 +118,8 @@ export class ServersController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update quick settings (sleep timeout, auto-wake, maintenance, access policy) and sync the Gateway',
+    summary:
+      'Update quick settings (sleep timeout, auto-wake, maintenance, access policy) and sync the Gateway',
   })
   @ApiResponse({ status: 200, description: 'Server updated' })
   @ApiResponse({ status: 404, description: 'Server not found' })
@@ -124,7 +129,9 @@ export class ServersController {
   }
 
   @Post(':id/update-version')
-  @ApiOperation({ summary: 'Update server version with pre-update backup and automated rollback (RF-STO-13)' })
+  @ApiOperation({
+    summary: 'Update server version with pre-update backup and automated rollback (RF-STO-13)',
+  })
   @ApiResponse({ status: 200, description: 'Version update result' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Server is already being updated' })
@@ -161,11 +168,7 @@ export class ServersController {
   @ApiOperation({ summary: 'Dispatch command to server via RCON or console driver' })
   @ApiResponse({ status: 200, description: 'Command response' })
   @ApiResponse({ status: 404, description: 'Server not found' })
-  async sendCommand(
-    @Param('id') id: string,
-    @Body() dto: CommandDto,
-    @Req() req?: any,
-  ) {
+  async sendCommand(@Param('id') id: string, @Body() dto: CommandDto, @Req() req?: any) {
     return this.serversService.sendCommand(id, dto.command, {
       user: req?.user,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
@@ -174,7 +177,9 @@ export class ServersController {
   }
 
   @Get(':id/files')
-  @ApiOperation({ summary: 'List files and directories inside server /data storage (RF-ARQ-17, L-04)' })
+  @ApiOperation({
+    summary: 'List files and directories inside server /data storage (RF-ARQ-17, L-04)',
+  })
   @ApiResponse({ status: 200, description: 'Directory contents' })
   @ApiResponse({ status: 403, description: 'Path traversal or symlink violation' })
   @ApiResponse({ status: 404, description: 'Server or path not found' })
@@ -218,10 +223,7 @@ export class ServersController {
   @ApiResponse({ status: 202, description: 'World archive extracted successfully' })
   @ApiResponse({ status: 409, description: 'Conflict: server is running or starting' })
   @ApiResponse({ status: 403, description: 'Zip-slip or forbidden symlink detected' })
-  async uploadWorld(
-    @Param('id') id: string,
-    @UploadedFile() file?: any,
-  ) {
+  async uploadWorld(@Param('id') id: string, @UploadedFile() file?: any) {
     return this.filesService.uploadWorld(id, file);
   }
 
@@ -231,10 +233,7 @@ export class ServersController {
   @ApiResponse({ status: 202, description: 'Backup iniciado ou concluído com sucesso' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Conflito de estado ou tarefa em andamento' })
-  async createBackup(
-    @Param('id') id: string,
-    @Body() dto?: CreateBackupDto,
-  ) {
+  async createBackup(@Param('id') id: string, @Body() dto?: CreateBackupDto) {
     return this.backupService.createBackupForServer(id, dto?.type || 'HOT');
   }
 
@@ -249,7 +248,10 @@ export class ServersController {
   @ApiOperation({ summary: 'Remover backup físico e registro do banco (RF-STO-15, RF-STO-17)' })
   @ApiResponse({ status: 200, description: 'Backup removed successfully' })
   @ApiResponse({ status: 403, description: 'Tentativa de remover backup protegido sem force=true' })
-  @ApiResponse({ status: 400, description: 'Tentativa de remover backup pre-restore dentro de 48h' })
+  @ApiResponse({
+    status: 400,
+    description: 'Tentativa de remover backup pre-restore dentro de 48h',
+  })
   @ApiResponse({ status: 404, description: 'Backup não encontrado' })
   async deleteBackup(
     @Param('id') id: string,
@@ -261,14 +263,13 @@ export class ServersController {
 
   @Post(':id/backups/:backupId/restore')
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Restaurar backup transacionalmente com staging e rollback (RF-STO-17)' })
+  @ApiOperation({
+    summary: 'Restaurar backup transacionalmente com staging e rollback (RF-STO-17)',
+  })
   @ApiResponse({ status: 202, description: 'Restauração transacional executada' })
   @ApiResponse({ status: 404, description: 'Servidor ou backup não encontrado' })
   @ApiResponse({ status: 409, description: 'Instância não está STOPPED' })
-  async restoreBackup(
-    @Param('id') id: string,
-    @Param('backupId') backupId: string,
-  ) {
+  async restoreBackup(@Param('id') id: string, @Param('backupId') backupId: string) {
     return this.backupService.restoreBackupById(id, backupId);
   }
 
@@ -296,8 +297,13 @@ export class ServersController {
 
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Publicar servidor publicamente na internet via Cloudflare SRV (RF-CF-07)' })
-  @ApiResponse({ status: 200, description: 'Servidor publicado com política INTERNET e online-mode=true' })
+  @ApiOperation({
+    summary: 'Publicar servidor publicamente na internet via Cloudflare SRV (RF-CF-07)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Servidor publicado com política INTERNET e online-mode=true',
+  })
   @ApiResponse({ status: 404, description: 'Server not found' })
   async publish(@Param('id') id: string) {
     return this.serversService.publishServer(id);
@@ -305,11 +311,12 @@ export class ServersController {
 
   @Delete(':id/publish')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Despublicar servidor da internet e reverter registro Cloudflare (RF-CF-07)' })
+  @ApiOperation({
+    summary: 'Despublicar servidor da internet e reverter registro Cloudflare (RF-CF-07)',
+  })
   @ApiResponse({ status: 200, description: 'Servidor despublicado e retornado à política padrão' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   async unpublish(@Param('id') id: string) {
     return this.serversService.unpublishServer(id);
   }
 }
-

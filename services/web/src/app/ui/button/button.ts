@@ -4,7 +4,13 @@ import { McIcon } from '../icon/icon';
 import { IconName } from '../icon/icon-registry';
 
 export type ButtonVariant =
-  'neutral' | 'light' | 'primary' | 'danger' | 'info' | 'warning' | 'accent';
+  | 'neutral'
+  | 'light'
+  | 'primary'
+  | 'danger'
+  | 'info'
+  | 'warning'
+  | 'accent';
 export type ButtonSize = 'md' | 'sm';
 
 /** Light and warning backgrounds are bright, so they take inverse (black) text for contrast. */

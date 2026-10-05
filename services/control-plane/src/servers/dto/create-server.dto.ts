@@ -97,7 +97,8 @@ export class CreateServerDto {
   @MinLength(2)
   @MaxLength(63)
   @Matches(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/, {
-    message: 'Subdomain must contain only lowercase letters, numbers and hyphens, without a leading or trailing hyphen',
+    message:
+      'Subdomain must contain only lowercase letters, numbers and hyphens, without a leading or trailing hyphen',
   })
   subdomain: string;
 

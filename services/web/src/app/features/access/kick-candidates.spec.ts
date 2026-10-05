@@ -4,7 +4,12 @@ import { isKickable, kickCandidates } from './kick-candidates';
 const server = (id: string, state: ServerSummary['state'] = 'READY'): ServerSummary =>
   ({ id, name: id, state }) as ServerSummary;
 
-const accessible = (id: string): AccessibleServer => ({ id, name: id, subdomain: id, state: 'READY' });
+const accessible = (id: string): AccessibleServer => ({
+  id,
+  name: id,
+  subdomain: id,
+  state: 'READY',
+});
 
 describe('kickCandidates', () => {
   const servers = [server('survival'), server('creative', 'STOPPED'), server('arena')];

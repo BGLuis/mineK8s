@@ -94,7 +94,9 @@ export class ServersBackupService {
         return stat.bfree * stat.bsize;
       }
     } catch (err: any) {
-      this.logger.debug(`Não foi possível verificar statfs no caminho ${backupsDir}: ${err.message}`);
+      this.logger.debug(
+        `Não foi possível verificar statfs no caminho ${backupsDir}: ${err.message}`,
+      );
     }
     return Number.MAX_SAFE_INTEGER;
   }
@@ -207,7 +209,9 @@ export class ServersBackupService {
 
         // Disparo da janela de freeze ultracurta (< 2 s)
         if (this.consoleDriver) {
-          this.logger.log(`Desabilitando autosave e descarregando chunks para [${server.subdomain}]...`);
+          this.logger.log(
+            `Desabilitando autosave e descarregando chunks para [${server.subdomain}]...`,
+          );
           await this.consoleDriver.saveOff(server);
           saveOffCalled = true;
           await this.consoleDriver.saveFlush(server);
@@ -554,7 +558,9 @@ export class ServersBackupService {
 
       extractionSucceeded = true;
     } catch (err: any) {
-      this.logger.error(`[Fase 5 - Rollback] Falha na extração ou validação: ${err.message}. Acionando Rollback...`);
+      this.logger.error(
+        `[Fase 5 - Rollback] Falha na extração ou validação: ${err.message}. Acionando Rollback...`,
+      );
 
       // Limpa dados parciais extraídos sem tocar em lost+found ou .staging_safety
       const currentEntries = await fs.promises.readdir(serverDir);
@@ -581,7 +587,9 @@ export class ServersBackupService {
     // Fase 5 - Commit: Purga staging de segurança
     if (extractionSucceeded && fs.existsSync(stagingDir)) {
       await fs.promises.rm(stagingDir, { recursive: true, force: true });
-      this.logger.log(`[Fase 5 - Commit] Staging purgado e restauração confirmada para ${server.subdomain}.`);
+      this.logger.log(
+        `[Fase 5 - Commit] Staging purgado e restauração confirmada para ${server.subdomain}.`,
+      );
     }
   }
 
@@ -627,19 +635,19 @@ export class ServersBackupService {
 
     // Exclusões padronizadas conforme RF-STO-10
     await execFileAsync('tar', [
-      "--exclude=logs/*",
-      "--exclude=crash-reports/*",
-      "--exclude=.cache/*",
-      "--exclude=.snapshot_tmp*",
-      "--exclude=.staging_safety*",
-      "--exclude=*.log.gz",
-      "--exclude=*.log",
-      "--exclude=.backups*",
-      "-czf",
+      '--exclude=logs/*',
+      '--exclude=crash-reports/*',
+      '--exclude=.cache/*',
+      '--exclude=.snapshot_tmp*',
+      '--exclude=.staging_safety*',
+      '--exclude=*.log.gz',
+      '--exclude=*.log',
+      '--exclude=.backups*',
+      '-czf',
       targetFile,
-      "-C",
+      '-C',
       sourceDir,
-      ".",
+      '.',
     ]);
   }
 
@@ -708,9 +716,7 @@ export class ServersBackupService {
       await this.copyRecursive(srcPath, destPath);
     }
 
-    this.logger.log(
-      `Backup pre-update concluído com sucesso para [${server.subdomain}].`,
-    );
+    this.logger.log(`Backup pre-update concluído com sucesso para [${server.subdomain}].`);
     return targetBackupDir;
   }
 
@@ -746,9 +752,7 @@ export class ServersBackupService {
       await this.copyRecursive(srcPath, destPath);
     }
 
-    this.logger.log(
-      `Rollback de arquivos concluído com sucesso para [${server.subdomain}].`,
-    );
+    this.logger.log(`Rollback de arquivos concluído com sucesso para [${server.subdomain}].`);
   }
 
   /**
@@ -866,10 +870,7 @@ export class ServersBackupService {
       ) {
         return false;
       }
-      return (
-        b.backupType === BackupType.HOT_SCHEDULED ||
-        b.backupType === BackupType.COLD_MANUAL
-      );
+      return b.backupType === BackupType.HOT_SCHEDULED || b.backupType === BackupType.COLD_MANUAL;
     });
 
     const removedBackups: string[] = [];
@@ -926,9 +927,7 @@ export class ServersBackupService {
       where: { id: backupId, serverId },
     });
     if (!backup) {
-      throw new NotFoundException(
-        `Backup with ID "${backupId}" not found for the given server.`,
-      );
+      throw new NotFoundException(`Backup with ID "${backupId}" not found for the given server.`);
     }
     return backup;
   }
@@ -973,7 +972,9 @@ export class ServersBackupService {
         await fs.promises.unlink(shaPath);
       }
     } catch (err: any) {
-      this.logger.warn(`Erro ao excluir arquivo físico de backup ${backup.storagePath}: ${err.message}`);
+      this.logger.warn(
+        `Erro ao excluir arquivo físico de backup ${backup.storagePath}: ${err.message}`,
+      );
     }
 
     if (this.backupRepo) {

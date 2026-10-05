@@ -90,7 +90,10 @@ async fn test_auto_wake_hold_connection_success() {
     };
     let mut hs_payload = BytesMut::new();
     handshake.encode(&mut hs_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &hs_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &hs_payload))
+        .await
+        .unwrap();
 
     // 2. LoginStart
     let login_start = LoginStartPacket {
@@ -99,7 +102,10 @@ async fn test_auto_wake_hold_connection_success() {
     };
     let mut ls_payload = BytesMut::new();
     login_start.encode(&mut ls_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &ls_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &ls_payload))
+        .await
+        .unwrap();
 
     // 3. Verificar que o evento WAKE foi emitido para o canal
     let woke_server_id = tokio::time::timeout(Duration::from_millis(500), wake_rx.recv())
@@ -161,7 +167,10 @@ async fn test_auto_wake_disabled_immediate_rejection() {
     };
     let mut hs_payload = BytesMut::new();
     handshake.encode(&mut hs_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &hs_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &hs_payload))
+        .await
+        .unwrap();
 
     let login_start = LoginStartPacket {
         username: "Alex".into(),
@@ -169,7 +178,10 @@ async fn test_auto_wake_disabled_immediate_rejection() {
     };
     let mut ls_payload = BytesMut::new();
     login_start.encode(&mut ls_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &ls_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &ls_payload))
+        .await
+        .unwrap();
 
     // Deve receber Disconnect imediato
     let mut buf = [0u8; 512];

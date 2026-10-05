@@ -10,13 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '../auth/roles.decorator';
 import { Public } from '../auth/public.decorator';
@@ -25,12 +19,7 @@ import { PostureAuditReport } from './posture/posture-audit.dto';
 import { RawTailscalePolicy, TailscalePostureService } from './posture/tailscale-posture.service';
 import { InvitesService } from './invites/invites.service';
 import { DevicesService } from './devices/devices.service';
-import {
-  CreateInviteDto,
-  ClaimInviteDto,
-  ClaimResultDto,
-  InviteSummaryDto,
-} from './dto';
+import { CreateInviteDto, ClaimInviteDto, ClaimResultDto, InviteSummaryDto } from './dto';
 
 @ApiTags('Tailscale & Network Posture')
 @Controller('api/tailscale')
@@ -46,7 +35,8 @@ export class TailscaleController {
   @Roles('ADMIN')
   @ApiOperation({
     summary: 'Obter relatório de auditoria de postura Zero-Trust da Tailnet (RF-TS-13)',
-    description: 'Inspeciona regras de firewall da Tailnet para detectar vazamento de portas ou regras curinga permissivas.',
+    description:
+      'Inspeciona regras de firewall da Tailnet para detectar vazamento de portas ou regras curinga permissivas.',
   })
   @ApiQuery({
     name: 'refresh',
@@ -76,7 +66,8 @@ export class TailscaleController {
   @ApiBearerAuth()
   @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Criar um convite com cotas e permissões pré-vinculadas (RF-TS-03, RF-TS-11, RF-ARQ-19)',
+    summary:
+      'Criar um convite com cotas e permissões pré-vinculadas (RF-TS-03, RF-TS-11, RF-ARQ-19)',
   })
   @ApiResponse({ status: 201, type: InviteSummaryDto })
   async createInvite(@Body() dto: CreateInviteDto, @Req() req: any): Promise<InviteSummaryDto> {
@@ -130,7 +121,8 @@ export class TailscaleController {
   @Post('claim')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Resgatar um convite no portal /join gerando AuthKey da Tailscale (RF-TS-08, ⚠️ L-03 Compensação)',
+    summary:
+      'Resgatar um convite no portal /join gerando AuthKey da Tailscale (RF-TS-08, ⚠️ L-03 Compensação)',
   })
   @ApiResponse({ status: 200, type: ClaimResultDto })
   async claimInvite(@Body() dto: ClaimInviteDto): Promise<ClaimResultDto> {
@@ -164,7 +156,10 @@ export class TailscaleController {
     summary:
       'Nível 2 de Revogação: Ban de Rede Total, fechamento forçado de sessões e exclusão do nó na Tailnet (RF-TS-09)',
   })
-  @ApiResponse({ status: 200, description: 'Dispositivo banido da rede privada e removido da Tailnet' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dispositivo banido da rede privada e removido da Tailnet',
+  })
   async revokeDevice(@Param('id') id: string) {
     return this.devicesService.revokeDevice(id);
   }
@@ -174,9 +169,15 @@ export class TailscaleController {
   @ApiBearerAuth()
   @Roles('ADMIN')
   @ApiOperation({
-    summary: 'DeviceGarbageCollector: Limpar nós órfãos e inativos há mais de 30 dias (RF-TS-15, E-03)',
+    summary:
+      'DeviceGarbageCollector: Limpar nós órfãos e inativos há mais de 30 dias (RF-TS-15, E-03)',
   })
-  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Threshold em dias (padrão: 30)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: Number,
+    description: 'Threshold em dias (padrão: 30)',
+  })
   @ApiResponse({ status: 200, description: 'Relatório de nós removidos da Tailnet' })
   async runDeviceGarbageCollector(@Query('days') days?: string) {
     const thresholdDays = days ? parseInt(days, 10) : 30;

@@ -7,7 +7,10 @@ export class CreateGroupDto {
   @Length(2, 50, { message: 'Group name must be between 2 and 50 characters' })
   name: string;
 
-  @ApiProperty({ example: 'Membros com acesso aos servidores pesados de modpacks', required: false })
+  @ApiProperty({
+    example: 'Membros com acesso aos servidores pesados de modpacks',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   description?: string;

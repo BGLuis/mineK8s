@@ -19,8 +19,8 @@ const FETCH_SERVER_JAR_SCRIPT = [
   // Variavel de padrao: aspas literais dentro de ${meta#...} anulam o corte no sh.
   `    pat='*"server:default":'`,
   '    section=${meta#$pat}',
-  "    url=$(printf %s \"$section\" | grep -o 'https://[^\"]*' | head -1)",
-  "    sha=$(printf %s \"$section\" | grep -o '\"sha256\":\"[0-9a-f]*\"' | head -1 | cut -d'\"' -f4)",
+  '    url=$(printf %s "$section" | grep -o \'https://[^"]*\' | head -1)',
+  '    sha=$(printf %s "$section" | grep -o \'"sha256":"[0-9a-f]*"\' | head -1 | cut -d\'"\' -f4)',
   '    ;;',
   '  *) echo "tipo $SERVER_TYPE sem provedor de jar" >&2; exit 1 ;;',
   'esac',
@@ -115,9 +115,7 @@ export class ManifestBuilder {
     const namespace = configService.kubernetes.namespace;
     const heapMb = server.allocated_memory_mb;
     const containerMemoryLimitMb = heapMb > 8192 ? heapMb + 2048 : heapMb + 1536; // Heap + 1.5/2 GiB (C-17, RF-ARQ-09)
-    const isModpack = ['FORGE', 'NEOFORGE', 'FABRIC'].includes(
-      server.server_type.toUpperCase(),
-    );
+    const isModpack = ['FORGE', 'NEOFORGE', 'FABRIC'].includes(server.server_type.toUpperCase());
 
     const serverType = server.server_type.toUpperCase();
     const initContainers = JAR_PROVIDED_TYPES.includes(serverType)

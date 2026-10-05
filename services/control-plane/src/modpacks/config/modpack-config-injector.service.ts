@@ -39,8 +39,7 @@ export class ModpackConfigInjectorService {
 
     // 3. Injeção de paper-global.yml para compatibilidade de proxy Gateway L7 (RF-STO-14, C-15)
     const isPaperLike =
-      options.serverType &&
-      ['PAPER', 'PURPUR'].includes(options.serverType.toUpperCase());
+      options.serverType && ['PAPER', 'PURPUR'].includes(options.serverType.toUpperCase());
     if (isPaperLike) {
       await this.injectPaperGlobal(serverDataDir);
     }

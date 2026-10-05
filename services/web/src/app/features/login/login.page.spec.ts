@@ -73,7 +73,9 @@ describe('LoginPage', () => {
 
     button(el, 'Entrar como admin').click();
 
-    expect(JSON.stringify(http.expectOne('/api/auth/session').request.body)).not.toContain('luis_dev');
+    expect(JSON.stringify(http.expectOne('/api/auth/session').request.body)).not.toContain(
+      'luis_dev',
+    );
     http.expectNone('/api/auth/token');
   });
 
@@ -97,7 +99,9 @@ describe('LoginPage', () => {
     const { fixture, el } = await setup();
 
     button(el, 'Entrar como admin').click();
-    http.expectOne('/api/auth/session').flush({ access_token: 'jwt', user: { ...admin, role: 'PLAYER' } });
+    http
+      .expectOne('/api/auth/session')
+      .flush({ access_token: 'jwt', user: { ...admin, role: 'PLAYER' } });
     await fixture.whenStable();
 
     expect(el.textContent).toContain('não é de administrador');
@@ -122,7 +126,10 @@ describe('LoginPage', () => {
     button(el, 'Entrar como admin').click();
     http
       .expectOne('/api/auth/session')
-      .flush({ message: 'Tailscale identity lookup is unavailable' }, { status: 503, statusText: 'Service Unavailable' });
+      .flush(
+        { message: 'Tailscale identity lookup is unavailable' },
+        { status: 503, statusText: 'Service Unavailable' },
+      );
     await fixture.whenStable();
 
     expect(el.textContent).toContain('não conseguiu consultar o Tailscale');
@@ -164,7 +171,10 @@ describe('LoginPage', () => {
     button(el, 'Criar primeiro administrador').click();
     http
       .expectOne('/api/auth/bootstrap')
-      .flush({ message: 'Token de bootstrap inválido ou expirado' }, { status: 401, statusText: 'Unauthorized' });
+      .flush(
+        { message: 'Token de bootstrap inválido ou expirado' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
     await fixture.whenStable();
 
     expect(el.textContent).toContain('Token de bootstrap inválido ou expirado');

@@ -45,11 +45,17 @@ describe('Socket.IO namespaces: origin and handshake authentication (#92)', () =
         {
           provide: AuthService,
           useValue: {
-            validateUserById: async (id: string) => (id === 'u-admin' ? { id, role: 'ADMIN' } : null),
+            validateUserById: async (id: string) =>
+              id === 'u-admin' ? { id, role: 'ADMIN' } : null,
             validateTailscaleUser: async () => null,
           },
         },
-        { provide: JwtService, useValue: { verify: (token: string) => (token === 'admin-jwt' ? { sub: 'u-admin' } : null) } },
+        {
+          provide: JwtService,
+          useValue: {
+            verify: (token: string) => (token === 'admin-jwt' ? { sub: 'u-admin' } : null),
+          },
+        },
         { provide: AppConfigService, useValue: { authTrustedProxyIps: [] } },
         {
           provide: getRepositoryToken(ModpackTaskEntity),
@@ -126,14 +132,21 @@ describe('Socket.IO namespaces: origin and handshake authentication (#92)', () =
       const { sid } = await openSession(PANEL_ORIGIN);
       const url = `${SOCKET_IO}&sid=${sid}`;
       const send = (packet: string) =>
-        request(baseUrl).post(url).set('Origin', PANEL_ORIGIN).set('Content-Type', 'text/plain').send(packet).expect(200);
+        request(baseUrl)
+          .post(url)
+          .set('Origin', PANEL_ORIGIN)
+          .set('Content-Type', 'text/plain')
+          .send(packet)
+          .expect(200);
       const poll = async () => (await request(baseUrl).get(url).set('Origin', PANEL_ORIGIN)).text;
 
       await send('40/ws/tasks,{"token":"admin-jwt"}');
       expect(await poll()).toContain('40/ws/tasks,{"sid"');
 
       await send(`42/ws/tasks,7["subscribeToTask",{"taskId":"${TASK_ID}"}]`);
-      expect(await poll()).toContain(`43/ws/tasks,7[{"status":"subscribed","taskId":"${TASK_ID}"}]`);
+      expect(await poll()).toContain(
+        `43/ws/tasks,7[{"status":"subscribed","taskId":"${TASK_ID}"}]`,
+      );
 
       app.get(TasksGateway).emitTaskProgress({
         taskId: TASK_ID,

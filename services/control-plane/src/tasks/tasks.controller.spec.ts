@@ -53,7 +53,10 @@ describe('TasksController: GET /api/tasks/:id', () => {
       errorMessage: 'Hash divergente',
     });
 
-    await expect(controller.getTask(TASK_ID)).resolves.toMatchObject({ status: 'FAILED', errorMessage: 'Hash divergente' });
+    await expect(controller.getTask(TASK_ID)).resolves.toMatchObject({
+      status: 'FAILED',
+      errorMessage: 'Hash divergente',
+    });
   });
 
   it('responde 404 quando a tarefa não existe', async () => {

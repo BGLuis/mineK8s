@@ -26,7 +26,9 @@ async fn test_measure_idle_memory_protocol() {
     if let Ok(statm_content) = fs::read_to_string(statm_path) {
         let parts: Vec<&str> = statm_content.split_whitespace().collect();
         if parts.len() >= 2 {
-            let resident_pages: u64 = parts[1].parse().expect("Falha ao analisar páginas residentes");
+            let resident_pages: u64 = parts[1]
+                .parse()
+                .expect("Falha ao analisar páginas residentes");
             // Tamanho de página padrão no Linux: 4096 bytes (4 KB)
             let page_size_bytes = 4096u64;
             let resident_bytes = resident_pages * page_size_bytes;

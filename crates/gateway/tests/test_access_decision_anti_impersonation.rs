@@ -1,6 +1,6 @@
+use bytes::{BufMut, BytesMut};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use bytes::{BufMut, BytesMut};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UnixListener};
 use tokio::sync::watch;
@@ -193,7 +193,9 @@ async fn test_anti_impersonation_disconnect_under_50ms() {
     let mut disconnect_cursor = &raw.payload[..];
     let disconnect = DisconnectPacket::decode(&mut disconnect_cursor).unwrap();
     assert!(
-        disconnect.reason_json.contains("Este nickname não pertence a este dispositivo/conta"),
+        disconnect
+            .reason_json
+            .contains("Este nickname não pertence a este dispositivo/conta"),
         "Mensagem de disconnect esperada, obtido: {}",
         disconnect.reason_json
     );
@@ -251,14 +253,20 @@ async fn test_invalid_nickname_format_disconnect_under_50ms() {
     };
     let mut hs_payload = BytesMut::new();
     handshake.encode(&mut hs_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &hs_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &hs_payload))
+        .await
+        .unwrap();
 
     // Login Start com espaços (payload bruto simulando cliente não conforme/malicioso)
     let mut login_payload = BytesMut::new();
     minecraft_protocol::types::string::encode_string("Bad Name", &mut login_payload);
 
     let start_instant = Instant::now();
-    client.write_all(&encode_packet(VarInt(0x00), &login_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &login_payload))
+        .await
+        .unwrap();
 
     let mut response_buf = [0u8; 512];
     let n = client.read(&mut response_buf).await.unwrap();
@@ -270,7 +278,9 @@ async fn test_invalid_nickname_format_disconnect_under_50ms() {
     let raw = RawPacket::decode_prelogin(&mut cursor).unwrap();
     let mut disconnect_cursor = &raw.payload[..];
     let disconnect = DisconnectPacket::decode(&mut disconnect_cursor).unwrap();
-    assert!(disconnect.reason_json.contains("Nickname não pode conter espaços"));
+    assert!(disconnect
+        .reason_json
+        .contains("Nickname não pode conter espaços"));
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
@@ -336,12 +346,18 @@ async fn test_maintenance_mode_and_admin_bypass() {
     };
     let mut hs_payload = BytesMut::new();
     handshake.encode(&mut hs_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &hs_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &hs_payload))
+        .await
+        .unwrap();
 
     let login_start = LoginStartPacket::new("RegularGuy").unwrap();
     let mut login_payload = BytesMut::new();
     login_start.encode(&mut login_payload);
-    client.write_all(&encode_packet(VarInt(0x00), &login_payload)).await.unwrap();
+    client
+        .write_all(&encode_packet(VarInt(0x00), &login_payload))
+        .await
+        .unwrap();
 
     let mut response_buf = [0u8; 512];
     let n = client.read(&mut response_buf).await.unwrap();
@@ -349,7 +365,9 @@ async fn test_maintenance_mode_and_admin_bypass() {
     let raw = RawPacket::decode_prelogin(&mut cursor).unwrap();
     let mut disconnect_cursor = &raw.payload[..];
     let disconnect = DisconnectPacket::decode(&mut disconnect_cursor).unwrap();
-    assert!(disconnect.reason_json.contains("Servidor em manutenção técnica programada"));
+    assert!(disconnect
+        .reason_json
+        .contains("Servidor em manutenção técnica programada"));
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
@@ -378,12 +396,18 @@ async fn test_maintenance_mode_and_admin_bypass() {
     };
     let mut hs_adm_payload = BytesMut::new();
     handshake_adm.encode(&mut hs_adm_payload);
-    client_admin.write_all(&encode_packet(VarInt(0x00), &hs_adm_payload)).await.unwrap();
+    client_admin
+        .write_all(&encode_packet(VarInt(0x00), &hs_adm_payload))
+        .await
+        .unwrap();
 
     let login_adm = LoginStartPacket::new("AdminGuy").unwrap();
     let mut login_adm_payload = BytesMut::new();
     login_adm.encode(&mut login_adm_payload);
-    client_admin.write_all(&encode_packet(VarInt(0x00), &login_adm_payload)).await.unwrap();
+    client_admin
+        .write_all(&encode_packet(VarInt(0x00), &login_adm_payload))
+        .await
+        .unwrap();
 
     // Para o admin autorizado, a conexão permanece aberta (sem pacote de disconnect imediato)
     tokio::time::sleep(Duration::from_millis(50)).await;

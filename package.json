@@ -1,0 +1,13 @@
+{
+  "name": "minek8s",
+  "private": true,
+  "description": "Repo tooling: Biome (lint/format) and lefthook (git hooks)",
+  "scripts": {
+    "check": "biome check .",
+    "fix": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "lefthook": "2.1.17"
+  }
+}

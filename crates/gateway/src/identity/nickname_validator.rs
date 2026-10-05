@@ -18,7 +18,9 @@ impl NicknameValidationError {
             Self::Empty => "§cNickname não pode ser vazio.",
             Self::TooShort => "§cNickname deve ter no mínimo 2 caracteres.",
             Self::TooLong => "§cNickname deve ter no máximo 16 caracteres.",
-            Self::InvalidCharacters => "§cNickname contém caracteres inválidos. Apenas [a-zA-Z0-9_] são permitidos.",
+            Self::InvalidCharacters => {
+                "§cNickname contém caracteres inválidos. Apenas [a-zA-Z0-9_] são permitidos."
+            }
             Self::SpacesNotAllowed => "§cNickname não pode conter espaços.",
             Self::ControlCharacters => "§cCaracteres de controle não permitidos.",
             Self::PathTraversal => "§cTentativa de path traversal detectada.",
@@ -80,8 +82,14 @@ mod tests {
 
     #[test]
     fn test_invalid_nicknames() {
-        assert_eq!(validate_minecraft_nickname(""), Err(NicknameValidationError::Empty));
-        assert_eq!(validate_minecraft_nickname("A"), Err(NicknameValidationError::TooShort));
+        assert_eq!(
+            validate_minecraft_nickname(""),
+            Err(NicknameValidationError::Empty)
+        );
+        assert_eq!(
+            validate_minecraft_nickname("A"),
+            Err(NicknameValidationError::TooShort)
+        );
         assert_eq!(
             validate_minecraft_nickname("NickMaisLongoQue16Chars"),
             Err(NicknameValidationError::TooLong)

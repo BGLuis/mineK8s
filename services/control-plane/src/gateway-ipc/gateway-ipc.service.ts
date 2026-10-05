@@ -19,7 +19,10 @@ import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { AppConfigService } from '@config/app-config.service';
 import { ManifestBuilder } from '@k8s/manifest-builder';
-import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
+import {
+  NETWORK_IDENTITY_PROVIDER,
+  NetworkIdentityProvider,
+} from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
 import { PlayerSessionsService } from './player-sessions.service';
@@ -113,7 +116,9 @@ export class GatewayIpcService {
       routes.push(await this.buildUpsertEvent(server));
     }
 
-    this.logger.log(`Snapshot inicial construído com sucesso: ${routes.length} rotas enviadas ao Gateway`);
+    this.logger.log(
+      `Snapshot inicial construído com sucesso: ${routes.length} rotas enviadas ao Gateway`,
+    );
     return { routes };
   }
 
@@ -199,7 +204,9 @@ export class GatewayIpcService {
           }
         }
       } catch (err: any) {
-        this.logger.warn(`Falha na resolução de identidade de rede para IP ${req.client_ip}: ${err.message}`);
+        this.logger.warn(
+          `Falha na resolução de identidade de rede para IP ${req.client_ip}: ${err.message}`,
+        );
       }
     }
 
@@ -276,12 +283,16 @@ export class GatewayIpcService {
     }
 
     if (server.auto_wake === false) {
-      this.logger.warn(`Wake requested for server [${server.subdomain}], but auto_wake is disabled.`);
+      this.logger.warn(
+        `Wake requested for server [${server.subdomain}], but auto_wake is disabled.`,
+      );
       return;
     }
 
     if (server.state === 'STOPPED') {
-      this.logger.log(`Wake requested for hibernating server [${server.subdomain}] (RF-GW-10). Scaling up pod...`);
+      this.logger.log(
+        `Wake requested for hibernating server [${server.subdomain}] (RF-GW-10). Scaling up pod...`,
+      );
       server.state = 'STARTING';
       server.last_player_active_at = new Date();
       await this.serverRepository.save(server);
@@ -311,7 +322,9 @@ export class GatewayIpcService {
         }
       }
     } else {
-      this.logger.debug(`Server [${server.subdomain}] is already in state ${server.state}, ignoring wake request.`);
+      this.logger.debug(
+        `Server [${server.subdomain}] is already in state ${server.state}, ignoring wake request.`,
+      );
     }
   }
 
@@ -324,7 +337,9 @@ export class GatewayIpcService {
     return new Observable<GatewayCommand>((subscriber) => {
       const channel: CommandChannel = { send: (command) => subscriber.next(command) };
       this.commandChannels.add(channel);
-      this.logger.log(`Canal de comandos do Gateway registrado (${this.commandChannels.size} ativo(s))`);
+      this.logger.log(
+        `Canal de comandos do Gateway registrado (${this.commandChannels.size} ativo(s))`,
+      );
 
       const incoming = results.subscribe({
         next: (result) => this.settleCommand(channel, result),
@@ -339,7 +354,9 @@ export class GatewayIpcService {
           channel,
           new ServiceUnavailableException('Gateway disconnected before answering the command'),
         );
-        this.logger.log(`Canal de comandos do Gateway encerrado (${this.commandChannels.size} ativo(s))`);
+        this.logger.log(
+          `Canal de comandos do Gateway encerrado (${this.commandChannels.size} ativo(s))`,
+        );
       };
     });
   }
@@ -352,7 +369,9 @@ export class GatewayIpcService {
    */
   async revokePlayerSession(req: RevokeSessionRequest): Promise<RevokeSessionResponse> {
     if (this.commandChannels.size === 0) {
-      throw new ServiceUnavailableException('Gateway is not connected: the session revocation was not delivered');
+      throw new ServiceUnavailableException(
+        'Gateway is not connected: the session revocation was not delivered',
+      );
     }
 
     const outcomes = await Promise.allSettled(
@@ -363,19 +382,27 @@ export class GatewayIpcService {
       throw (outcomes[0] as PromiseRejectedResult).reason;
     }
 
-    const terminated = answers.reduce((sum, answer) => sum + answer.terminated_connections_count, 0);
+    const terminated = answers.reduce(
+      (sum, answer) => sum + answer.terminated_connections_count,
+      0,
+    );
     this.logger.log(
       `Revogação de sessão para ${req.client_ip || req.minecraft_nick} (servidor: ${req.server_id || 'todos'}): ${terminated} sessão(ões) derrubada(s)`,
     );
     return { session_found: terminated > 0, terminated_connections_count: terminated };
   }
 
-  private async sendRevoke(channel: CommandChannel, req: RevokeSessionRequest): Promise<RevokeSessionResponse> {
+  private async sendRevoke(
+    channel: CommandChannel,
+    req: RevokeSessionRequest,
+  ): Promise<RevokeSessionResponse> {
     const commandId = randomUUID();
     const result = await new Promise<GatewayCommandResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingCommands.delete(commandId);
-        reject(new ServiceUnavailableException('Gateway did not answer the session revocation in time'));
+        reject(
+          new ServiceUnavailableException('Gateway did not answer the session revocation in time'),
+        );
       }, COMMAND_TIMEOUT_MS);
       this.pendingCommands.set(commandId, { channel, resolve, reject, timer });
       channel.send({ command_id: commandId, revoke_session: req });
@@ -394,7 +421,9 @@ export class GatewayIpcService {
   private settleCommand(channel: CommandChannel, result: GatewayCommandResult): void {
     const pending = this.pendingCommands.get(result.command_id);
     if (!pending || pending.channel !== channel) {
-      this.logger.warn(`Resultado de comando desconhecido ou expirado do Gateway: ${result.command_id}`);
+      this.logger.warn(
+        `Resultado de comando desconhecido ou expirado do Gateway: ${result.command_id}`,
+      );
       return;
     }
     clearTimeout(pending.timer);

@@ -47,17 +47,22 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
 
       // Asserções específicas de Zero-Trust
       const playerMcPort = outcomes.find(
-        (o) => o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:25565' && o.expected === 'accept',
+        (o) =>
+          o.src === 'tag:mc-player' &&
+          o.target === 'tag:mc-gateway:25565' &&
+          o.expected === 'accept',
       );
       expect(playerMcPort?.passed).toBe(true);
 
       const playerSshPort = outcomes.find(
-        (o) => o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:22' && o.expected === 'deny',
+        (o) =>
+          o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:22' && o.expected === 'deny',
       );
       expect(playerSshPort?.passed).toBe(true);
 
       const playerApiPort = outcomes.find(
-        (o) => o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:3000' && o.expected === 'deny',
+        (o) =>
+          o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:3000' && o.expected === 'deny',
       );
       expect(playerApiPort?.passed).toBe(true);
     });
@@ -99,7 +104,9 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       const report = service.evaluatePolicy(openPolicy);
 
       expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
-      expect(report.findings.some((f) => f.description.includes('Broad universal wildcard'))).toBe(true);
+      expect(report.findings.some((f) => f.description.includes('Broad universal wildcard'))).toBe(
+        true,
+      );
     });
 
     it('deve marcar VULNERABLE se tag:mc-player tiver acesso a porta administrativa (ex: 22 ou 3000)', () => {
@@ -117,14 +124,14 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       const report = service.evaluatePolicy(leakyPolicy);
 
       expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
-      expect(report.findings.some((f) => f.description.includes('non-Minecraft port (22)'))).toBe(true);
+      expect(report.findings.some((f) => f.description.includes('non-Minecraft port (22)'))).toBe(
+        true,
+      );
     });
 
     it('deve marcar VULNERABLE se os testes declarativos da policy falharem', () => {
       const policyWithFailingTest: RawTailscalePolicy = {
-        acls: [
-          { action: 'accept', src: ['tag:mc-player'], dst: ['tag:mc-gateway:25565'] },
-        ],
+        acls: [{ action: 'accept', src: ['tag:mc-player'], dst: ['tag:mc-gateway:25565'] }],
         tests: [
           {
             src: 'tag:mc-player',

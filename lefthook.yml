@@ -1,0 +1,32 @@
+# Installed by `npm install` at the repo root. Skip once with LEFTHOOK=0 git commit ...
+# Each job runs only when the commit or push touches files under its glob/root.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      glob: "*.{js,cjs,mjs,ts,json,css}"
+      run: >-
+        npx biome format --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+        && npx biome lint --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+    - name: rustfmt
+      glob: "*.rs"
+      run: rustfmt --edition 2021 {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: control-plane
+      root: services/control-plane/
+      run: npm run typecheck && npx jest --ci
+
+    - name: web
+      root: services/web/
+      run: npm test -- --watch=false
+
+    - name: gateway
+      glob: "{crates/**,proto/**,Cargo.toml,Cargo.lock}"
+      run: cargo test --locked

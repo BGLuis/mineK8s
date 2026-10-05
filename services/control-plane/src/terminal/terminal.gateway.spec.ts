@@ -57,10 +57,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
 
     mockAccessRepo = {
       findOne: jest.fn(async ({ where }: any) => {
-        if (
-          where.user_id === testPlayerUser.id &&
-          where.server_id === testServer.id
-        ) {
+        if (where.user_id === testPlayerUser.id && where.server_id === testServer.id) {
           return { user_id: testPlayerUser.id, server_id: testServer.id };
         }
         return null;
@@ -73,9 +70,11 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
 
     mockLogStreamer = {
       getBuffer: jest.fn().mockReturnValue({
-        getHistory: jest.fn().mockReturnValue([
-          { id: '1', timestamp: '12:00:00', level: 'INFO', message: 'World loaded' },
-        ]),
+        getHistory: jest
+          .fn()
+          .mockReturnValue([
+            { id: '1', timestamp: '12:00:00', level: 'INFO', message: 'World loaded' },
+          ]),
       }),
       subscribeToDeltas: jest.fn().mockReturnValue(() => {}),
       attachServerStream: jest.fn().mockResolvedValue({}),
@@ -243,10 +242,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
         command: 'weather clear',
       });
 
-      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
-        testServer,
-        'weather clear',
-      );
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(testServer, 'weather clear');
       expect(result).toBeUndefined();
 
       // Critério de aceite: Comando pelo WebSocket gera linha em server_audit_logs
@@ -262,11 +258,14 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       );
 
       expect(mockClient.emit).toHaveBeenCalledTimes(1);
-      expect(mockClient.emit).toHaveBeenCalledWith('command_output', expect.objectContaining({
-        command: 'weather clear',
-        output: 'Executed: weather clear',
-        durationMs: expect.any(Number),
-      }));
+      expect(mockClient.emit).toHaveBeenCalledWith(
+        'command_output',
+        expect.objectContaining({
+          command: 'weather clear',
+          output: 'Executed: weather clear',
+          durationMs: expect.any(Number),
+        }),
+      );
     });
   });
 

@@ -1,7 +1,10 @@
 import { DataSource } from 'typeorm';
 
 import { Server } from '../database/entities/server.entity';
-import { createIntegrationDataSource, describeWithDatabase } from '../database/testing/integration-datasource';
+import {
+  createIntegrationDataSource,
+  describeWithDatabase,
+} from '../database/testing/integration-datasource';
 import { ServerStateSubscriber } from './server-state.subscriber';
 
 describeWithDatabase('ServerStateSubscriber contra Postgres real', () => {
@@ -27,7 +30,9 @@ describeWithDatabase('ServerStateSubscriber contra Postgres real', () => {
   beforeEach(() => {
     emitted = [];
     dataSource.subscribers.length = 0;
-    new ServerStateSubscriber(dataSource, { emitServerState: (event: any) => emitted.push(event) } as any);
+    new ServerStateSubscriber(dataSource, {
+      emitServerState: (event: any) => emitted.push(event),
+    } as any);
   });
 
   it('aplica todas as migrations em um banco vazio, incluindo invites.created_by e servers.access_policy', async () => {

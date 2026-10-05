@@ -1,5 +1,5 @@
-use std::net::IpAddr;
 use bytes::BytesMut;
+use std::net::IpAddr;
 use tokio::io::{copy, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
@@ -155,7 +155,9 @@ pub async fn handle_login_proxy(
                 "Falha ao conectar no upstream"
             );
             let reason = match &err {
-                GatewayError::UpstreamResolution { .. } => "§cNão foi possível localizar o servidor de destino.",
+                GatewayError::UpstreamResolution { .. } => {
+                    "§cNão foi possível localizar o servidor de destino."
+                }
                 _ => "§cServidor indisponível no momento. Tente novamente em instantes.",
             };
             let _ = GatewayServer::send_login_disconnect(conn, reason).await;

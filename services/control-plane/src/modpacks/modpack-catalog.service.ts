@@ -74,13 +74,15 @@ export class ModpackCatalogService {
    * Busca nas fontes ativas. Com duas fontes a página é dividida entre elas, então
    * `offset` deve avançar de `limit` em `limit` e `limit` deve ser par para não perder itens.
    */
-  public async search(params: {
-    query?: string;
-    source?: CatalogSource;
-    offset?: number;
-    limit?: number;
-    sort?: CatalogSort;
-  } & CatalogFilters): Promise<ModpackSearchResponseDto> {
+  public async search(
+    params: {
+      query?: string;
+      source?: CatalogSource;
+      offset?: number;
+      limit?: number;
+      sort?: CatalogSort;
+    } & CatalogFilters,
+  ): Promise<ModpackSearchResponseDto> {
     const query = (params.query || '').trim();
     const limit = this.clamp(params.limit, 1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE);
     const offset = this.clamp(params.offset, 0, Number.MAX_SAFE_INTEGER, 0);
@@ -88,7 +90,9 @@ export class ModpackCatalogService {
     const wanted: CatalogSource[] = params.source ? [params.source] : ['modrinth', 'curseforge'];
     const usable = wanted.filter((s) => s !== 'curseforge' || this.curseForge.getApiKey());
     if (usable.length === 0) {
-      throw new ServiceUnavailableException('CurseForge API key não configurada (CURSEFORGE_API_KEY).');
+      throw new ServiceUnavailableException(
+        'CurseForge API key não configurada (CURSEFORGE_API_KEY).',
+      );
     }
 
     const sort = params.sort ?? 'relevance';
@@ -270,7 +274,9 @@ export class ModpackCatalogService {
 
   private async curseForgeVersions(modId: string): Promise<ModpackVersionDto[]> {
     if (!this.curseForge.getApiKey()) {
-      throw new ServiceUnavailableException('CurseForge API key não configurada (CURSEFORGE_API_KEY).');
+      throw new ServiceUnavailableException(
+        'CurseForge API key não configurada (CURSEFORGE_API_KEY).',
+      );
     }
     const url = `${CURSEFORGE_API}/mods/${encodeURIComponent(modId)}/files?pageSize=${MAX_PAGE_SIZE}`;
     const body = await this.getJson<any>(url, this.curseForgeHeaders());

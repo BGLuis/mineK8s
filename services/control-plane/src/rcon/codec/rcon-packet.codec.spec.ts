@@ -1,7 +1,4 @@
-import {
-  RconPacketCodec,
-  RconPacketType,
-} from './rcon-packet.codec';
+import { RconPacketCodec, RconPacketType } from './rcon-packet.codec';
 
 describe('RconPacketCodec (RF-RCON-01, RF-RCON-02, RF-RCON-15, Guarda E-01)', () => {
   it('test_rcon_encode_decode_roundtrip: should encode and decode a packet correctly', () => {
@@ -35,9 +32,7 @@ describe('RconPacketCodec (RF-RCON-01, RF-RCON-02, RF-RCON-15, Guarda E-01)', ()
       body: 'op Steve\0something_else',
     };
 
-    expect(() => RconPacketCodec.encode(maliciousPacket)).toThrow(
-      /Null-byte injection detected/,
-    );
+    expect(() => RconPacketCodec.encode(maliciousPacket)).toThrow(/Null-byte injection detected/);
   });
 
   it('test_rcon_packet_fragmentation_reassembly: should handle TCP fragmented streams incrementally', () => {
@@ -98,16 +93,12 @@ describe('RconPacketCodec (RF-RCON-01, RF-RCON-02, RF-RCON-15, Guarda E-01)', ()
     // 2. Decode packet length < 10 must throw illegal length
     const invalidSmallBuffer = Buffer.alloc(14);
     invalidSmallBuffer.writeInt32LE(9, 0); // length 9 < 10
-    expect(() => RconPacketCodec.decode(invalidSmallBuffer)).toThrow(
-      /Illegal packet length/,
-    );
+    expect(() => RconPacketCodec.decode(invalidSmallBuffer)).toThrow(/Illegal packet length/);
 
     // 3. Decode packet length > 4110 must throw illegal length
     const invalidLargeBuffer = Buffer.alloc(14);
     invalidLargeBuffer.writeInt32LE(4111, 0); // length 4111 > 4110
-    expect(() => RconPacketCodec.decode(invalidLargeBuffer)).toThrow(
-      /Illegal packet length/,
-    );
+    expect(() => RconPacketCodec.decode(invalidLargeBuffer)).toThrow(/Illegal packet length/);
 
     // 4. Large response of 4110 total wire bytes (packetLength = 4106, 4096 body) MUST be accepted (Critério de Aceite Issue #63)
     const largeBody = 'X'.repeat(4096);
@@ -140,8 +131,6 @@ describe('RconPacketCodec (RF-RCON-01, RF-RCON-02, RF-RCON-15, Guarda E-01)', ()
     corruptedBuffer.writeUInt8(0, 14); // pad 1
     corruptedBuffer.writeUInt8(1, 15); // corrupted pad 2 (not 0)
 
-    expect(() => RconPacketCodec.decode(corruptedBuffer)).toThrow(
-      /Invalid packet terminators/,
-    );
+    expect(() => RconPacketCodec.decode(corruptedBuffer)).toThrow(/Invalid packet terminators/);
   });
 });

@@ -64,10 +64,18 @@ async fn test_tcp_fragmentation_tolerance() {
 
     client_task.await.unwrap();
     let res = server_task.await.unwrap();
-    assert!(res.is_ok(), "Falha ao processar handshake fragmentado: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Falha ao processar handshake fragmentado: {:?}",
+        res.err()
+    );
 
     match res.unwrap() {
-        HandshakeResult::Status { handshake, request: _, client_ip } => {
+        HandshakeResult::Status {
+            handshake,
+            request: _,
+            client_ip,
+        } => {
             assert_eq!(handshake.server_address, "survival.mine.lan");
             assert_eq!(handshake.server_port, 25565);
             assert_eq!(handshake.next_state, HandshakeNextState::Status);
@@ -102,7 +110,10 @@ async fn test_slowloris_timeout() {
         // Tentar ler da stream: o servidor deve ter fechado o socket
         let mut buf = [0u8; 16];
         let n = stream.read(&mut buf).await.unwrap_or(0);
-        assert_eq!(n, 0, "Socket deveria ter sido fechado pelo servidor após timeout");
+        assert_eq!(
+            n, 0,
+            "Socket deveria ter sido fechado pelo servidor após timeout"
+        );
     });
 
     client_task.await.unwrap();
@@ -118,7 +129,10 @@ async fn test_rate_limiter_governor() {
 
     assert!(limiter.check(ip), "Primeira requisição deve ser permitida");
     assert!(limiter.check(ip), "Segunda requisição deve ser permitida");
-    assert!(!limiter.check(ip), "Terceira requisição imediata deve ser bloqueada por rate limit");
+    assert!(
+        !limiter.check(ip),
+        "Terceira requisição imediata deve ser bloqueada por rate limit"
+    );
 }
 
 /// Testa rejeição imediata de pacote pré-login superior a 4 KB sem alocação no heap (RF-GW-04).
@@ -148,7 +162,10 @@ async fn test_packet_over_4kb_rejection() {
     let res = server_task.await.unwrap();
     assert!(res.is_err());
     match res.unwrap_err() {
-        GatewayError::Protocol(minecraft_protocol::ProtocolError::PacketTooLarge { size, max_size }) => {
+        GatewayError::Protocol(minecraft_protocol::ProtocolError::PacketTooLarge {
+            size,
+            max_size,
+        }) => {
             assert_eq!(size, 4097);
             assert_eq!(max_size, 4096);
         }
@@ -176,12 +193,8 @@ async fn test_trusted_proxy_v2_handshake() {
 
         // 1. Cabeçalho PROXY v2 declarando IP real 100.64.0.42
         let real_client_ip: std::net::Ipv4Addr = "100.64.0.42".parse().unwrap();
-        let proxy_header = ProxyHeader::new_ipv4_proxy(
-            real_client_ip,
-            54321,
-            "127.0.0.1".parse().unwrap(),
-            25565,
-        );
+        let proxy_header =
+            ProxyHeader::new_ipv4_proxy(real_client_ip, 54321, "127.0.0.1".parse().unwrap(), 25565);
         let mut wire = BytesMut::new();
         proxy_header.encode(&mut wire);
 
@@ -224,7 +237,10 @@ async fn test_trusted_proxy_v2_handshake() {
         } => {
             assert_eq!(handshake.server_address, "survival.mine.lan");
             assert_eq!(login_start.username, "PlayerTest");
-            assert_eq!(client_ip, "100.64.0.42".parse::<std::net::IpAddr>().unwrap());
+            assert_eq!(
+                client_ip,
+                "100.64.0.42".parse::<std::net::IpAddr>().unwrap()
+            );
         }
         other => panic!("Esperado HandshakeResult::Login, recebido: {:?}", other),
     }

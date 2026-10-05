@@ -58,9 +58,7 @@ export class SkinsProvisionerService {
           '# MineKubernetes Injected Server Mod: FabricTailor (RF-ARQ-22)\n',
         );
         injected.push('FabricTailor.jar');
-        this.logger.log(
-          `[RF-ARQ-22] Mod FabricTailor.jar injetado com sucesso em ${modsDir}`,
-        );
+        this.logger.log(`[RF-ARQ-22] Mod FabricTailor.jar injetado com sucesso em ${modsDir}`);
       }
     }
 
@@ -73,10 +71,7 @@ export class SkinsProvisionerService {
    */
   public async sanitizeServerMods(serverDataDir: string): Promise<string[]> {
     const purged: string[] = [];
-    const dirsToCheck = [
-      path.join(serverDataDir, 'mods'),
-      path.join(serverDataDir, 'plugins'),
-    ];
+    const dirsToCheck = [path.join(serverDataDir, 'mods'), path.join(serverDataDir, 'plugins')];
 
     for (const dir of dirsToCheck) {
       if (!fs.existsSync(dir)) {

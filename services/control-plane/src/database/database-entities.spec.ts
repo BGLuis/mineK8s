@@ -126,7 +126,9 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     expect(backup.filename).toBe('server-1_2026-09-29.tar.gz');
     expect(backup.storagePath).toBe('/backups/server-1_2026-09-29.tar.gz');
     expect(backup.sizeBytes).toBe(1048576);
-    expect(backup.sha256Checksum).toBe('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890');
+    expect(backup.sha256Checksum).toBe(
+      'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    );
     expect(backup.backupType).toBe(BackupType.HOT_SCHEDULED);
     expect(backup.status).toBe(BackupStatus.COMPLETED);
     expect(backup.isProtected).toBe(false);

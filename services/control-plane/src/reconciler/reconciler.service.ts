@@ -161,8 +161,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
         }
 
         // 2. Replica synchronization: Desired vs Observed
-        const desiredReplicas =
-          server.state === 'READY' || server.state === 'STARTING' ? 1 : 0;
+        const desiredReplicas = server.state === 'READY' || server.state === 'STARTING' ? 1 : 0;
 
         if (observedDep.replicas !== desiredReplicas) {
           this.logger.warn(
@@ -207,7 +206,8 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
               server.server_type?.toUpperCase(),
             );
             const maxStartupTimeoutMs = isModpack ? 15.5 * 60 * 1000 : 3.5 * 60 * 1000;
-            const elapsed = Date.now() - (server.updated_at ? server.updated_at.getTime() : Date.now());
+            const elapsed =
+              Date.now() - (server.updated_at ? server.updated_at.getTime() : Date.now());
 
             if (elapsed > maxStartupTimeoutMs) {
               this.logger.error(
@@ -235,7 +235,11 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
             }
 
             // 5. Inactivity Sleep / Hibernation Check (RF-ARQ-07)
-            await this.checkInactivityHibernation(server, probeResult.playersOnline, stateTransitions);
+            await this.checkInactivityHibernation(
+              server,
+              probeResult.playersOnline,
+              stateTransitions,
+            );
           } else {
             const now = Date.now();
             let tracker = this.livenessFailures.get(server.id);
@@ -260,12 +264,10 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
               }
             }
           }
-        } else if (
-          server.state === 'STOPPING' &&
-          observedDep.replicas === 0 &&
-          readyCount === 0
-        ) {
-          this.logger.log(`Server [${server.subdomain}] pod stopped. Updating state STOPPING -> STOPPED.`);
+        } else if (server.state === 'STOPPING' && observedDep.replicas === 0 && readyCount === 0) {
+          this.logger.log(
+            `Server [${server.subdomain}] pod stopped. Updating state STOPPING -> STOPPED.`,
+          );
           server.state = 'STOPPED';
           await this.serverRepo.save(server);
           this.notifyGateway(server, 'STOPPED');
@@ -284,7 +286,11 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
       };
 
       this.lastSummary = summary;
-      if (healedDeployments.length > 0 || reconciledReplicas.length > 0 || stateTransitions.length > 0) {
+      if (
+        healedDeployments.length > 0 ||
+        reconciledReplicas.length > 0 ||
+        stateTransitions.length > 0
+      ) {
         this.logger.log(
           `Reconciliation completed in ${durationMs}ms: ` +
             `healed=${healedDeployments.length}, ` +

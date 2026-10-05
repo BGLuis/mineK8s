@@ -1,9 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -110,7 +105,9 @@ export class AdminService {
             {
               serverId: server.id,
               policy: effectiveAccessPolicy(server),
-              allowedGroupIds: serverGroups.filter((sg) => sg.server_id === server.id).map((sg) => sg.group_id),
+              allowedGroupIds: serverGroups
+                .filter((sg) => sg.server_id === server.id)
+                .map((sg) => sg.group_id),
               allowedUserIds: directServerIds.has(server.id) ? [user.id] : [],
             },
           ).allowed,
@@ -295,7 +292,9 @@ export class AdminService {
   /**
    * Disparo manual de Smart Kick para um jogador específico (RF-GW-15, RF-TS-09).
    */
-  async smartKick(dto: SmartKickDto): Promise<{ success: boolean; terminated_connections: number }> {
+  async smartKick(
+    dto: SmartKickDto,
+  ): Promise<{ success: boolean; terminated_connections: number }> {
     const server = await this.serverRepo.findOne({
       where: { id: dto.serverId },
       relations: ['minecraft_settings'],

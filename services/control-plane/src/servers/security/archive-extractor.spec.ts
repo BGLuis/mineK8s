@@ -36,9 +36,7 @@ function createZipBuffer(
     localHeaders.push(local);
 
     // Central directory file header
-    const externalAttr = file.isSymlink
-      ? ((0o120777 << 16) >>> 0)
-      : ((0o100644 << 16) >>> 0);
+    const externalAttr = file.isSymlink ? (0o120777 << 16) >>> 0 : (0o100644 << 16) >>> 0;
     const central = Buffer.alloc(46 + filenameBuf.length);
     central.writeUInt32LE(0x02014b50, 0); // PK\x01\x02
     central.writeUInt16LE(20, 4); // version made by
@@ -105,9 +103,7 @@ describe('ArchiveExtractor (Zip-Slip & Symlink Mitigations - L-04)', () => {
   });
 
   it('should strictly reject Zip-Slip attempts with ".." path traversal (L-04)', async () => {
-    const maliciousZip = createZipBuffer([
-      { name: '../../etc/passwd_evil', content: 'malicious' },
-    ]);
+    const maliciousZip = createZipBuffer([{ name: '../../etc/passwd_evil', content: 'malicious' }]);
 
     await expect(ArchiveExtractor.extractZip(maliciousZip, targetDir)).rejects.toThrow(
       ForbiddenException,

@@ -9,7 +9,9 @@ use tokio::sync::{mpsc, watch};
 use tokio::time::sleep;
 
 use gateway::identity::is_tailscale_ip;
-use gateway::routing::{AccessPolicy, CachedServerRoute, RouteTable, RoutingModel, ServerInstanceStatus};
+use gateway::routing::{
+    AccessPolicy, CachedServerRoute, RouteTable, RoutingModel, ServerInstanceStatus,
+};
 use gateway::{GatewayConfig, GatewayServer};
 
 use minecraft_protocol::frame::RawPacket;
@@ -73,12 +75,13 @@ async fn test_public_listener_routes_internet_world_via_srv_target() {
     route_table.insert(public_route);
 
     let config = GatewayConfig::default();
-    let server = GatewayServer::new(config)
-        .with_route_table(route_table);
+    let server = GatewayServer::new(config).with_route_table(route_table);
 
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
     tokio::spawn(async move {
-        let _ = server.run_dual(priv_listener, Some(pub_listener), shutdown_rx).await;
+        let _ = server
+            .run_dual(priv_listener, Some(pub_listener), shutdown_rx)
+            .await;
     });
 
     sleep(Duration::from_millis(100)).await;
@@ -148,12 +151,13 @@ async fn test_public_listener_rejects_private_worlds() {
     route_table.insert(private_route);
 
     let config = GatewayConfig::default();
-    let server = GatewayServer::new(config)
-        .with_route_table(route_table);
+    let server = GatewayServer::new(config).with_route_table(route_table);
 
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
     tokio::spawn(async move {
-        let _ = server.run_dual(priv_listener, Some(pub_listener), shutdown_rx).await;
+        let _ = server
+            .run_dual(priv_listener, Some(pub_listener), shutdown_rx)
+            .await;
     });
 
     sleep(Duration::from_millis(100)).await;
@@ -204,7 +208,9 @@ async fn test_public_listener_rejects_private_worlds() {
 
     let mut payload_cursor = &raw_pkt.payload[..];
     let disconnect = DisconnectPacket::decode(&mut payload_cursor).unwrap();
-    assert!(disconnect.reason_json.contains("não aceita conexões públicas"));
+    assert!(disconnect
+        .reason_json
+        .contains("não aceita conexões públicas"));
 }
 
 #[tokio::test]
@@ -237,7 +243,9 @@ async fn test_auto_wake_anti_scanner_behavior() {
 
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
     tokio::spawn(async move {
-        let _ = server.run_dual(priv_listener, Some(pub_listener), shutdown_rx).await;
+        let _ = server
+            .run_dual(priv_listener, Some(pub_listener), shutdown_rx)
+            .await;
     });
 
     sleep(Duration::from_millis(100)).await;
@@ -271,7 +279,10 @@ async fn test_auto_wake_anti_scanner_behavior() {
     sleep(Duration::from_millis(100)).await;
 
     // RF-CF-08: Scanner NÃO acorda a JVM!
-    assert!(wake_rx.try_recv().is_err(), "Server List Ping não deve disparar Auto-Wake em mundos INTERNET");
+    assert!(
+        wake_rx.try_recv().is_err(),
+        "Server List Ping não deve disparar Auto-Wake em mundos INTERNET"
+    );
 
     // 2. Jogador real envia LoginStart válido -> Deve acordar a JVM
     let mut player = TcpStream::connect(pub_addr).await.unwrap();

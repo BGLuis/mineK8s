@@ -19,7 +19,11 @@ export class ArchiveExtractor {
     return new Promise((resolve, reject) => {
       yauzl.fromBuffer(zipBuffer, { lazyEntries: true }, (err, zipfile) => {
         if (err || !zipfile) {
-          return reject(new BadRequestException(`Failed to parse ZIP archive: ${err?.message || 'Invalid format'}`));
+          return reject(
+            new BadRequestException(
+              `Failed to parse ZIP archive: ${err?.message || 'Invalid format'}`,
+            ),
+          );
         }
 
         const extractedPaths: string[] = [];
@@ -33,7 +37,11 @@ export class ArchiveExtractor {
             const isSymlink = mode === 0o120000;
             if (isSymlink) {
               zipfile.close();
-              return reject(new ForbiddenException(`Symlink entry "${entry.fileName}" inside archive is forbidden (L-04)`));
+              return reject(
+                new ForbiddenException(
+                  `Symlink entry "${entry.fileName}" inside archive is forbidden (L-04)`,
+                ),
+              );
             }
 
             // 2. Validate entry path against zip-slip
@@ -60,7 +68,11 @@ export class ArchiveExtractor {
             zipfile.openReadStream(entry, async (streamErr, readStream) => {
               if (streamErr || !readStream) {
                 zipfile.close();
-                return reject(new BadRequestException(`Error reading ZIP entry "${entry.fileName}": ${streamErr?.message}`));
+                return reject(
+                  new BadRequestException(
+                    `Error reading ZIP entry "${entry.fileName}": ${streamErr?.message}`,
+                  ),
+                );
               }
 
               const writeStream = fs.createWriteStream(destPath);
@@ -106,7 +118,11 @@ export class ArchiveExtractor {
   /**
    * Safely extracts a TAR or TAR.GZ buffer into targetDir with strict Zip-Slip and symlink checking.
    */
-  public static async extractTar(tarBuffer: Buffer, targetDir: string, isGzip = false): Promise<string[]> {
+  public static async extractTar(
+    tarBuffer: Buffer,
+    targetDir: string,
+    isGzip = false,
+  ): Promise<string[]> {
     let uncompressed = tarBuffer;
     if (isGzip) {
       try {
@@ -129,7 +145,11 @@ export class ArchiveExtractor {
           // Reject symlinks / hardlinks
           if (entryType === 'symlink' || entryType === 'link') {
             extract.destroy();
-            return reject(new ForbiddenException(`Symlink/Link entry "${entryName}" in tar archive is forbidden (L-04)`));
+            return reject(
+              new ForbiddenException(
+                `Symlink/Link entry "${entryName}" in tar archive is forbidden (L-04)`,
+              ),
+            );
           }
 
           let destPath: string;
@@ -161,7 +181,9 @@ export class ArchiveExtractor {
       });
 
       extract.on('finish', () => resolve(extractedPaths));
-      extract.on('error', (err: any) => reject(new BadRequestException(`TAR error: ${err.message}`)));
+      extract.on('error', (err: any) =>
+        reject(new BadRequestException(`TAR error: ${err.message}`)),
+      );
 
       const bufferStream = new stream.PassThrough();
       bufferStream.end(uncompressed);

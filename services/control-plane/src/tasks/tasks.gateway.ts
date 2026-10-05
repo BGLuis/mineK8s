@@ -63,7 +63,9 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.trustedProxies,
       );
       if (!user) {
-        this.logger.warn(`Conexão rejeitada no WebSocket de tarefas: credenciais ausentes ou inválidas`);
+        this.logger.warn(
+          `Conexão rejeitada no WebSocket de tarefas: credenciais ausentes ou inválidas`,
+        );
         client.emit('unauthorized', { message: 'Missing or invalid credentials' });
         client.disconnect?.();
         return;
@@ -71,7 +73,9 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       client.data = client.data || {};
       client.data.user = user;
-      this.logger.debug(`Cliente conectado ao WebSocket de tarefas: ${client.id} (user ${user.id})`);
+      this.logger.debug(
+        `Cliente conectado ao WebSocket de tarefas: ${client.id} (user ${user.id})`,
+      );
     } catch (err) {
       this.logger.error(`Erro no handshake de /ws/tasks: ${(err as Error).message}`);
       client.disconnect?.();
@@ -112,7 +116,9 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   public emitTaskProgress(payload: TaskProgressPayload): void {
     if (!this.server) {
-      this.logger.debug(`WebSocket server não inicializado, pulando emissão de progresso para task ${payload.taskId}`);
+      this.logger.debug(
+        `WebSocket server não inicializado, pulando emissão de progresso para task ${payload.taskId}`,
+      );
       return;
     }
 

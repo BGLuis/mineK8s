@@ -30,7 +30,9 @@ export function liveRefresh(
   const signals = signals$.pipe(share());
 
   const pushes = signals.pipe(
-    filter((signal): signal is Extract<ServerSocketSignal, { type: 'state' }> => signal.type === 'state'),
+    filter(
+      (signal): signal is Extract<ServerSocketSignal, { type: 'state' }> => signal.type === 'state',
+    ),
     filter((signal) => accept(signal.event)),
     debounceTime(PUSH_DEBOUNCE_MS),
     map(() => undefined),
@@ -41,7 +43,9 @@ export function liveRefresh(
     map((signal) => signal.type === 'connected'),
     startWith(false),
     distinctUntilChanged(),
-    switchMap((connected) => (connected ? of(undefined) : visiblePoll(fallbackMs).pipe(map(() => undefined)))),
+    switchMap((connected) =>
+      connected ? of(undefined) : visiblePoll(fallbackMs).pipe(map(() => undefined)),
+    ),
   );
 
   return merge(pushes, connection);

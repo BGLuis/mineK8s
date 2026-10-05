@@ -23,12 +23,7 @@ export type ServerState =
   | 'CRASHED'
   | 'FAILED';
 
-export type ServerAccessPolicy =
-  | 'PUBLIC'
-  | 'GROUP'
-  | 'INDIVIDUAL'
-  | 'MAINTENANCE'
-  | 'INTERNET';
+export type ServerAccessPolicy = 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET';
 
 @Entity('servers')
 export class Server {

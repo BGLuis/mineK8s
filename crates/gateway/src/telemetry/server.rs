@@ -54,7 +54,10 @@ impl TelemetryServer {
         Ok(())
     }
 
-    async fn handle_http(mut stream: TcpStream, metrics: Arc<GatewayMetrics>) -> std::io::Result<()> {
+    async fn handle_http(
+        mut stream: TcpStream,
+        metrics: Arc<GatewayMetrics>,
+    ) -> std::io::Result<()> {
         let mut buf = [0u8; 1024];
         let n = stream.read(&mut buf).await?;
         if n == 0 {
@@ -81,7 +84,8 @@ impl TelemetryServer {
             );
             stream.write_all(response.as_bytes()).await?;
         } else {
-            let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let response =
+                "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
             stream.write_all(response.as_bytes()).await?;
         }
 

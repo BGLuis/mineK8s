@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '@auth/roles.decorator';
@@ -29,12 +21,14 @@ export class HealthBotController {
 
   @Get('servers/:id/reports')
   @ApiOperation({ summary: 'Get historical synthetic health check reports for a specific server' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of reports to return (max 50, default 20)' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of reports to return (max 50, default 20)',
+  })
   @ApiResponse({ status: 200, description: 'List of historical health bot reports' })
-  async getReports(
-    @Param('id') id: string,
-    @Query('limit') limit?: number,
-  ) {
+  async getReports(@Param('id') id: string, @Query('limit') limit?: number) {
     const parsedLimit = limit ? parseInt(limit.toString(), 10) : 20;
     return this.schedulerService.getReports(id, isNaN(parsedLimit) ? 20 : parsedLimit);
   }

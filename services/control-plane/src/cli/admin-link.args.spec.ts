@@ -25,9 +25,17 @@ describe('parseAdminLinkArgs (#131)', () => {
   it.each([
     ['no nick', ['--tailscale-user-id', '1'], /--nick is required/],
     ['no source', ['--nick', 'Steve'], /Provide --tailscale-user-id or --ip/],
-    ['both sources', ['--nick', 'Steve', '--ip', '100.64.0.7', '--tailscale-user-id', '1'], /mutually exclusive/],
+    [
+      'both sources',
+      ['--nick', 'Steve', '--ip', '100.64.0.7', '--tailscale-user-id', '1'],
+      /mutually exclusive/,
+    ],
     ['an unknown flag', ['--nick', 'Steve', '--ip', '100.64.0.7', '--frce'], /Unknown option/],
-    ['a stray argument', ['--nick', 'Steve', '--ip', '100.64.0.7', 'extra'], /Unexpected argument "extra"/],
+    [
+      'a stray argument',
+      ['--nick', 'Steve', '--ip', '100.64.0.7', 'extra'],
+      /Unexpected argument "extra"/,
+    ],
     ['a flag without its value', ['--nick'], /argument missing|requires/i],
   ])('rejects %s as a usage error', (_label, argv, message) => {
     expect(() => parseAdminLinkArgs(argv)).toThrow(UsageError);

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use bytes::BytesMut;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::time::timeout;
 use tracing::debug;
@@ -59,7 +59,10 @@ pub async fn handle_status_ping(
                 raw_pong.encode(&mut pong_wire);
                 conn.stream.write_all(&pong_wire).await?;
             } else {
-                debug!(id = raw_ping.packet_id.0, "Pacote inesperado aguardando Ping Request");
+                debug!(
+                    id = raw_ping.packet_id.0,
+                    "Pacote inesperado aguardando Ping Request"
+                );
             }
         }
         _ => {
@@ -87,7 +90,12 @@ async fn resolve_status_json(
 
             // Tentar consultar JVM upstream com timeout curto (2 segundos)
             if let Some(target) = r.target_addr.as_ref() {
-                if let Ok(Ok(upstream_json)) = timeout(Duration::from_secs(2), query_upstream_status(target, &r.subdomain)).await {
+                if let Ok(Ok(upstream_json)) = timeout(
+                    Duration::from_secs(2),
+                    query_upstream_status(target, &r.subdomain),
+                )
+                .await
+                {
                     status_cache.set(&r.server_id, upstream_json.clone());
                     return upstream_json;
                 }
@@ -138,7 +146,9 @@ async fn query_upstream_status(target: &UpstreamAddr, hostname: &str) -> Result<
     let mut conn = ClientConnection::new(upstream, upstream_addr);
     let (raw_res, _) = conn.read_raw_packet_streaming().await?;
     if raw_res.packet_id != StatusResponsePacket::PACKET_ID {
-        return Err(GatewayError::InvalidState("Esperado StatusResponse do upstream".into()));
+        return Err(GatewayError::InvalidState(
+            "Esperado StatusResponse do upstream".into(),
+        ));
     }
 
     let mut cursor = &raw_res.payload[..];

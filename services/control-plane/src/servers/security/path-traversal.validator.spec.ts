@@ -29,15 +29,11 @@ describe('resolveSafePath (L-04)', () => {
   });
 
   it('should reject null byte injection with BadRequestException', () => {
-    expect(() => resolveSafePath(tempBaseDir, 'world\0/evil.dat')).toThrow(
-      BadRequestException,
-    );
+    expect(() => resolveSafePath(tempBaseDir, 'world\0/evil.dat')).toThrow(BadRequestException);
   });
 
   it('should reject path traversal with ".." using ForbiddenException', () => {
-    expect(() => resolveSafePath(tempBaseDir, '../outside.txt')).toThrow(
-      ForbiddenException,
-    );
+    expect(() => resolveSafePath(tempBaseDir, '../outside.txt')).toThrow(ForbiddenException);
     expect(() => resolveSafePath(tempBaseDir, 'world/../../etc/passwd')).toThrow(
       ForbiddenException,
     );
@@ -47,9 +43,7 @@ describe('resolveSafePath (L-04)', () => {
   });
 
   it('should reject absolute paths pointing outside base directory', () => {
-    expect(() => resolveSafePath(tempBaseDir, '/etc/shadow')).toThrow(
-      ForbiddenException,
-    );
+    expect(() => resolveSafePath(tempBaseDir, '/etc/shadow')).toThrow(ForbiddenException);
   });
 
   it('should reject symlinks pointing outside the base directory', async () => {
@@ -65,9 +59,7 @@ describe('resolveSafePath (L-04)', () => {
       return;
     }
 
-    expect(() => resolveSafePath(tempBaseDir, 'symlink-outside')).toThrow(
-      ForbiddenException,
-    );
+    expect(() => resolveSafePath(tempBaseDir, 'symlink-outside')).toThrow(ForbiddenException);
 
     await fs.promises.rm(outsideTarget, { recursive: true, force: true });
   });

@@ -116,7 +116,10 @@ async fn test_server_stopped_responds_hibernation_motd_without_touching_jvm() {
 
                     assert_eq!(status_json.players.online, 0);
                     assert_eq!(status_json.players.max, 20);
-                    let sample = status_json.players.sample.expect("Deve conter player sample");
+                    let sample = status_json
+                        .players
+                        .sample
+                        .expect("Deve conter player sample");
                     assert_eq!(sample[0].name, "§7[Clique para Conectar e Acordar]");
                     break;
                 }

@@ -42,9 +42,9 @@
   --color-scene-dirt-dark: #7a5236;
   --color-scene-cloud: #ffffff;
 
-  --font-display: 'Tiny5', ui-monospace, monospace;
-  --font-body: 'Inter Variable', system-ui, sans-serif;
-  --font-mono: 'VT323', ui-monospace, monospace;
+  --font-display: "Tiny5", ui-monospace, monospace;
+  --font-body: "Inter Variable", system-ui, sans-serif;
+  --font-mono: "VT323", ui-monospace, monospace;
 
   --radius-*: initial;
   --radius-none: 0;

@@ -3,14 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthSession } from '../../core/auth';
-import {
-  McBanner,
-  McButton,
-  McLegalFooter,
-  McPanel,
-  McTextField,
-  McVoxelScene,
-} from '../../ui';
+import { McBanner, McButton, McLegalFooter, McPanel, McTextField, McVoxelScene } from '../../ui';
 import { focusFirstInvalid } from '../access/format';
 import { apiErrorMessage, asHttpError } from '../join/api-error';
 import { NICK_HELP, validateNick } from '../join/nick';
@@ -131,7 +124,9 @@ export class LoginPage {
   private readonly session = inject(AuthSession);
   private readonly router = inject(Router);
   /** Read once: a 401 from the session request makes the interceptor navigate to a bare /login. */
-  private readonly target = safeRedirect(inject(ActivatedRoute).snapshot.queryParamMap.get('redirect'));
+  private readonly target = safeRedirect(
+    inject(ActivatedRoute).snapshot.queryParamMap.get('redirect'),
+  );
 
   protected readonly nickHelp = NICK_HELP;
   protected readonly token = signal('');
@@ -144,9 +139,13 @@ export class LoginPage {
   protected readonly bootstrapError = signal('');
   private readonly submitted = signal(false);
 
-  private readonly tokenError = computed(() => (this.token().trim() ? '' : 'Cole o token de instalação.'));
+  private readonly tokenError = computed(() =>
+    this.token().trim() ? '' : 'Cole o token de instalação.',
+  );
   private readonly nickError = computed(() => validateNick(this.nick()) ?? '');
-  protected readonly visibleTokenError = computed(() => (this.submitted() ? this.tokenError() : ''));
+  protected readonly visibleTokenError = computed(() =>
+    this.submitted() ? this.tokenError() : '',
+  );
   protected readonly visibleNickError = computed(() => (this.submitted() ? this.nickError() : ''));
 
   protected signInWithVpn(): void {
@@ -157,7 +156,9 @@ export class LoginPage {
         if (user.role !== 'ADMIN') {
           this.session.logout();
           this.vpnBusy.set(false);
-          this.vpnError.set('Esta conta não é de administrador. Peça acesso a quem administra o painel.');
+          this.vpnError.set(
+            'Esta conta não é de administrador. Peça acesso a quem administra o painel.',
+          );
           return;
         }
         this.identity.set(user.minecraft_nick);

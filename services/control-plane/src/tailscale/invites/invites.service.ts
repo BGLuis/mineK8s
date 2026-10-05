@@ -174,22 +174,32 @@ export class InvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'Invite not found or invalid token' });
+      throw new NotFoundException({
+        code: 'INVITE_NOT_FOUND',
+        message: 'Invite not found or invalid token',
+      });
     }
 
     const status = computeInviteStatus(invite);
     if (status === 'Revoked') {
-      throw new BadRequestException({ code: 'INVITE_REVOKED', message: 'This invite has been revoked by the administrator' });
+      throw new BadRequestException({
+        code: 'INVITE_REVOKED',
+        message: 'This invite has been revoked by the administrator',
+      });
     }
     if (status === 'Expired') {
       throw new BadRequestException({ code: 'INVITE_EXPIRED', message: 'This invite has expired' });
     }
     if (status === 'Depleted') {
-      throw new ConflictException({ code: 'INVITE_DEPLETED', message: 'The usage limit of this invite has been reached' });
+      throw new ConflictException({
+        code: 'INVITE_DEPLETED',
+        message: 'The usage limit of this invite has been reached',
+      });
     }
 
     const serverIds = (invite.invite_servers || []).map((s) => s.server_id);
-    const servers = serverIds.length > 0 ? await this.serverRepo.find({ where: { id: In(serverIds) } }) : [];
+    const servers =
+      serverIds.length > 0 ? await this.serverRepo.find({ where: { id: In(serverIds) } }) : [];
 
     return {
       ...this.toSummaryDto(
@@ -203,16 +213,14 @@ export class InvitesService {
 
   /**
    * Resgate atômico de convite no portal /join com checagem de nickname e compensação L-03 (RF-TS-08, RF-TS-11).
-   * 
+   *
    * Critério de Concorrência: 10 claims simultâneos em maxUses=1 garantem exatamente 1 sucesso e 9 conflitos.
    */
   async claimInvite(dto: ClaimInviteDto): Promise<ClaimResultDto> {
     // 1. Validação estrita do Nickname Vanilla (RF-ARQ-21, GW:430-432)
     const nickValidation = validateNicknameFormat(dto.minecraftNick);
     if (!nickValidation.valid) {
-      throw new BadRequestException(
-        `Invalid nickname format: ${nickValidation.reason}`,
-      );
+      throw new BadRequestException(`Invalid nickname format: ${nickValidation.reason}`);
     }
 
     // 2. Reserva atômica da cota no banco via conditional update atômico (RF-TS-08)
@@ -229,16 +237,28 @@ export class InvitesService {
     if (updateResult.affected === 0) {
       const invite = await this.inviteRepo.findOne({ where: { token: dto.token } });
       if (!invite) {
-        throw new NotFoundException({ code: 'INVITE_NOT_FOUND', message: 'Invite not found or invalid token' });
+        throw new NotFoundException({
+          code: 'INVITE_NOT_FOUND',
+          message: 'Invite not found or invalid token',
+        });
       }
       const status = computeInviteStatus(invite);
       if (status === 'Revoked') {
-        throw new BadRequestException({ code: 'INVITE_REVOKED', message: 'This invite has been revoked by the administrator' });
+        throw new BadRequestException({
+          code: 'INVITE_REVOKED',
+          message: 'This invite has been revoked by the administrator',
+        });
       }
       if (status === 'Expired') {
-        throw new BadRequestException({ code: 'INVITE_EXPIRED', message: 'This invite has expired' });
+        throw new BadRequestException({
+          code: 'INVITE_EXPIRED',
+          message: 'This invite has expired',
+        });
       }
-      throw new ConflictException({ code: 'INVITE_DEPLETED', message: 'The usage limit of this invite has been reached' });
+      throw new ConflictException({
+        code: 'INVITE_DEPLETED',
+        message: 'The usage limit of this invite has been reached',
+      });
     }
 
     // Carrega o convite completo e suas permissões pré-vinculadas
@@ -357,11 +377,7 @@ export class InvitesService {
     };
   }
 
-  private toSummaryDto(
-    invite: Invite,
-    groupIds: string[],
-    serverIds: string[],
-  ): InviteSummaryDto {
+  private toSummaryDto(invite: Invite, groupIds: string[], serverIds: string[]): InviteSummaryDto {
     const status = computeInviteStatus(invite);
     return {
       id: invite.id,

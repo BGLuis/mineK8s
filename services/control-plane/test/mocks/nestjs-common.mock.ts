@@ -11,17 +11,29 @@ export const Body = () => (_target: any, _key: string, _idx: number) => {};
 export const Param = () => (_target: any, _key: string, _idx: number) => {};
 export const Query = () => (_target: any, _key: string, _idx: number) => {};
 export const UseGuards = () => (_target: any, _key?: string, desc?: any) => desc || _target;
-export const UseInterceptors = (..._interceptors: any[]) => (_target: any, _key?: string, desc?: any) => desc || _target;
+export const UseInterceptors =
+  (..._interceptors: any[]) =>
+  (_target: any, _key?: string, desc?: any) =>
+    desc || _target;
 export const UploadedFile = () => (_target: any, _key: string, _idx: number) => {};
-export const Inject = (_token?: any) => (_target: any, _key: string | symbol | undefined, _idx?: number) => {};
+export const Inject =
+  (_token?: any) => (_target: any, _key: string | symbol | undefined, _idx?: number) => {};
 export const Optional = () => (_target: any, _key?: string | symbol, _idx?: number) => {};
-export const HttpCode = (_statusCode: number) => (_target: any, _key?: string, desc?: any) => desc || _target;
+export const HttpCode = (_statusCode: number) => (_target: any, _key?: string, desc?: any) =>
+  desc || _target;
 export const Req = () => (_target: any, _key: string, _idx: number) => {};
 export const Res = () => (_target: any, _key: string, _idx: number) => {};
 export const Headers = () => (_target: any, _key: string, _idx: number) => {};
-export const Header = (_name: string, _value: string) => (_target: any, _key?: string, desc?: any) => desc || _target;
-export const Catch = (..._types: any[]) => (target: any) => target;
-export const SetMetadata = (_key: any, _val: any) => (_target: any, _keyName?: string, desc?: any) => desc || _target;
+export const Header =
+  (_name: string, _value: string) => (_target: any, _key?: string, desc?: any) =>
+    desc || _target;
+export const Catch =
+  (..._types: any[]) =>
+  (target: any) =>
+    target;
+export const SetMetadata =
+  (_key: any, _val: any) => (_target: any, _keyName?: string, desc?: any) =>
+    desc || _target;
 
 export class Logger {
   constructor(private context?: string) {}
@@ -32,7 +44,10 @@ export class Logger {
 }
 
 export class HttpException extends Error {
-  constructor(public response: string | object, public status: number) {
+  constructor(
+    public response: string | object,
+    public status: number,
+  ) {
     super(typeof response === 'string' ? response : JSON.stringify(response));
   }
   getStatus() {

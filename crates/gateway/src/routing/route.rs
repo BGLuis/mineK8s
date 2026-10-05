@@ -115,4 +115,3 @@ pub struct CachedServerRoute {
     pub game_type: String,
     pub auto_wake: bool,
 }
-

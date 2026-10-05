@@ -38,9 +38,12 @@ const LEVEL_TOGGLE_ACTIVE: Record<LogLevel, string> = {
   ERROR: 'border-status-danger text-status-danger',
 };
 
+const ESC = '\u001b';
+const ANSI_COLOR_CODE = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
+
 /** Drops Minecraft section-sign colour codes and ANSI escapes so they do not show as noise. */
 export function stripFormatting(text: string): string {
-  return text.replace(/\u001b\[[0-9;]*m/g, '').replace(/§./g, '');
+  return text.replace(ANSI_COLOR_CODE, '').replace(/§./g, '');
 }
 
 export function formatClock(timestamp: string): string {

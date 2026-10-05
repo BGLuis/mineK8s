@@ -36,13 +36,15 @@ describe('TasksGateway (RF-STO-18, #92)', () => {
       ),
     };
     authService = {
-      validateUserById: jest.fn(async (id: string) =>
-        [admin, player, stranger].find((user) => user.id === id) ?? null,
+      validateUserById: jest.fn(
+        async (id: string) => [admin, player, stranger].find((user) => user.id === id) ?? null,
       ),
       validateTailscaleUser: jest.fn(async () => admin),
     };
     jwtService = {
-      verify: jest.fn((token: string) => (token.startsWith('jwt-') ? { sub: token.slice(4) } : null)),
+      verify: jest.fn((token: string) =>
+        token.startsWith('jwt-') ? { sub: token.slice(4) } : null,
+      ),
     };
 
     gateway = new TasksGateway(
@@ -84,7 +86,10 @@ describe('TasksGateway (RF-STO-18, #92)', () => {
     });
 
     it('rejects a forged x-tailscale-user header from outside the trusted proxies', async () => {
-      const client = socket({}, { address: '203.0.113.9', headers: { 'x-tailscale-user': 'admin' } });
+      const client = socket(
+        {},
+        { address: '203.0.113.9', headers: { 'x-tailscale-user': 'admin' } },
+      );
 
       await gateway.handleConnection(client);
 

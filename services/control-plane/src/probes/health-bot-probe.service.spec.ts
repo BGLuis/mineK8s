@@ -109,10 +109,7 @@ describe('HealthBotProbeService (RF-ARQ-30, Milestone F9)', () => {
           pubKey,
           verifyToken,
         ]);
-        const encPacket = Buffer.concat([
-          probeService.encodeVarInt(encPayload.length),
-          encPayload,
-        ]);
+        const encPacket = Buffer.concat([probeService.encodeVarInt(encPayload.length), encPayload]);
 
         socket.write(encPacket);
       });
@@ -146,10 +143,7 @@ describe('HealthBotProbeService (RF-ARQ-30, Milestone F9)', () => {
         const reasonPayload = probeService.encodeString(
           JSON.stringify({ text: 'You are not whitelisted on this server' }),
         );
-        const disconnectPayload = Buffer.concat([
-          probeService.encodeVarInt(0x00),
-          reasonPayload,
-        ]);
+        const disconnectPayload = Buffer.concat([probeService.encodeVarInt(0x00), reasonPayload]);
         const disconnectPacket = Buffer.concat([
           probeService.encodeVarInt(disconnectPayload.length),
           disconnectPayload,

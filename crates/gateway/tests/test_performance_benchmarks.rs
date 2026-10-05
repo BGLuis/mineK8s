@@ -215,10 +215,22 @@ async fn bench_proxy_forwarding_latency_overhead() {
     println!("\n========================================================");
     println!("  1. BENCHMARK DE OVERHEAD DE LATÊNCIA (500 AMOSTRAS)");
     println!("========================================================");
-    println!("  Direto Baseline  p50: {:>7.2?} | p99: {:>7.2?}", direct_p50, direct_p99);
-    println!("  Com Gateway L7   p50: {:>7.2?} | p99: {:>7.2?}", proxied_p50, proxied_p99);
-    println!("  OVERHEAD ADICIONADO p50: {:>7.2?} (Meta: < 500 µs)", overhead_p50);
-    println!("  OVERHEAD ADICIONADO p99: {:>7.2?} (Meta: < 2.0 ms)", overhead_p99);
+    println!(
+        "  Direto Baseline  p50: {:>7.2?} | p99: {:>7.2?}",
+        direct_p50, direct_p99
+    );
+    println!(
+        "  Com Gateway L7   p50: {:>7.2?} | p99: {:>7.2?}",
+        proxied_p50, proxied_p99
+    );
+    println!(
+        "  OVERHEAD ADICIONADO p50: {:>7.2?} (Meta: < 500 µs)",
+        overhead_p50
+    );
+    println!(
+        "  OVERHEAD ADICIONADO p99: {:>7.2?} (Meta: < 2.0 ms)",
+        overhead_p99
+    );
     println!("========================================================\n");
 
     assert!(
@@ -322,7 +334,10 @@ async fn bench_duplex_proxy_throughput() {
     println!("========================================================");
     println!("  Total transferido: {:.2} MB", mb_transferred);
     println!("  Tempo decorrido:   {:.3} s", elapsed.as_secs_f64());
-    println!("  Throughput real:   {:.2} MB/s (Meta: > 300 MB/s)", throughput_mb_s);
+    println!(
+        "  Throughput real:   {:.2} MB/s (Meta: > 300 MB/s)",
+        throughput_mb_s
+    );
     println!("========================================================\n");
 
     assert!(
@@ -439,11 +454,21 @@ async fn bench_server_list_ping_burst() {
     println!("========================================================");
     println!("  Conexões concluídas: {}", count);
     println!("  Tempo total:         {:.3} s", elapsed.as_secs_f64());
-    println!("  Taxa de Conexões:    {:.1} pings/s (Meta: > 1.000 CPS)", cps);
+    println!(
+        "  Taxa de Conexões:    {:.1} pings/s (Meta: > 1.000 CPS)",
+        cps
+    );
     println!("========================================================\n");
 
-    assert_eq!(count, total_requests, "Todas as requisições devem ser atendidas");
-    assert!(cps > 1000.0, "Taxa CPS ({:.1}) abaixo da meta de 1.000", cps);
+    assert_eq!(
+        count, total_requests,
+        "Todas as requisições devem ser atendidas"
+    );
+    assert!(
+        cps > 1000.0,
+        "Taxa CPS ({:.1}) abaixo da meta de 1.000",
+        cps
+    );
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
@@ -536,7 +561,10 @@ async fn bench_memory_under_concurrent_load() {
             println!("\n========================================================");
             println!("  4. ESCALABILIDADE DE MEMÓRIA SOB CARGA (50 SESSÕES)");
             println!("========================================================");
-            println!("  Sessões ativas concorrentes: {}", session_mgr.active_count());
+            println!(
+                "  Sessões ativas concorrentes: {}",
+                session_mgr.active_count()
+            );
             println!("  Memória RSS sob carga ativa: {:.2} MB", resident_mb);
             println!("  Limite máximo especificado:  30.00 MB (RNF-GW-02)");
             println!("========================================================\n");

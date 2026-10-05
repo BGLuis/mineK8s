@@ -243,7 +243,9 @@ export class RealKubernetesDriver implements IKubernetesDriver {
           }
         }
       } catch (err) {
-        this.logger.debug(`Error checking pod status for job ${jobName}: ${(err as Error).message}`);
+        this.logger.debug(
+          `Error checking pod status for job ${jobName}: ${(err as Error).message}`,
+        );
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
     }

@@ -35,7 +35,9 @@ export class GatewayIpcController {
    */
   @GrpcMethod('GatewayControlService', 'StreamRouteUpdates')
   streamRouteUpdates(_empty: Empty): Observable<RouteUpdateEvent> {
-    this.logger.log('Gateway L7 conectou ao stream contínuo de atualizações de rotas (StreamRouteUpdates)');
+    this.logger.log(
+      'Gateway L7 conectou ao stream contínuo de atualizações de rotas (StreamRouteUpdates)',
+    );
     return this.ipcService.getRouteUpdatesStream();
   }
 
@@ -44,7 +46,9 @@ export class GatewayIpcController {
    */
   @GrpcStreamMethod('GatewayControlService', 'StreamSessionEvents')
   streamSessionEvents(messages: Observable<SessionLifecycleEvent>): Observable<Empty> {
-    this.logger.log('Gateway L7 abriu stream de eventos de ciclo de vida de sessão (StreamSessionEvents)');
+    this.logger.log(
+      'Gateway L7 abriu stream de eventos de ciclo de vida de sessão (StreamSessionEvents)',
+    );
 
     // O RPC é "stream -> Empty": a resposta única só pode sair quando o Gateway encerra o seu fluxo.
     // Responder antes encerraria a chamada e descartaria todos os eventos seguintes.
@@ -53,7 +57,9 @@ export class GatewayIpcController {
         next: (event) =>
           void this.ipcService
             .handleSessionEvent(event)
-            .catch((err) => this.logger.error(`Falha ao processar evento de sessão: ${err?.message}`)),
+            .catch((err) =>
+              this.logger.error(`Falha ao processar evento de sessão: ${err?.message}`),
+            ),
         error: (err) => {
           this.logger.error(`Erro no stream de eventos de sessão: ${err?.message}`);
           this.ipcService.handleSessionStreamClosed();

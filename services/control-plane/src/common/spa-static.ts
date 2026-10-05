@@ -36,7 +36,8 @@ export function serveSpa(app: NestExpressApplication, root: string): boolean {
 
   app.useStaticAssets(root, { index: false });
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const isPageRequest = (req.method === 'GET' || req.method === 'HEAD') && !path.extname(req.path);
+    const isPageRequest =
+      (req.method === 'GET' || req.method === 'HEAD') && !path.extname(req.path);
     if (!isPageRequest || isBackendPath(req.path)) {
       return next();
     }
@@ -48,5 +49,7 @@ export function serveSpa(app: NestExpressApplication, root: string): boolean {
 }
 
 function isBackendPath(requestPath: string): boolean {
-  return BACKEND_PREFIXES.some((prefix) => requestPath === prefix || requestPath.startsWith(`${prefix}/`));
+  return BACKEND_PREFIXES.some(
+    (prefix) => requestPath === prefix || requestPath.startsWith(`${prefix}/`),
+  );
 }

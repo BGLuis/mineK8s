@@ -31,7 +31,12 @@ describe('Linking a legacy admin, then signing in over HTTP (#131)', () => {
 
   beforeEach(async () => {
     users = [
-      { id: 'u-legacy', minecraft_nick: 'LegacyAdmin', role: 'ADMIN', tailscale_user_id: null } as User,
+      {
+        id: 'u-legacy',
+        minecraft_nick: 'LegacyAdmin',
+        role: 'ADMIN',
+        tailscale_user_id: null,
+      } as User,
     ];
     const matches = (where: Record<string, unknown>) => (u: User) =>
       Object.entries(where).every(([key, value]) => (u as any)[key] === value);
@@ -72,7 +77,9 @@ describe('Linking a legacy admin, then signing in over HTTP (#131)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     link = app.get(AdminLinkService);
   });

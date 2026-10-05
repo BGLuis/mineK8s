@@ -27,9 +27,7 @@ async function bootstrap() {
   // Unhandled promise rejections
   process.on('unhandledRejection', (reason) => {
     logger.error(
-      `Unhandled promise rejection: ${
-        reason instanceof Error ? reason.stack : String(reason)
-      }`,
+      `Unhandled promise rejection: ${reason instanceof Error ? reason.stack : String(reason)}`,
     );
   });
 
@@ -38,7 +36,8 @@ async function bootstrap() {
   // Security headers via Helmet
   app.use(helmet(SPA_HELMET_OPTIONS));
 
-  const webDistDir = configService.webDistDir ?? path.resolve(__dirname, '../../web/dist/web/browser');
+  const webDistDir =
+    configService.webDistDir ?? path.resolve(__dirname, '../../web/dist/web/browser');
   if (serveSpa(app, webDistDir)) {
     logger.log(`Serving the web SPA from ${webDistDir}`);
   } else {
@@ -102,9 +101,7 @@ async function bootstrap() {
   );
 
   await app.listen(configService.port);
-  logger.log(
-    `Control Plane API running on port ${configService.port} (${configService.nodeEnv})`,
-  );
+  logger.log(`Control Plane API running on port ${configService.port} (${configService.nodeEnv})`);
 }
 
 bootstrap();

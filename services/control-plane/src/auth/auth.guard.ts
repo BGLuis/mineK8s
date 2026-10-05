@@ -1,9 +1,4 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { AuthService } from './auth.service';
@@ -36,7 +31,9 @@ export class AuthGuard implements CanActivate {
       if (context.switchToWs().getClient()?.data?.user) {
         return true;
       }
-      throw new UnauthorizedException('Access denied: socket was not authenticated at the handshake');
+      throw new UnauthorizedException(
+        'Access denied: socket was not authenticated at the handshake',
+      );
     }
 
     const request = context.switchToHttp().getRequest();
@@ -59,9 +56,7 @@ export class AuthGuard implements CanActivate {
     // 2. Tailscale identity header: anyone can type it, so it only counts when a trusted proxy sent it.
     const tailscaleUserHeader = request.headers['x-tailscale-user'];
     if (tailscaleUserHeader && this.trustedProxies.isTrusted(request.socket?.remoteAddress)) {
-      const user = await this.authService.validateTailscaleUser(
-        String(tailscaleUserHeader),
-      );
+      const user = await this.authService.validateTailscaleUser(String(tailscaleUserHeader));
       if (user) {
         request.user = user;
         return true;

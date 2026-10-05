@@ -49,10 +49,7 @@ export class LoggerRuleEngine {
       return contextLevel;
     }
 
-    return (
-      this.contextRules.get(this.DEFAULT_CONTEXT) ??
-      this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL]
-    );
+    return this.contextRules.get(this.DEFAULT_CONTEXT) ?? this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL];
   }
 
   private initializeRules(rules?: string): void {
@@ -68,8 +65,7 @@ export class LoggerRuleEngine {
       if (!parsedRule) continue;
 
       const numericLevel =
-        this.LOG_LEVEL_MAP[parsedRule.level] ??
-        this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL];
+        this.LOG_LEVEL_MAP[parsedRule.level] ?? this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL];
 
       for (const context of parsedRule.contexts) {
         this.contextRules.set(context.trim(), numericLevel);
@@ -82,15 +78,10 @@ export class LoggerRuleEngine {
   }
 
   private setDefaultRule(): void {
-    this.contextRules.set(
-      this.DEFAULT_CONTEXT,
-      this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL],
-    );
+    this.contextRules.set(this.DEFAULT_CONTEXT, this.LOG_LEVEL_MAP[this.DEFAULT_LEVEL]);
   }
 
-  private parseRule(
-    rule: string,
-  ): { contexts: string[]; level: LogLevel } | null {
+  private parseRule(rule: string): { contexts: string[]; level: LogLevel } | null {
     try {
       if (this.isLogLevel(rule)) {
         return {

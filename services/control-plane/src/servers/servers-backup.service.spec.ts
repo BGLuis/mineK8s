@@ -44,11 +44,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       deleteJob: jest.fn().mockResolvedValue(undefined),
     };
 
-    service = new ServersBackupService(
-      mockConfigService,
-      mockK8sService,
-      mockConsoleDriver,
-    );
+    service = new ServersBackupService(mockConfigService, mockK8sService, mockConsoleDriver);
 
     sampleServer = {
       id: 'srv-backup-123',
@@ -77,18 +73,34 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     // Configura estrutura com todas as dimensões Paper para readyServer (D-02)
     const readyDir = path.join(tempStorageRoot, readyServer.subdomain);
     await fs.promises.mkdir(path.join(readyDir, 'world', 'region'), { recursive: true });
-    await fs.promises.mkdir(path.join(readyDir, 'world_nether', 'DIM-1', 'region'), { recursive: true });
-    await fs.promises.mkdir(path.join(readyDir, 'world_the_end', 'DIM1', 'region'), { recursive: true });
+    await fs.promises.mkdir(path.join(readyDir, 'world_nether', 'DIM-1', 'region'), {
+      recursive: true,
+    });
+    await fs.promises.mkdir(path.join(readyDir, 'world_the_end', 'DIM1', 'region'), {
+      recursive: true,
+    });
     await fs.promises.mkdir(path.join(readyDir, 'logs'), { recursive: true });
     await fs.promises.mkdir(path.join(readyDir, 'crash-reports'), { recursive: true });
     await fs.promises.mkdir(path.join(readyDir, '.cache'), { recursive: true });
 
     await fs.promises.writeFile(path.join(readyDir, 'world', 'level.dat'), 'original-pre-freeze');
-    await fs.promises.writeFile(path.join(readyDir, 'world', 'region', 'r.0.0.mca'), 'chunk-data-overworld');
-    await fs.promises.writeFile(path.join(readyDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'), 'chunk-data-nether');
-    await fs.promises.writeFile(path.join(readyDir, 'world_the_end', 'DIM1', 'region', 'r.0.0.mca'), 'chunk-data-end');
+    await fs.promises.writeFile(
+      path.join(readyDir, 'world', 'region', 'r.0.0.mca'),
+      'chunk-data-overworld',
+    );
+    await fs.promises.writeFile(
+      path.join(readyDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'),
+      'chunk-data-nether',
+    );
+    await fs.promises.writeFile(
+      path.join(readyDir, 'world_the_end', 'DIM1', 'region', 'r.0.0.mca'),
+      'chunk-data-end',
+    );
     await fs.promises.writeFile(path.join(readyDir, 'server.properties'), 'motd=ReadyServer');
-    await fs.promises.writeFile(path.join(readyDir, 'paper-global.yml'), 'proxies:\n  velocity:\n    enabled: true');
+    await fs.promises.writeFile(
+      path.join(readyDir, 'paper-global.yml'),
+      'proxies:\n  velocity:\n    enabled: true',
+    );
     // Arquivos que devem ser excluídos pelo tar (RF-STO-10)
     await fs.promises.writeFile(path.join(readyDir, 'logs', 'latest.log'), 'secret-log-data');
     await fs.promises.writeFile(path.join(readyDir, 'logs', '2026-09-01-1.log.gz'), 'archived-log');
@@ -194,8 +206,14 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       // Simula escrita in-place da JVM após o religamento do save-on (D-03, D-04)
       mockConsoleDriver.saveOn.mockImplementation(async () => {
         // Imediatamente após save-on, mutamos arquivos na pasta viva /data
-        await fs.promises.writeFile(path.join(readyDir, 'world', 'level.dat'), 'MUTATED_POST_FREEZE');
-        await fs.promises.writeFile(path.join(readyDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'), 'MUTATED_NETHER');
+        await fs.promises.writeFile(
+          path.join(readyDir, 'world', 'level.dat'),
+          'MUTATED_POST_FREEZE',
+        );
+        await fs.promises.writeFile(
+          path.join(readyDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'),
+          'MUTATED_NETHER',
+        );
       });
 
       const result = await service.createBackup(readyServer, 'HOT');
@@ -210,8 +228,12 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // 1. Todas as dimensões Paper estão presentes (D-02)
       expect(fs.existsSync(path.join(extractDir, 'world', 'region', 'r.0.0.mca'))).toBe(true);
-      expect(fs.existsSync(path.join(extractDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'))).toBe(true);
-      expect(fs.existsSync(path.join(extractDir, 'world_the_end', 'DIM1', 'region', 'r.0.0.mca'))).toBe(true);
+      expect(
+        fs.existsSync(path.join(extractDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca')),
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(extractDir, 'world_the_end', 'DIM1', 'region', 'r.0.0.mca')),
+      ).toBe(true);
       expect(fs.existsSync(path.join(extractDir, 'server.properties'))).toBe(true);
       expect(fs.existsSync(path.join(extractDir, 'paper-global.yml'))).toBe(true);
 
@@ -222,11 +244,17 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // 3. Snapshot não foi afetado pela mutação pós-save-on (D-01, D-03):
       // O level.dat e o nether no tar extraído contêm o valor ORIGINAL no momento do freeze!
-      const levelDatInTar = await fs.promises.readFile(path.join(extractDir, 'world', 'level.dat'), 'utf-8');
+      const levelDatInTar = await fs.promises.readFile(
+        path.join(extractDir, 'world', 'level.dat'),
+        'utf-8',
+      );
       expect(levelDatInTar).toBe('original-pre-freeze');
       expect(levelDatInTar).not.toBe('MUTATED_POST_FREEZE');
 
-      const netherInTar = await fs.promises.readFile(path.join(extractDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'), 'utf-8');
+      const netherInTar = await fs.promises.readFile(
+        path.join(extractDir, 'world_nether', 'DIM-1', 'region', 'r.-1.-1.mca'),
+        'utf-8',
+      );
       expect(netherInTar).toBe('chunk-data-nether');
       expect(netherInTar).not.toBe('MUTATED_NETHER');
 
@@ -256,7 +284,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('deve garantir execução do save-on mesmo se ocorrer falha inesperada durante o freeze', async () => {
-      jest.spyOn<any, any>(service, 'createLocalSnapshot').mockRejectedValueOnce(new Error('Falha de I/O'));
+      jest
+        .spyOn<any, any>(service, 'createLocalSnapshot')
+        .mockRejectedValueOnce(new Error('Falha de I/O'));
 
       await expect(service.createBackup(readyServer, 'HOT')).rejects.toThrow('Falha de I/O');
 
@@ -267,13 +297,15 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
     it('deve disparar Watchdog de contingência para forçar save-on se o snapshot ultrapassar o tempo limite (RF-STO-19)', async () => {
       let resolveSlowSnapshot: (value?: any) => void = () => {};
-      jest.spyOn<any, any>(service, 'createLocalSnapshot').mockImplementationOnce(async (...args: any[]) => {
-        const snapDir = args[1] as string;
-        await fs.promises.mkdir(snapDir, { recursive: true });
-        return new Promise((resolve) => {
-          resolveSlowSnapshot = resolve;
+      jest
+        .spyOn<any, any>(service, 'createLocalSnapshot')
+        .mockImplementationOnce(async (...args: any[]) => {
+          const snapDir = args[1] as string;
+          await fs.promises.mkdir(snapDir, { recursive: true });
+          return new Promise((resolve) => {
+            resolveSlowSnapshot = resolve;
+          });
         });
-      });
 
       // Dispara com watchdog de 50ms
       const backupPromise = service.createBackup(readyServer, 'HOT', { watchdogTimeoutMs: 50 });
@@ -305,7 +337,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       expect(result).toBeDefined();
       expect(result.backupType).toBe('COLD');
-      expect(result.filename).toMatch(new RegExp(`^${sampleServer.subdomain}_cold_\\d+\\.tar\\.gz$`));
+      expect(result.filename).toMatch(
+        new RegExp(`^${sampleServer.subdomain}_cold_\\d+\\.tar\\.gz$`),
+      );
       expect(mockConsoleDriver.saveOff).not.toHaveBeenCalled();
       expect(mockConsoleDriver.saveOn).not.toHaveBeenCalled();
       expect(fs.existsSync(result.storagePath)).toBe(true);
@@ -326,9 +360,18 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       const validSourceDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'valid-backup-src-'));
       await fs.promises.mkdir(path.join(validSourceDir, 'world'), { recursive: true });
       await fs.promises.mkdir(path.join(validSourceDir, '.fabric'), { recursive: true });
-      await fs.promises.writeFile(path.join(validSourceDir, 'world', 'level.dat'), 'seed=restored-world');
-      await fs.promises.writeFile(path.join(validSourceDir, 'server.properties'), 'motd=RestoredServer');
-      await fs.promises.writeFile(path.join(validSourceDir, '.fabric', 'loader.json'), '{"loader":"fabric"}');
+      await fs.promises.writeFile(
+        path.join(validSourceDir, 'world', 'level.dat'),
+        'seed=restored-world',
+      );
+      await fs.promises.writeFile(
+        path.join(validSourceDir, 'server.properties'),
+        'motd=RestoredServer',
+      );
+      await fs.promises.writeFile(
+        path.join(validSourceDir, '.fabric', 'loader.json'),
+        '{"loader":"fabric"}',
+      );
 
       validBackupPath = path.join(tempBackupsRoot, 'valid-backup.tar.gz');
       await execAsync('tar', ['-czf', validBackupPath, '-C', validSourceDir, '.']);
@@ -339,7 +382,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       await fs.promises.writeFile(corruptedBackupPath, Buffer.from('NOT_A_VALID_GZIP_OR_TAR_DATA'));
 
       // 3. Cria um backup estruturalmente inválido (falta level.dat)
-      const invalidSourceDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'invalid-backup-src-'));
+      const invalidSourceDir = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'invalid-backup-src-'),
+      );
       await fs.promises.writeFile(path.join(invalidSourceDir, 'server.properties'), 'motd=NoWorld');
       invalidStructureBackupPath = path.join(tempBackupsRoot, 'invalid-structure-backup.tar.gz');
       await execAsync('tar', ['-czf', invalidStructureBackupPath, '-C', invalidSourceDir, '.']);
@@ -357,13 +402,22 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(fs.existsSync(result.preRestoreBackupPath!)).toBe(true);
 
       // Conteúdo restaurado
-      const restoredLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+      const restoredLevelDat = await fs.promises.readFile(
+        path.join(serverDir, 'world', 'level.dat'),
+        'utf-8',
+      );
       expect(restoredLevelDat).toBe('seed=restored-world');
 
-      const restoredProperties = await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8');
+      const restoredProperties = await fs.promises.readFile(
+        path.join(serverDir, 'server.properties'),
+        'utf-8',
+      );
       expect(restoredProperties).toBe('motd=RestoredServer');
 
-      const restoredDotfile = await fs.promises.readFile(path.join(serverDir, '.fabric', 'loader.json'), 'utf-8');
+      const restoredDotfile = await fs.promises.readFile(
+        path.join(serverDir, '.fabric', 'loader.json'),
+        'utf-8',
+      );
       expect(restoredDotfile).toBe('{"loader":"fabric"}');
 
       // Staging de segurança deve ser purgado após commit
@@ -376,42 +430,77 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       // Simula diretório de sistema lost+found e dotfiles originais em /data
       await fs.promises.mkdir(path.join(serverDir, 'lost+found'), { recursive: true });
       await fs.promises.mkdir(path.join(serverDir, '.hidden_config'), { recursive: true });
-      await fs.promises.writeFile(path.join(serverDir, '.hidden_config', 'cfg.json'), '{"original":true}');
+      await fs.promises.writeFile(
+        path.join(serverDir, '.hidden_config', 'cfg.json'),
+        '{"original":true}',
+      );
 
       // Salva snapshot do conteúdo original antes do restore
-      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
-      const origProperties = await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8');
-      const origMod = await fs.promises.readFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'utf-8');
-      const origDotfile = await fs.promises.readFile(path.join(serverDir, '.hidden_config', 'cfg.json'), 'utf-8');
+      const origLevelDat = await fs.promises.readFile(
+        path.join(serverDir, 'world', 'level.dat'),
+        'utf-8',
+      );
+      const origProperties = await fs.promises.readFile(
+        path.join(serverDir, 'server.properties'),
+        'utf-8',
+      );
+      const origMod = await fs.promises.readFile(
+        path.join(serverDir, 'mods', 'jei-1.20.jar'),
+        'utf-8',
+      );
+      const origDotfile = await fs.promises.readFile(
+        path.join(serverDir, '.hidden_config', 'cfg.json'),
+        'utf-8',
+      );
 
       // Tenta restaurar com arquivo corrompido
-      await expect(service.restoreBackup(sampleServer, 'corrupted-backup.tar.gz')).rejects.toThrow(HttpException);
+      await expect(service.restoreBackup(sampleServer, 'corrupted-backup.tar.gz')).rejects.toThrow(
+        HttpException,
+      );
 
       // Validação pós-rollback: tudo deve permanecer idêntico ao estado anterior (D-05)
       expect(fs.existsSync(path.join(serverDir, 'lost+found'))).toBe(true);
       expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
 
-      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
-      expect(await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8')).toBe(origProperties);
-      expect(await fs.promises.readFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'utf-8')).toBe(origMod);
-      expect(await fs.promises.readFile(path.join(serverDir, '.hidden_config', 'cfg.json'), 'utf-8')).toBe(origDotfile);
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(
+        origLevelDat,
+      );
+      expect(await fs.promises.readFile(path.join(serverDir, 'server.properties'), 'utf-8')).toBe(
+        origProperties,
+      );
+      expect(
+        await fs.promises.readFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'utf-8'),
+      ).toBe(origMod);
+      expect(
+        await fs.promises.readFile(path.join(serverDir, '.hidden_config', 'cfg.json'), 'utf-8'),
+      ).toBe(origDotfile);
     });
 
     it('deve disparar rollback quando validação de estrutura (RF-MG-07) reprovar o mundo restaurado', async () => {
       const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
-      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+      const origLevelDat = await fs.promises.readFile(
+        path.join(serverDir, 'world', 'level.dat'),
+        'utf-8',
+      );
 
       // Backup válido como tar mas sem level.dat (sanidade falha)
-      await expect(service.restoreBackup(sampleServer, 'invalid-structure-backup.tar.gz')).rejects.toThrow(HttpException);
+      await expect(
+        service.restoreBackup(sampleServer, 'invalid-structure-backup.tar.gz'),
+      ).rejects.toThrow(HttpException);
 
       // Estado original preservado intacto
-      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(
+        origLevelDat,
+      );
       expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
     });
 
     it('deve abortar na Fase 1 sem tocar em /data se o checksum SHA-256 for divergente', async () => {
       const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
-      const origLevelDat = await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8');
+      const origLevelDat = await fs.promises.readFile(
+        path.join(serverDir, 'world', 'level.dat'),
+        'utf-8',
+      );
 
       await expect(
         service.restoreBackup(sampleServer, 'valid-backup.tar.gz', {
@@ -419,23 +508,33 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         }),
       ).rejects.toThrow(/SHA-256 checksum mismatch/);
 
-      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(origLevelDat);
+      expect(await fs.promises.readFile(path.join(serverDir, 'world', 'level.dat'), 'utf-8')).toBe(
+        origLevelDat,
+      );
       expect(fs.existsSync(path.join(serverDir, '.staging_safety'))).toBe(false);
     });
 
     it('deve rejeitar restauração com HTTP 409 Conflict se o servidor não estiver STOPPED', async () => {
       readyServer.state = 'READY';
-      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(ConflictException);
-      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(/STOPPED state/);
+      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.restoreBackup(readyServer, 'valid-backup.tar.gz')).rejects.toThrow(
+        /STOPPED state/,
+      );
     });
 
     it('deve rejeitar restauração com HTTP 409 Conflict se o servidor já estiver ocupado', async () => {
       (service as any).activeBackupLocks.add(sampleServer.id);
-      await expect(service.restoreBackup(sampleServer, 'valid-backup.tar.gz')).rejects.toThrow(ConflictException);
+      await expect(service.restoreBackup(sampleServer, 'valid-backup.tar.gz')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('deve rejeitar restauração com HTTP 404 se o arquivo de backup não for encontrado', async () => {
-      await expect(service.restoreBackup(sampleServer, 'non-existent-backup.tar.gz')).rejects.toThrow(HttpException);
+      await expect(
+        service.restoreBackup(sampleServer, 'non-existent-backup.tar.gz'),
+      ).rejects.toThrow(HttpException);
     });
   });
 
@@ -474,7 +573,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         }),
         findOne: jest.fn().mockImplementation(async (options) => {
           return inMemoryBackups.find(
-            (b) => b.id === options?.where?.id && (!options?.where?.serverId || b.serverId === options.where.serverId),
+            (b) =>
+              b.id === options?.where?.id &&
+              (!options?.where?.serverId || b.serverId === options.where.serverId),
           );
         }),
         delete: jest.fn().mockImplementation(async (id) => {
@@ -683,8 +784,12 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         minecraftVersion: '1.20.4',
       });
 
-      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(ConflictException);
-      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(/STOPPED state/);
+      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.restoreBackupById(readyServer.id, b!.id)).rejects.toThrow(
+        /STOPPED state/,
+      );
     });
   });
 });

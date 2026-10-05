@@ -42,7 +42,9 @@ describe('McPublishDialog', () => {
 
   it('offers Despublicar for a world the API reports as INTERNET, e.g. after a reload', async () => {
     store.accessPolicy.set('INTERNET');
-    api.unpublish.mockReturnValue(of({ id: 'srv-1', subdomain: 'survival', access_policy: 'GROUP' }));
+    api.unpublish.mockReturnValue(
+      of({ id: 'srv-1', subdomain: 'survival', access_policy: 'GROUP' }),
+    );
 
     const { fixture, el, confirm } = await open();
     expect(el.querySelector('[role="dialog"] h2')?.textContent).toContain('Despublicar');

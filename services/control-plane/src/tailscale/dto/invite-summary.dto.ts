@@ -30,7 +30,9 @@ export class InviteSummaryDto {
   })
   status: InviteStatus;
 
-  @ApiProperty({ example: 'https://mine.example.ts.net:3001/join?token=d9b73f8a0e2c418fb263914a87e50c4f' })
+  @ApiProperty({
+    example: 'https://mine.example.ts.net:3001/join?token=d9b73f8a0e2c418fb263914a87e50c4f',
+  })
   joinUrl: string;
 
   @ApiProperty({ type: [String], example: ['b1a95e7c-88eb-4b2a-b60f-21f4df463e2a'] })

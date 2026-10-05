@@ -20,7 +20,11 @@ export class TailscaleDevice {
   @Column({ type: 'uuid' })
   user_id: string;
 
-  @ManyToOne(() => User, (user) => user.devices, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => User,
+    (user) => user.devices,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'user_id' })
   user: User;
 

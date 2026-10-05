@@ -56,7 +56,8 @@ export function toApiError(exception: unknown): ApiErrorBody {
 
   const statusCode = exception.getStatus();
   const response = exception.getResponse();
-  const body = typeof response === 'string' ? {} : (response as { message?: unknown; code?: unknown });
+  const body =
+    typeof response === 'string' ? {} : (response as { message?: unknown; code?: unknown });
   const raw = typeof response === 'string' ? response : body.message;
 
   if (Array.isArray(raw)) {
@@ -69,7 +70,10 @@ export function toApiError(exception: unknown): ApiErrorBody {
       ? body.code
       : (CODE_BY_STATUS[statusCode] ?? (statusCode >= 500 ? 'INTERNAL_ERROR' : 'ERROR'));
   const message =
-    typeof raw !== 'string' || !raw.trim() || NEST_DEFAULT_MESSAGES.has(raw) || raw.startsWith('Cannot ')
+    typeof raw !== 'string' ||
+    !raw.trim() ||
+    NEST_DEFAULT_MESSAGES.has(raw) ||
+    raw.startsWith('Cannot ')
       ? (MESSAGE_BY_STATUS[statusCode] ?? INTERNAL_ERROR.message)
       : raw;
   return { statusCode, code, message };
@@ -85,7 +89,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
     const body = toApiError(exception);
     if (body.statusCode >= 500) {
-      this.logger.error(exception instanceof Error ? (exception.stack ?? exception.message) : String(exception));
+      this.logger.error(
+        exception instanceof Error ? (exception.stack ?? exception.message) : String(exception),
+      );
     }
     host.switchToHttp().getResponse().status(body.statusCode).json(body);
   }
