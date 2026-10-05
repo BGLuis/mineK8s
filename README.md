@@ -51,7 +51,7 @@ docker build -f crates/gateway/Dockerfile -t minekubernetes/gateway .           
 
 Ambas rodam como `nonroot` (UID 65532) sobre distroless, sem shell.
 
-**Control plane** (`3000` API e SPA, `50051` gRPC do gateway). Com `NODE_ENV=production` (padrão da imagem) o boot **não** aplica migrações; rode-as antes de cada versão nova, por exemplo num init container:
+**Control plane** (`3000` API e SPA, `50051` gRPC do gateway). O boot aplica as migrações pendentes sob um advisory lock do Postgres, então réplicas que sobem juntas se revezam; se uma migração falhar, o boot falha e a versão anterior continua no ar. Para aplicá-las sem subir a API (por exemplo, para ver o erro de uma migração):
 
 ```bash
 docker run --rm --env-file .env minekubernetes/control-plane \
