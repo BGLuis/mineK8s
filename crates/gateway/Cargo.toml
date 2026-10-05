@@ -9,7 +9,7 @@ description = "High-performance L7 reverse proxy gateway for MineKubernetes"
 minecraft-protocol = { path = "../minecraft-protocol" }
 tokio = { version = "1.38", features = ["full"] }
 bytes = "1.6"
-governor = "0.8"
+governor = "0.10"
 dashmap = "6.2"
 uuid = { version = "1.8", features = ["v4"] }
 prometheus = "0.14"
