@@ -1,0 +1,14 @@
+{
+  "version": {
+    "id": "1.21.11",
+    "support": {
+      "status": "UNSUPPORTED",
+      "end": "2026-06-15"
+    },
+    "java": {
+      "version": {
+        "minimum": 21
+      }
+    }
+  }
+}

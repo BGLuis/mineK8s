@@ -1,3 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -16,7 +22,7 @@ describe('ManifestBuilder', () => {
         nodeAffinityValue: 'node-nvme-1',
       },
       registry: {
-        jvmRunnerImage: 'eclipse-temurin:21-jre-jammy',
+        jvmRunnerImage: 'eclipse-temurin:{java}-jre-jammy',
       },
     } as any;
 
@@ -150,55 +156,37 @@ describe('ManifestBuilder', () => {
       expect(container.args[0]).toContain('exec java');
     });
 
-    describe('provisionamento do server.jar (#102)', () => {
+    describe('server.jar resolvido no registro (#102, #154, #157)', () => {
+      const PAPER_JAR =
+        'https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar';
+      const PAPER_CHECKSUM =
+        'sha256:5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba';
+
       const initContainersOf = (dep: ReturnType<typeof ManifestBuilder.buildDeployment>) =>
         dep.spec.template.spec.initContainers;
 
-      it.each(['PAPER', 'PURPUR'])(
-        'should add an init container that fetches the %s jar into the data volume before the runner starts',
-        (type) => {
-          sampleServer.server_type = type;
-          sampleServer.game_version = '1.20.4';
+      it('should fetch the resolved jar into the data volume before the runner starts', () => {
+        sampleServer.server_jar_url = PAPER_JAR;
+        sampleServer.server_jar_checksum = PAPER_CHECKSUM;
 
-          const init = initContainersOf(
-            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
-          )![0];
-
-          expect(init.name).toBe('fetch-server-jar');
-          expect(init.env).toEqual([
-            { name: 'SERVER_TYPE', value: type },
-            { name: 'MC_VERSION', value: '1.20.4' },
-          ]);
-          expect(init.volumeMounts).toEqual([{ name: 'server-data', mountPath: '/data' }]);
-        },
-      );
-
-      it('should point each type at its official download API and verify the Paper checksum', () => {
-        const script = initContainersOf(
+        const init = initContainersOf(
           ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
-        )![0].args[0];
+        )![0];
 
-        expect(script).toContain('https://api.purpurmc.org/v2/purpur/$MC_VERSION/latest/download');
-        expect(script).toContain(
-          'https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest',
-        );
-        expect(script).toContain('sha256sum -c -');
+        expect(init.name).toBe('fetch-server-jar');
+        expect(init.env).toEqual([
+          { name: 'SERVER_JAR_URL', value: PAPER_JAR },
+          { name: 'SERVER_JAR_CHECKSUM', value: PAPER_CHECKSUM },
+        ]);
+        expect(init.volumeMounts).toEqual([{ name: 'server-data', mountPath: '/data' }]);
       });
 
-      it('should not overwrite a jar already installed for the same type and version, but refetch when they change', () => {
-        const script = initContainersOf(
-          ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
-        )![0].args[0];
-
-        expect(script).toContain('[ -s /data/server.jar ]');
-        expect(script).toContain('cat /data/.server-jar');
-        expect(script).toContain('mv /data/server.jar.tmp /data/server.jar');
-      });
-
-      it.each(['FORGE', 'NEOFORGE', 'FABRIC', 'VANILLA'])(
-        'should not add a jar init container for %s',
+      it.each(['FORGE', 'NEOFORGE', 'FABRIC'])(
+        'should not add a jar init container for %s, whose installer provides the jar',
         (type) => {
           sampleServer.server_type = type;
+          sampleServer.server_jar_url = null;
+          sampleServer.server_jar_checksum = null;
           const dep = ManifestBuilder.buildDeployment(
             sampleServer,
             sampleSettings,
@@ -209,24 +197,154 @@ describe('ManifestBuilder', () => {
         },
       );
 
-      it.each(['1.20.4; rm -rf /data', '$(id)', '../../etc', '', '1.20.4&x=1', '1'])(
-        'should reject game_version "%s" instead of handing it to the download script',
-        (version) => {
-          sampleServer.game_version = version;
+      describe('script do init container', () => {
+        let workDir: string;
+        let dataDir: string;
+        let jarSource: string;
+        let wgetLog: string;
+        let script: string;
 
-          expect(() =>
-            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
-          ).toThrow(/game_version invalida/);
-        },
-      );
+        const JAR = Buffer.from('fake server jar');
+        const digest = (algorithm: string, content: Buffer = JAR) =>
+          createHash(algorithm).update(content).digest('hex');
 
-      it('should accept release candidates and two-part versions', () => {
-        for (const version of ['1.21', '1.21.4', '1.21-pre1', '1.21.4-rc2']) {
-          sampleServer.game_version = version;
-          expect(() =>
+        const runScript = (checksum: string) =>
+          spawnSync('/bin/sh', ['-c', script], {
+            encoding: 'utf8',
+            env: {
+              PATH: `${path.join(workDir, 'bin')}:${process.env.PATH}`,
+              SERVER_JAR_URL: 'https://downloads.test/server.jar',
+              SERVER_JAR_CHECKSUM: checksum,
+              JAR_SOURCE: jarSource,
+              WGET_LOG: wgetLog,
+            },
+          });
+
+        beforeEach(() => {
+          workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fetch-server-jar-'));
+          dataDir = path.join(workDir, 'data');
+          jarSource = path.join(workDir, 'upstream.jar');
+          wgetLog = path.join(workDir, 'wget.log');
+          fs.mkdirSync(dataDir);
+          fs.mkdirSync(path.join(workDir, 'bin'));
+          fs.writeFileSync(jarSource, JAR);
+          // Stands in for busybox wget: records the URL and "downloads" JAR_SOURCE to the -O path.
+          fs.writeFileSync(
+            path.join(workDir, 'bin', 'wget'),
+            [
+              '#!/bin/sh',
+              'while [ $# -gt 0 ]; do case "$1" in -O) out="$2"; shift 2 ;; *) url="$1"; shift ;; esac; done',
+              'echo "$url" >> "$WGET_LOG"',
+              'cp "$JAR_SOURCE" "$out"',
+            ].join('\n'),
+            { mode: 0o755 },
+          );
+
+          sampleServer.server_jar_url = 'https://downloads.test/server.jar';
+          sampleServer.server_jar_checksum = `sha1:${digest('sha1')}`;
+          const init = initContainersOf(
             ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
-          ).not.toThrow();
-        }
+          )![0];
+          script = init.args[0].replaceAll('/data', dataDir);
+        });
+
+        afterEach(() => {
+          fs.rmSync(workDir, { recursive: true, force: true });
+        });
+
+        it.each(['sha1', 'sha256', 'md5'])(
+          'installs a jar whose %s matches and records the checksum',
+          (algorithm) => {
+            const checksum = `${algorithm}:${digest(algorithm)}`;
+
+            const run = runScript(checksum);
+
+            expect(run.status).toBe(0);
+            expect(fs.readFileSync(path.join(dataDir, 'server.jar'))).toEqual(JAR);
+            expect(fs.readFileSync(path.join(dataDir, '.server-jar'), 'utf8').trim()).toBe(
+              checksum,
+            );
+            expect(fs.readFileSync(wgetLog, 'utf8').trim()).toBe(
+              'https://downloads.test/server.jar',
+            );
+          },
+        );
+
+        it('refuses a jar whose sha1 differs from the declared one and leaves no jar behind', () => {
+          const run = runScript(`sha1:${digest('sha1', Buffer.from('another jar'))}`);
+
+          expect(run.status).not.toBe(0);
+          expect(run.stderr).toContain('nao confere');
+          expect(fs.readdirSync(dataDir)).toEqual([]);
+        });
+
+        it('keeps the installed jar when a refetch does not match', () => {
+          fs.writeFileSync(path.join(dataDir, 'server.jar'), 'old jar');
+          fs.writeFileSync(path.join(dataDir, '.server-jar'), 'sha1:old\n');
+
+          const run = runScript(`sha1:${digest('sha1', Buffer.from('another jar'))}`);
+
+          expect(run.status).not.toBe(0);
+          expect(fs.readFileSync(path.join(dataDir, 'server.jar'), 'utf8')).toBe('old jar');
+        });
+
+        it('does not download again a jar already installed with the same checksum', () => {
+          const checksum = `sha1:${digest('sha1')}`;
+          expect(runScript(checksum).status).toBe(0);
+
+          const run = runScript(checksum);
+
+          expect(run.status).toBe(0);
+          expect(fs.readFileSync(wgetLog, 'utf8').trim().split('\n')).toHaveLength(1);
+        });
+
+        it('refuses a checksum without a known algorithm', () => {
+          const run = runScript(`crc32:${digest('sha1')}`);
+
+          expect(run.status).not.toBe(0);
+          expect(fs.existsSync(wgetLog)).toBe(false);
+        });
+      });
+    });
+
+    describe('imagem do runner por versão do Java (#156)', () => {
+      it('should fill the image template with the Java version resolved for the server', () => {
+        (mockConfigService.registry as any).jvmRunnerImage = 'eclipse-temurin:{java}-jre-jammy';
+        sampleServer.java_version = 25;
+
+        const dep = ManifestBuilder.buildDeployment(
+          sampleServer,
+          sampleSettings,
+          mockConfigService,
+        );
+
+        expect(dep.spec.template.spec.containers[0].image).toBe('eclipse-temurin:25-jre-jammy');
+      });
+
+      it('should keep Java 21 for a server created before the Java version was resolved', () => {
+        (mockConfigService.registry as any).jvmRunnerImage = 'eclipse-temurin:{java}-jre-jammy';
+        sampleServer.java_version = null;
+
+        const dep = ManifestBuilder.buildDeployment(
+          sampleServer,
+          sampleSettings,
+          mockConfigService,
+        );
+
+        expect(dep.spec.template.spec.containers[0].image).toBe('eclipse-temurin:21-jre-jammy');
+      });
+
+      it('should use an image without the {java} placeholder as is, for every server', () => {
+        (mockConfigService.registry as any).jvmRunnerImage = 'registry.local/runner:custom';
+        sampleServer.java_version = 8;
+
+        const dep = ManifestBuilder.buildDeployment(
+          sampleServer,
+          sampleSettings,
+          mockConfigService,
+        );
+
+        expect(dep.spec.template.spec.containers[0].image).toBe('registry.local/runner:custom');
       });
     });
   });

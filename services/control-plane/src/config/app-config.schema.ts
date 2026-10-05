@@ -50,7 +50,8 @@ export const appConfigSchema = Joi.object({
 
   // Images
   REGISTRY_URL: Joi.string().default('docker.io'),
-  IMAGE_JVM_RUNNER: Joi.string().default('eclipse-temurin:21-jre-jammy'),
+  // {java} becomes the Java major each server needs; an image without it is used for every server.
+  IMAGE_JVM_RUNNER: Joi.string().default('eclipse-temurin:{java}-jre-jammy'),
   IMAGE_INSTALLER_JOB: Joi.string().default('minekubernetes/installer:latest'),
   IMAGE_CONTROL_PLANE: Joi.string().default('minekubernetes/control-plane:latest'),
   IMAGE_GATEWAY: Joi.string().default('minekubernetes/gateway:latest'),
@@ -74,4 +75,11 @@ export const appConfigSchema = Joi.object({
   // Modpack catalog (Modrinth v2 / CurseForge v1)
   MODPACK_CATALOG_CACHE_TTL_MS: Joi.number().min(0).default(60000),
   MODPACK_CATALOG_TIMEOUT_MS: Joi.number().min(1000).default(8000),
+
+  // Server jar sources (Mojang piston-meta, Paper Fill v3, Purpur v2)
+  MOJANG_VERSION_MANIFEST_URL: Joi.string()
+    .uri()
+    .default('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'),
+  PAPER_API_URL: Joi.string().uri().default('https://fill.papermc.io'),
+  PURPUR_API_URL: Joi.string().uri().default('https://api.purpurmc.org'),
 }).unknown(true);

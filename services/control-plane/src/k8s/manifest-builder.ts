@@ -2,33 +2,28 @@ import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
 
-const JAR_PROVIDED_TYPES = ['PAPER', 'PURPUR'];
-const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
+// Servers created before the Java version was resolved per server all ran on Java 21.
+const LEGACY_RUNNER_JAVA = 21;
 
-// O version/type chegam por env para nunca serem interpolados no script de shell.
+// URL and checksum arrive by env so they are never interpolated into the shell script.
 const FETCH_SERVER_JAR_SCRIPT = [
   'set -eu',
-  'want="$SERVER_TYPE-$MC_VERSION"',
-  'if [ -s /data/server.jar ] && [ "$(cat /data/.server-jar 2>/dev/null)" = "$want" ]; then echo "server.jar $want ja presente"; exit 0; fi',
-  'sha=""',
-  'case "$SERVER_TYPE" in',
-  '  PURPUR) url="https://api.purpurmc.org/v2/purpur/$MC_VERSION/latest/download" ;;',
-  '  PAPER)',
-  // Fill v3 exige User-Agent identificado; o wget padrao do busybox e recusado.
-  '    meta=$(wget -q -U "minek8s-control-plane/1.0 (https://github.com/BGLuis/mineK8s)" -O - "https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest")',
-  // Variavel de padrao: aspas literais dentro de ${meta#...} anulam o corte no sh.
-  `    pat='*"server:default":'`,
-  '    section=${meta#$pat}',
-  '    url=$(printf %s "$section" | grep -o \'https://[^"]*\' | head -1)',
-  '    sha=$(printf %s "$section" | grep -o \'"sha256":"[0-9a-f]*"\' | head -1 | cut -d\'"\' -f4)',
-  '    ;;',
-  '  *) echo "tipo $SERVER_TYPE sem provedor de jar" >&2; exit 1 ;;',
+  'if [ -s /data/server.jar ] && [ "$(cat /data/.server-jar 2>/dev/null)" = "$SERVER_JAR_CHECKSUM" ]; then echo "server.jar $SERVER_JAR_CHECKSUM ja presente"; exit 0; fi',
+  'case "${SERVER_JAR_CHECKSUM%%:*}" in',
+  '  sha1) sum=sha1sum ;;',
+  '  sha256) sum=sha256sum ;;',
+  '  md5) sum=md5sum ;;',
+  '  *) echo "checksum sem algoritmo conhecido: $SERVER_JAR_CHECKSUM" >&2; exit 1 ;;',
   'esac',
-  '[ -n "$url" ] || { echo "URL do jar nao encontrada para $want" >&2; exit 1; }',
-  'wget -q -U "minek8s-control-plane/1.0 (https://github.com/BGLuis/mineK8s)" -O /data/server.jar.tmp "$url"',
-  '[ -z "$sha" ] || echo "$sha  /data/server.jar.tmp" | sha256sum -c -',
+  'rm -f /data/server.jar.tmp',
+  'wget -q -U "minek8s-control-plane/1.0 (https://github.com/BGLuis/mineK8s)" -O /data/server.jar.tmp "$SERVER_JAR_URL"',
+  'if ! echo "${SERVER_JAR_CHECKSUM#*:}  /data/server.jar.tmp" | "$sum" -c -; then',
+  '  rm -f /data/server.jar.tmp',
+  '  echo "server.jar baixado de $SERVER_JAR_URL nao confere com $SERVER_JAR_CHECKSUM" >&2',
+  '  exit 1',
+  'fi',
   'mv /data/server.jar.tmp /data/server.jar',
-  'echo "$want" > /data/.server-jar',
+  'echo "$SERVER_JAR_CHECKSUM" > /data/.server-jar',
 ].join('\n');
 
 export class ManifestBuilder {
@@ -117,10 +112,15 @@ export class ManifestBuilder {
     const containerMemoryLimitMb = heapMb > 8192 ? heapMb + 2048 : heapMb + 1536; // Heap + 1.5/2 GiB (C-17, RF-ARQ-09)
     const isModpack = ['FORGE', 'NEOFORGE', 'FABRIC'].includes(server.server_type.toUpperCase());
 
-    const serverType = server.server_type.toUpperCase();
-    const initContainers = JAR_PROVIDED_TYPES.includes(serverType)
-      ? [ManifestBuilder.buildFetchServerJarInitContainer(serverType, server.game_version)]
-      : undefined;
+    const initContainers =
+      server.server_jar_url && server.server_jar_checksum
+        ? [
+            ManifestBuilder.buildFetchServerJarInitContainer(
+              server.server_jar_url,
+              server.server_jar_checksum,
+            ),
+          ]
+        : undefined;
 
     const aikarsFlags = [
       `-Xms${heapMb}M`,
@@ -212,7 +212,10 @@ export class ManifestBuilder {
             containers: [
               {
                 name: 'runner',
-                image: configService.registry.jvmRunnerImage,
+                image: configService.registry.jvmRunnerImage.replaceAll(
+                  '{java}',
+                  String(server.java_version ?? LEGACY_RUNNER_JAVA),
+                ),
                 workingDir: '/data',
                 command: ['/bin/sh', '-c'],
                 args: [
@@ -278,18 +281,15 @@ export class ManifestBuilder {
     };
   }
 
-  private static buildFetchServerJarInitContainer(serverType: string, gameVersion: string) {
-    if (!MC_VERSION_PATTERN.test(gameVersion)) {
-      throw new Error(`game_version invalida para download do server.jar: "${gameVersion}"`);
-    }
+  private static buildFetchServerJarInitContainer(jarUrl: string, checksum: string) {
     return {
       name: 'fetch-server-jar',
       image: 'alpine:3.20',
       command: ['/bin/sh', '-c'],
       args: [FETCH_SERVER_JAR_SCRIPT],
       env: [
-        { name: 'SERVER_TYPE', value: serverType },
-        { name: 'MC_VERSION', value: gameVersion },
+        { name: 'SERVER_JAR_URL', value: jarUrl },
+        { name: 'SERVER_JAR_CHECKSUM', value: checksum },
       ],
       resources: {
         requests: { memory: '32Mi', cpu: '50m' },

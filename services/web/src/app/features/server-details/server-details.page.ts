@@ -77,6 +77,14 @@ import { ServerDetailStore } from './server-detail.store';
               <span>{{ s.subdomain }}</span>
               <span aria-hidden="true">·</span>
               <span>{{ typeLabel() }} {{ s.game_version }}</span>
+              @if (s.server_build) {
+                <span aria-hidden="true">·</span>
+                <span>build {{ s.server_build }} {{ s.server_build_channel }}</span>
+              }
+              @if (s.java_version) {
+                <span aria-hidden="true">·</span>
+                <span>Java {{ s.java_version }}</span>
+              }
               @if (uptime(); as up) {
                 <span aria-hidden="true">·</span>
                 <span>online há {{ up }}</span>

@@ -12,6 +12,7 @@ import {
   CloudflareConfig,
   HealthBotConfig,
   ModpackCatalogConfig,
+  ServerJarSourcesConfig,
 } from './app-config.values';
 
 @Injectable()
@@ -129,7 +130,7 @@ export class AppConfigService {
   get registry(): RegistryConfig {
     return new RegistryConfig(
       this.config.get<string>('REGISTRY_URL', 'docker.io'),
-      this.config.get<string>('IMAGE_JVM_RUNNER', 'eclipse-temurin:21-jre-jammy'),
+      this.config.get<string>('IMAGE_JVM_RUNNER', 'eclipse-temurin:{java}-jre-jammy'),
       this.config.get<string>('IMAGE_INSTALLER_JOB', 'minekubernetes/installer:latest'),
       this.config.get<string>('IMAGE_CONTROL_PLANE', 'minekubernetes/control-plane:latest'),
       this.config.get<string>('IMAGE_GATEWAY', 'minekubernetes/gateway:latest'),
@@ -164,6 +165,17 @@ export class AppConfigService {
     return new ModpackCatalogConfig(
       this.config.get<number>('MODPACK_CATALOG_CACHE_TTL_MS', 60000),
       this.config.get<number>('MODPACK_CATALOG_TIMEOUT_MS', 8000),
+    );
+  }
+
+  get serverJarSources(): ServerJarSourcesConfig {
+    return new ServerJarSourcesConfig(
+      this.config.get<string>(
+        'MOJANG_VERSION_MANIFEST_URL',
+        'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',
+      ),
+      this.config.get<string>('PAPER_API_URL', 'https://fill.papermc.io'),
+      this.config.get<string>('PURPUR_API_URL', 'https://api.purpurmc.org'),
     );
   }
 }

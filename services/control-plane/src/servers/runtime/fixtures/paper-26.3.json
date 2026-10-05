@@ -1,0 +1,13 @@
+{
+  "version": {
+    "id": "26.3",
+    "support": {
+      "status": "SUPPORTED"
+    },
+    "java": {
+      "version": {
+        "minimum": 25
+      }
+    }
+  }
+}

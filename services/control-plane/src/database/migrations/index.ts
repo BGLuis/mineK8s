@@ -5,6 +5,7 @@ import { AddServerAccessPolicy1710000000003 } from './1710000000003-AddServerAcc
 import { AddInviteCreatedBy1710000000004 } from './1710000000004-AddInviteCreatedBy';
 import { UniqueUserTailscaleId1710000000005 } from './1710000000005-UniqueUserTailscaleId';
 import { AddBackupModpackCasTables1710000000006 } from './1710000000006-AddBackupModpackCasTables';
+import { AddServerRuntime1710000000007 } from './1710000000007-AddServerRuntime';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -14,4 +15,5 @@ export const migrations = [
   AddInviteCreatedBy1710000000004,
   UniqueUserTailscaleId1710000000005,
   AddBackupModpackCasTables1710000000006,
+  AddServerRuntime1710000000007,
 ];

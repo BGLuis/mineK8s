@@ -6,10 +6,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnApplicationBootstrap,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -34,11 +35,12 @@ import { ServerDetailDto, ServerSummaryDto, toServerSettingsDto } from './dto/se
 import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
+import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
 
 @Injectable()
-export class ServersService {
+export class ServersService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ServersService.name);
 
   constructor(
@@ -52,6 +54,7 @@ export class ServersService {
     @Inject(CONSOLE_DRIVER_TOKEN)
     private readonly consoleDriver: ConsoleDriver,
     private readonly logStreamer: K8sLogStreamerService,
+    private readonly runtimeResolver: ServerRuntimeResolver,
     @Optional()
     private readonly backupService?: ServersBackupService,
     @Optional()
@@ -64,6 +67,30 @@ export class ServersService {
     private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
+  /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
+  onApplicationBootstrap(): void {
+    this.backfillRuntimes().catch((err) =>
+      this.logger.warn(`Could not backfill server runtimes: ${err.message}`),
+    );
+  }
+
+  private async backfillRuntimes(): Promise<void> {
+    const servers = await this.serverRepo.find({
+      where: { game_type: 'minecraft', java_version: IsNull() },
+    });
+    for (const server of servers) {
+      try {
+        const runtime = await this.runtimeResolver.resolve(server.server_type, server.game_version);
+        // update, not save: a stale entity would overwrite the state other flows write meanwhile.
+        await this.serverRepo.update(server.id, runtime);
+      } catch (err: any) {
+        this.logger.warn(
+          `Could not resolve the runtime of [${server.subdomain}] (${server.server_type} ${server.game_version}): ${err.message}`,
+        );
+      }
+    }
+  }
+
   async create(
     dto: CreateServerDto,
   ): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
@@ -75,15 +102,24 @@ export class ServersService {
     }
 
     const accessPolicy = dto.access_policy || 'GROUP';
+    const gameType = dto.game_type || 'minecraft';
+    const serverType = dto.server_type || ServerType.PAPER;
+    const gameVersion = dto.game_version || '1.20.4';
+    // Resolved before anything is saved: a version that cannot boot is refused instead of becoming a crashing server.
+    const runtime =
+      gameType === 'minecraft'
+        ? await this.runtimeResolver.resolve(serverType, gameVersion)
+        : undefined;
 
     const server = this.serverRepo.create({
       name: dto.name,
       subdomain: dto.subdomain,
-      game_type: dto.game_type || 'minecraft',
+      game_type: gameType,
       routing_model: dto.routing_model || 'sni-shared-port',
       allocated_port: dto.allocated_port ?? null,
-      server_type: dto.server_type || ServerType.PAPER,
-      game_version: dto.game_version || '1.20.4',
+      server_type: serverType,
+      game_version: gameVersion,
+      ...runtime,
       modpack_id: dto.modpack_id ?? null,
       allocated_memory_mb: dto.allocated_memory_mb || 4096,
       auto_wake: dto.auto_wake ?? true,
@@ -205,6 +241,9 @@ export class ServersService {
       routing_model: server.routing_model,
       server_type: server.server_type,
       game_version: server.game_version,
+      java_version: server.java_version,
+      server_build: server.server_build,
+      server_build_channel: server.server_build_channel,
       allocated_memory_mb: server.allocated_memory_mb,
       allocated_port: server.allocated_port,
       state: server.state,
@@ -477,9 +516,16 @@ export class ServersService {
       );
     }
 
+    // Resolved before the server is touched, so a version that cannot boot fails here with nothing to roll back.
+    const runtime = await this.runtimeResolver.resolve(
+      dto.server_type || server.server_type,
+      dto.game_version,
+    );
+
     const previousVersion = server.game_version;
     const previousModpack = server.modpack_id;
     const previousType = server.server_type;
+    const previousRuntime = ServersService.runtimeOf(server);
     const previousState = server.state;
 
     this.logger.log(
@@ -530,12 +576,10 @@ export class ServersService {
       if (dto.modpack_id !== undefined) {
         server.modpack_id = dto.modpack_id;
       }
+      Object.assign(server, runtime);
       await this.serverRepo.save(server);
 
-      // Re-provisiona manifesto com novos recursos/imagem no K8s
-      await this.k8sService.provisionServer(server, server.minecraft_settings);
-
-      // 6. Inicia o pod na nova versão
+      // 6. Inicia o pod na nova versão (startServer reescreve o Deployment com o novo jar e a nova imagem)
       server.state = 'STARTING';
       await this.serverRepo.save(server);
       this.notifyGateway(server, 'STARTING');
@@ -569,6 +613,7 @@ export class ServersService {
         previousVersion,
         previousModpack,
         previousType,
+        previousRuntime,
       );
     } catch (err: any) {
       this.logger.error(
@@ -580,8 +625,19 @@ export class ServersService {
         previousVersion,
         previousModpack,
         previousType,
+        previousRuntime,
       );
     }
+  }
+
+  private static runtimeOf(server: Server): ServerRuntime {
+    return {
+      java_version: server.java_version,
+      server_jar_url: server.server_jar_url,
+      server_jar_checksum: server.server_jar_checksum,
+      server_build: server.server_build,
+      server_build_channel: server.server_build_channel,
+    };
   }
 
   private async verifyPostUpdateBoot(server: Server): Promise<boolean> {
@@ -607,6 +663,7 @@ export class ServersService {
     previousVersion: string,
     previousModpack: string | null,
     previousType: string,
+    previousRuntime: ServerRuntime,
   ): Promise<{ message: string; version: string; rolledBack: boolean }> {
     try {
       // 1. Para pod da nova versão com falha
@@ -621,12 +678,12 @@ export class ServersService {
       server.game_version = previousVersion;
       server.modpack_id = previousModpack;
       server.server_type = previousType;
+      Object.assign(server, previousRuntime);
       server.state = 'STARTING';
       await this.serverRepo.save(server);
       this.notifyGateway(server, 'STARTING');
 
-      // 4. Re-provisiona manifesto anterior e inicia
-      await this.k8sService.provisionServer(server, server.minecraft_settings);
+      // 4. Inicia sobre o manifesto anterior, que startServer reescreve a partir do registro
       await this.k8sService.startServer(server);
 
       server.state = 'READY';

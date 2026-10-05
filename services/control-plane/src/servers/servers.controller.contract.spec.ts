@@ -72,6 +72,7 @@ describe('ServersController - response contract (#93)', () => {
       k8s as any,
       {} as any,
       {} as any,
+      { resolve: jest.fn().mockResolvedValue({}) } as any,
     );
     controller = new ServersController(service, {} as any, {} as any);
   });

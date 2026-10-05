@@ -41,6 +41,11 @@ export class ServerSettingsDto {
 }
 
 export class ServerDetailDto extends ServerSummaryDto {
+  /** Java major of the runner image; null for a server created before it was resolved. */
+  java_version: number | null;
+  /** Build of the installed jar (Paper, Purpur) and its release channel (Paper only). */
+  server_build: string | null;
+  server_build_channel: string | null;
   settings?: ServerSettingsDto;
 }
 

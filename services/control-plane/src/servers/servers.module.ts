@@ -20,6 +20,7 @@ import { ServersFilesService } from './servers-files.service';
 import { ServersBackupService } from './servers-backup.service';
 import { MinecraftStorageProvider } from './providers/minecraft-storage.provider';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
+import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { GameStorageProviderRegistry } from './providers/game-storage-provider.r
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
+    ServerRuntimeResolver,
   ],
   exports: [
     ServersService,

@@ -1,0 +1,77 @@
+[
+  {
+    "id": 132,
+    "time": "2026-05-11T11:43:09Z",
+    "channel": "STABLE",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.11-132.jar",
+        "checksums": {
+          "sha256": "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+        },
+        "size": 54846016,
+        "url": "https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar"
+      }
+    }
+  },
+  {
+    "id": 131,
+    "time": "2026-05-03T16:08:07Z",
+    "channel": "STABLE",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.11-131.jar",
+        "checksums": {
+          "sha256": "6c099540fccd27e10750d1adcb382f1552fb5aa2816aeaf2cc1efb23ddd9e3df"
+        },
+        "size": 54836919,
+        "url": "https://fill-data.papermc.io/v1/objects/6c099540fccd27e10750d1adcb382f1552fb5aa2816aeaf2cc1efb23ddd9e3df/paper-1.21.11-131.jar"
+      }
+    }
+  },
+  {
+    "id": 130,
+    "time": "2026-04-11T11:14:19Z",
+    "channel": "STABLE",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.11-130.jar",
+        "checksums": {
+          "sha256": "25eb85bd8415195ce4bc188e1939e0c7cef77fb51d26d4e766407ee922561097"
+        },
+        "size": 54836966,
+        "url": "https://fill-data.papermc.io/v1/objects/25eb85bd8415195ce4bc188e1939e0c7cef77fb51d26d4e766407ee922561097/paper-1.21.11-130.jar"
+      }
+    }
+  },
+  {
+    "id": 66,
+    "time": "2025-12-30T14:15:39Z",
+    "channel": "BETA",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.11-66.jar",
+        "checksums": {
+          "sha256": "22322ae26aa839afb6ab51763fd629ded1044e0ad83510fb50942880fa622c7f"
+        },
+        "size": 54815533,
+        "url": "https://fill-data.papermc.io/v1/objects/22322ae26aa839afb6ab51763fd629ded1044e0ad83510fb50942880fa622c7f/paper-1.21.11-66.jar"
+      }
+    }
+  },
+  {
+    "id": 65,
+    "time": "2025-12-29T21:56:22Z",
+    "channel": "BETA",
+    "downloads": {
+      "server:default": {
+        "name": "paper-1.21.11-65.jar",
+        "checksums": {
+          "sha256": "a7bcf3ad65733f168a0d83be1fc40f23c7762f34bf01b7d29c3f90f643258f57"
+        },
+        "size": 54813900,
+        "url": "https://fill-data.papermc.io/v1/objects/a7bcf3ad65733f168a0d83be1fc40f23c7762f34bf01b7d29c3f90f643258f57/paper-1.21.11-65.jar"
+      }
+    }
+  }
+]

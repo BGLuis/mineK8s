@@ -1,5 +1,5 @@
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServersService } from './servers.service';
@@ -14,7 +14,16 @@ describe('ServersService', () => {
   let mockBackupService: any;
   let mockGatewayIpcService: any;
   let mockSlpProbeService: any;
+  let mockRuntimeResolver: any;
   let playerSessions: PlayerSessionsService;
+
+  const runtimeFor = (version: string) => ({
+    java_version: version.startsWith('26.') ? 25 : 21,
+    server_jar_url: `https://fill-data.papermc.io/v1/objects/abc/paper-${version}.jar`,
+    server_jar_checksum: `sha256:${version}`,
+    server_build: '132',
+    server_build_channel: 'STABLE',
+  });
 
   let serversDb: Map<string, Server>;
   let settingsDb: Map<string, MinecraftServerSettings>;
@@ -40,6 +49,9 @@ describe('ServersService', () => {
         return null;
       }),
       find: jest.fn(async () => Array.from(serversDb.values())),
+      update: jest.fn(async (id: string, partial: Partial<Server>) => {
+        Object.assign(serversDb.get(id)!, partial);
+      }),
       remove: jest.fn(async (entity) => {
         serversDb.delete(entity.id);
         return entity;
@@ -132,6 +144,10 @@ describe('ServersService', () => {
       getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
     };
 
+    mockRuntimeResolver = {
+      resolve: jest.fn(async (_type: string, version: string) => runtimeFor(version)),
+    };
+
     playerSessions = new PlayerSessionsService();
 
     service = new ServersService(
@@ -141,6 +157,7 @@ describe('ServersService', () => {
       mockK8sService as any,
       mockConsoleDriver as any,
       mockLogStreamer as any,
+      mockRuntimeResolver as any,
       mockBackupService as any,
       mockGatewayIpcService as any,
       mockSlpProbeService as any,
@@ -166,6 +183,36 @@ describe('ServersService', () => {
       expect(mockK8sService.provisionServer).toHaveBeenCalled();
       expect(serversDb.size).toBe(1);
       expect(settingsDb.size).toBe(1);
+    });
+
+    it('should store the runtime resolved for the type and version, so the Deployment never needs the network', async () => {
+      await service.create({
+        name: 'Vanilla',
+        subdomain: 'vanilla',
+        server_type: ServerType.VANILLA,
+        game_version: '1.21.1',
+      });
+
+      expect(mockRuntimeResolver.resolve).toHaveBeenCalledWith('VANILLA', '1.21.1');
+      const provisioned = mockK8sService.provisionServer.mock.calls[0][0];
+      expect(provisioned).toMatchObject(runtimeFor('1.21.1'));
+    });
+
+    it('should refuse a version the resolver rejects before saving or provisioning anything', async () => {
+      mockRuntimeResolver.resolve.mockRejectedValueOnce(
+        new BadRequestException('Minecraft 1.0 has no dedicated server jar'),
+      );
+
+      await expect(
+        service.create({
+          name: 'Old',
+          subdomain: 'old',
+          server_type: ServerType.VANILLA,
+          game_version: '1.0',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(serversDb.size).toBe(0);
+      expect(mockK8sService.provisionServer).not.toHaveBeenCalled();
     });
 
     it('should throw ConflictException if subdomain already exists', async () => {
@@ -499,7 +546,6 @@ describe('ServersService', () => {
       expect(mockK8sService.stopServer).toHaveBeenCalled();
       expect(mockBackupService.createPreUpdateBackup).toHaveBeenCalled();
       expect(mockBackupService.purgeModsDirectory).toHaveBeenCalled();
-      expect(mockK8sService.provisionServer).toHaveBeenCalled();
       expect(mockK8sService.startServer).toHaveBeenCalled();
 
       const server = serversDb.get('srv-update-1')!;
@@ -532,6 +578,40 @@ describe('ServersService', () => {
       expect(result.version).toBe('1.20.4');
     });
 
+    it('should start the new version on its own jar and Java, and the old ones after a rollback (#156)', async () => {
+      Object.assign(serversDb.get('srv-update-1')!, runtimeFor('1.21.11'));
+      const startedWith: { java: number | null; jar: string | null }[] = [];
+      mockK8sService.startServer.mockImplementation(async (s: Server) => {
+        startedWith.push({ java: s.java_version, jar: s.server_jar_url });
+      });
+      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+
+      await service.updateVersion('srv-update-1', { game_version: '26.2' });
+
+      expect(mockRuntimeResolver.resolve).toHaveBeenCalledWith('PAPER', '26.2');
+      expect(startedWith).toEqual([
+        { java: 25, jar: runtimeFor('26.2').server_jar_url },
+        { java: 21, jar: runtimeFor('1.21.11').server_jar_url },
+      ]);
+      expect(serversDb.get('srv-update-1')).toMatchObject(runtimeFor('1.21.11'));
+    });
+
+    it('should keep the server untouched when the new version cannot be resolved', async () => {
+      mockRuntimeResolver.resolve.mockRejectedValueOnce(
+        new BadRequestException('Paper has no STABLE build for Minecraft 26.3 yet'),
+      );
+
+      await expect(service.updateVersion('srv-update-1', { game_version: '26.3' })).rejects.toThrow(
+        BadRequestException,
+      );
+
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.state).toBe('READY');
+      expect(server.game_version).toBe('1.20.4');
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(mockBackupService.createPreUpdateBackup).not.toHaveBeenCalled();
+    });
+
     it('should reject update with ConflictException if server is already in UPDATING state', async () => {
       const server = serversDb.get('srv-update-1')!;
       server.state = 'UPDATING';
@@ -539,6 +619,55 @@ describe('ServersService', () => {
       await expect(
         service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('runtime de servidores criados antes da resolução', () => {
+    it('resolves the servers without a Java version and keeps going past a failure', async () => {
+      serversDb.set('legacy-1', {
+        id: 'legacy-1',
+        subdomain: 'legacy-one',
+        game_type: 'minecraft',
+        server_type: 'PAPER',
+        game_version: '26.3',
+        java_version: null,
+      } as any);
+      serversDb.set('legacy-2', {
+        id: 'legacy-2',
+        subdomain: 'legacy-two',
+        game_type: 'minecraft',
+        server_type: 'VANILLA',
+        game_version: '1.21.1',
+        java_version: null,
+        state: 'READY',
+      } as any);
+      mockRuntimeResolver.resolve.mockRejectedValueOnce(new BadRequestException('no STABLE build'));
+
+      await (service as any).backfillRuntimes();
+
+      expect(mockServerRepo.find).toHaveBeenCalledWith({
+        where: { game_type: 'minecraft', java_version: expect.anything() },
+      });
+      expect(serversDb.get('legacy-1')!.java_version).toBeNull();
+      expect(serversDb.get('legacy-2')).toMatchObject({ ...runtimeFor('1.21.1'), state: 'READY' });
+      expect(mockK8sService.startServer).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOne: build instalado (#157)', () => {
+    it('exposes the Java version, build number and channel of the server', async () => {
+      serversDb.set('srv-build', {
+        id: 'srv-build',
+        subdomain: 'build',
+        state: 'STOPPED',
+        ...runtimeFor('1.21.11'),
+      } as any);
+
+      await expect(service.findOne('srv-build')).resolves.toMatchObject({
+        java_version: 21,
+        server_build: '132',
+        server_build_channel: 'STABLE',
+      });
     });
   });
 
