@@ -9,6 +9,7 @@ import {
   PreAuthKeyResult,
 } from '../identity/network-identity-provider.interface';
 import { LocalSocketUnavailableException } from '../identity/tailscale-whois.types';
+import { parseClientAddress } from '../identity/client-address';
 
 interface CachedEntry {
   identity: NetworkIdentity | null;
@@ -42,7 +43,11 @@ export class TailscaleCompositeProvider implements NetworkIdentityProvider {
    * 3. Fallback automático para Cloud API em caso de ENOENT / indisponibilidade do socket.
    */
   public async resolveIdentity(clientIp: string): Promise<NetworkIdentity | null> {
-    const cleanIp = clientIp.split(':')[0];
+    const cleanIp = parseClientAddress(clientIp);
+    if (!cleanIp) {
+      this.logger.warn(`Endereço de cliente sem IP legível, identidade não resolvida: ${clientIp}`);
+      return null;
+    }
 
     // 1. Verificação de Cache
     const cached = this.cache.get(cleanIp);
