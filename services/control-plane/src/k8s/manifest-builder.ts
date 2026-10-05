@@ -2,6 +2,8 @@ import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
 
+import { serverDataVolumeName } from './server-data-volume';
+
 const JAR_PROVIDED_TYPES = ['PAPER', 'PURPUR'];
 const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
 
@@ -38,7 +40,7 @@ export class ManifestBuilder {
       apiVersion: 'v1',
       kind: 'PersistentVolumeClaim',
       metadata: {
-        name: `data-${server.subdomain}`,
+        name: serverDataVolumeName(server.subdomain),
         namespace,
         labels: {
           'app.kubernetes.io/name': `mc-${server.subdomain}`,
@@ -268,7 +270,7 @@ export class ManifestBuilder {
               {
                 name: 'server-data',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
             ],
@@ -434,7 +436,7 @@ echo "Cold backup concluido com sucesso."
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
               {
@@ -588,7 +590,7 @@ fi
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
               {
