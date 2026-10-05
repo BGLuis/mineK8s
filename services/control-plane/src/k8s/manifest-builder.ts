@@ -11,6 +11,8 @@ const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
 const FETCH_SERVER_JAR_SCRIPT = [
   'set -eu',
   'want="$SERVER_TYPE-$MC_VERSION"',
+  // Mesma aceitação que o instalador de modpacks grava (RF-STO-14); sem ela a JVM cria eula=false e encerra.
+  "printf 'eula=true\\n' > /data/eula.txt",
   'if [ -s /data/server.jar ] && [ "$(cat /data/.server-jar 2>/dev/null)" = "$want" ]; then echo "server.jar $want ja presente"; exit 0; fi',
   'sha=""',
   'case "$SERVER_TYPE" in',
