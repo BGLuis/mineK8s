@@ -1,11 +1,13 @@
 import { isIP } from 'node:net';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 
 import { User } from '@database/entities/user.entity';
 
 import { TailscaleLocalDriver } from '../tailscale/drivers/tailscale-local.driver';
+
+const UNIQUE_VIOLATION = '23505';
 
 export class AdminLinkError extends Error {
   constructor(message: string) {
@@ -80,7 +82,17 @@ export class AdminLinkService {
       );
     }
 
-    await this.userRepository.update({ id: user.id }, { tailscale_user_id: tailscaleUserId });
+    try {
+      await this.userRepository.update({ id: user.id }, { tailscale_user_id: tailscaleUserId });
+    } catch (err) {
+      // The check above can lose a race against a concurrent link or a manual SQL write; the unique index settles it.
+      if (err instanceof QueryFailedError && (err.driverError as { code?: string })?.code === UNIQUE_VIOLATION) {
+        throw new AdminLinkError(
+          `Tailscale user ID ${tailscaleUserId} was linked to another user while this command ran; one Tailscale account maps to one user`,
+        );
+      }
+      throw err;
+    }
     return {
       outcome: previous ? 'replaced' : 'linked',
       nick: user.minecraft_nick,

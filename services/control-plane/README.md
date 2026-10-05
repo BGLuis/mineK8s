@@ -40,12 +40,14 @@ Depois do comando a pessoa abre o painel normalmente; não precisa reiniciar a A
 
 ### SQL de emergência
 
-Só se o comando não puder rodar (por exemplo, sem Node no host). Confira antes que o ID não está em uso, porque o banco não tem restrição de unicidade nessa coluna e dois usuários com o mesmo ID tornam o login ambíguo:
+Só se o comando não puder rodar (por exemplo, sem Node no host). O índice único `uq_users_tailscale_user_id` recusa um ID que já pertence a outro usuário; nesse caso, descubra quem é o dono antes de mexer:
 
 ```sql
 SELECT minecraft_nick FROM users WHERE tailscale_user_id = '<id>';  -- deve voltar vazio
 UPDATE users SET tailscale_user_id = '<id>' WHERE minecraft_nick = '<nick>';
 ```
+
+Se a migração `UniqueUserTailscaleId` abortar, o banco já tem IDs duplicados e a mensagem lista cada ID com os nicks que o usam. Deixe o ID em um só usuário, ponha `NULL` nos outros e rode as migrações de novo.
 
 ## Testes
 

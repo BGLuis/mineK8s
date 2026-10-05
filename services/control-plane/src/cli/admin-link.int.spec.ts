@@ -98,4 +98,17 @@ describeWithDatabase('admin:link against a real Postgres (#131)', () => {
     await link.link({ nick: 'Alex', tailscaleUserId: '888', force: true });
     expect(await tailscaleIdOf('Alex')).toBe('888');
   });
+
+  it('turns a link written concurrently after its own check into a readable error (#135)', async () => {
+    // Another run (or a manual UPDATE) takes the ID between the ownership check and the write.
+    jest.spyOn(users, 'find').mockResolvedValueOnce([]);
+
+    await expect(link.link({ nick: 'LegacyAdmin', tailscaleUserId: '777' })).rejects.toThrow(
+      new AdminLinkError(
+        'Tailscale user ID 777 was linked to another user while this command ran; one Tailscale account maps to one user',
+      ),
+    );
+    expect(await tailscaleIdOf('LegacyAdmin')).toBeNull();
+    expect(await tailscaleIdOf('Alex')).toBe('777');
+  });
 });
