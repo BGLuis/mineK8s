@@ -59,9 +59,19 @@ export class ManifestBuilder {
     };
   }
 
+  /** Where the gateway reaches the server: the game port of the Service that buildService creates. */
+  public static routeTarget(server: Server, configService: AppConfigService): string {
+    const namespace = configService.kubernetes.namespace;
+    return `mc-${server.subdomain}.${namespace}.svc.cluster.local:${ManifestBuilder.serviceGamePort(server)}`;
+  }
+
+  private static serviceGamePort(server: Server): number {
+    return server.allocated_port || 25565;
+  }
+
   public static buildService(server: Server, configService: AppConfigService) {
     const namespace = configService.kubernetes.namespace;
-    const listenPort = server.allocated_port || 25565;
+    const listenPort = ManifestBuilder.serviceGamePort(server);
     return {
       apiVersion: 'v1',
       kind: 'Service',

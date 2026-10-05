@@ -45,7 +45,7 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
     sessions = new PlayerSessionsService();
     gatewayIpc = new GatewayIpcService(
       repo(Server), repo(User), repo(ServerGroup), repo(UserServerAccess), repo(UserGroup),
-      undefined, undefined, sessions,
+      undefined, undefined, sessions, { kubernetes: { namespace: 'minekubernetes' } } as any,
     );
 
     const server = (name: string, access_policy: Server['access_policy'], extra: Partial<Server> = {}) =>

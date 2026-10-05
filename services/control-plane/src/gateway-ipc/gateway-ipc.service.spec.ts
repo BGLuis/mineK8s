@@ -109,6 +109,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       undefined,
       mockK8sService,
       playerSessions,
+      { kubernetes: { namespace: 'minekubernetes' } } as any,
     );
   });
 

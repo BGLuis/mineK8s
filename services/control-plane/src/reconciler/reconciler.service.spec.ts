@@ -83,6 +83,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
 
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
+      routeTarget: jest.fn((server: Server) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`),
     };
 
     reconciler = new ReconcilerService(

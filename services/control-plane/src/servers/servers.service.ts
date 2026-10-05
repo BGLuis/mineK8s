@@ -754,7 +754,7 @@ export class ServersService {
         action: RouteAction.STATUS_CHANGE,
         server_id: server.id,
         subdomain: server.subdomain,
-        target_ip_port: `mc-${server.subdomain}.minekubernetes.svc.cluster.local:${server.allocated_port || 25565}`,
+        target_ip_port: this.gatewayIpcService.routeTarget(server),
         status: status.toUpperCase(),
         access_policy: server.access_policy || 'GROUP',
         allowed_group_ids: [],
