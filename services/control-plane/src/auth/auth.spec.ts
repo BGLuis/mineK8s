@@ -265,6 +265,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
       return {
         getHandler: () => {},
         getClass: () => {},
+        getType: () => 'http',
         switchToHttp: () => ({
           getRequest: () => ({
             headers,
@@ -272,6 +273,26 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
         }),
       } as any;
     };
+
+    describe('mensagens de gateway WebSocket', () => {
+      const wsContext = (client: any) => {
+        reflector.getAllAndOverride = jest.fn(() => false);
+        return {
+          getHandler: () => {},
+          getClass: () => {},
+          getType: () => 'ws',
+          switchToWs: () => ({ getClient: () => client }),
+        } as any;
+      };
+
+      it('aceita o socket autenticado no handshake, sem procurar headers HTTP', async () => {
+        await expect(authGuard.canActivate(wsContext({ data: { user: { id: 'u-1' } } }))).resolves.toBe(true);
+      });
+
+      it('recusa socket sem usuário do handshake', async () => {
+        await expect(authGuard.canActivate(wsContext({ data: {} }))).rejects.toThrow(UnauthorizedException);
+      });
+    });
 
     it('should permit access when endpoint is marked @Public()', async () => {
       const ctx = createMockContext({}, true);
@@ -306,6 +327,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
       const ctx: any = {
         getHandler: () => {},
         getClass: () => {},
+        getType: () => 'http',
         switchToHttp: () => ({ getRequest: () => req }),
       };
 
@@ -325,6 +347,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
         const ctx: any = {
           getHandler: () => {},
           getClass: () => {},
+        getType: () => 'http',
           switchToHttp: () => ({ getRequest: () => req }),
         };
         return { req, ctx };

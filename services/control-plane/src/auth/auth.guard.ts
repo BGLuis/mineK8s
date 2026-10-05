@@ -30,6 +30,15 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
+    // Gateway messages carry no HTTP headers: each gateway authenticates the socket once in
+    // handleConnection (common/ws-auth.ts) and stores the user on it.
+    if (context.getType() === 'ws') {
+      if (context.switchToWs().getClient()?.data?.user) {
+        return true;
+      }
+      throw new UnauthorizedException('Access denied: socket was not authenticated at the handshake');
+    }
+
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers['authorization'];
 
