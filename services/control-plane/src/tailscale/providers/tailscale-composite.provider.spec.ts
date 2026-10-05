@@ -104,13 +104,9 @@ describe('TailscaleCompositeProvider (RF-TS-05, RF-TS-14)', () => {
     localDriver.queryWhoIs.mockRejectedValueOnce(
       new LocalSocketUnavailableException('Socket local não encontrado', 'ENOENT'),
     );
-    cloudDriver.findDeviceByIp.mockRejectedValueOnce(
-      new Error('Cloud API Timeout'),
-    );
+    cloudDriver.findDeviceByIp.mockRejectedValueOnce(new Error('Cloud API Timeout'));
 
-    await expect(provider.resolveIdentity('100.64.0.50')).rejects.toThrow(
-      'Cloud API Timeout',
-    );
+    await expect(provider.resolveIdentity('100.64.0.50')).rejects.toThrow('Cloud API Timeout');
   });
 
   it('deve revogar dispositivo no CloudDriver e invalidar cache do nó', async () => {

@@ -105,7 +105,9 @@ export class DevicesService {
           `Ban de rede do dispositivo ${device.id}: ${revoked.terminated_connections_count} sessão(ões) derrubada(s) no Gateway`,
         );
       } catch (ipcErr: any) {
-        this.logger.warn(`Falha ao revogar as sessões do dispositivo ${device.id} no Gateway: ${ipcErr.message}`);
+        this.logger.warn(
+          `Falha ao revogar as sessões do dispositivo ${device.id} no Gateway: ${ipcErr.message}`,
+        );
       }
     }
 
@@ -129,7 +131,9 @@ export class DevicesService {
   /**
    * DeviceGarbageCollector: Coleta e exclusão automática de nós inativos > 30 dias (RF-TS-15, E-03).
    */
-  async cleanInactiveDevices(thresholdDays = 30): Promise<{ removedCount: number; removedDeviceIds: string[] }> {
+  async cleanInactiveDevices(
+    thresholdDays = 30,
+  ): Promise<{ removedCount: number; removedDeviceIds: string[] }> {
     const cutoffDate = new Date(Date.now() - thresholdDays * 24 * 60 * 60 * 1000);
     const pendingCutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // chaves pendentes > 7 dias
 
@@ -156,7 +160,9 @@ export class DevicesService {
         await this.tailscaleCloudDriver.deleteDevice(externalId);
         removedDeviceIds.push(dev.id);
       } catch (err: any) {
-        this.logger.warn(`DeviceGarbageCollector: Falha ao deletar nó ${externalId}: ${err.message}`);
+        this.logger.warn(
+          `DeviceGarbageCollector: Falha ao deletar nó ${externalId}: ${err.message}`,
+        );
       }
     }
 

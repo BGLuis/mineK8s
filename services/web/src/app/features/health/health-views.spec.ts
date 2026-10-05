@@ -18,7 +18,13 @@ function report(overrides: Partial<HealthBotReport> = {}): HealthBotReport {
     healthy: true,
     stage: 'spawn_verified',
     onlineMode: false,
-    latencies: { tcpConnectMs: 10, handshakeLatencyMs: 20, loginLatencyMs: 30, spawnLatencyMs: 40, totalDurationMs: 212 },
+    latencies: {
+      tcpConnectMs: 10,
+      handshakeLatencyMs: 20,
+      loginLatencyMs: 30,
+      spawnLatencyMs: 40,
+      totalDurationMs: 212,
+    },
     ...overrides,
   };
 }
@@ -88,7 +94,9 @@ describe('botRow', () => {
 });
 
 describe('posture', () => {
-  const audit = (summary: Partial<PostureAuditReport['testedRulesSummary']>): PostureAuditReport => ({
+  const audit = (
+    summary: Partial<PostureAuditReport['testedRulesSummary']>,
+  ): PostureAuditReport => ({
     status: 'WARNING',
     timestamp: '2026-10-02T12:00:00.000Z',
     isTailnetLiveChecked: true,
@@ -116,7 +124,9 @@ describe('posture', () => {
   });
 
   it('fails the wildcard, port and test checks independently', () => {
-    const checks = postureChecks(audit({ wildcardPlayerFound: true, onlyGamePortExposed: false, testsFailed: 2 }));
+    const checks = postureChecks(
+      audit({ wildcardPlayerFound: true, onlyGamePortExposed: false, testsFailed: 2 }),
+    );
     expect(checks.map((check) => check.ok)).toEqual([false, false, false]);
     expect(checks[2].text).toBe('2 testes de política falharam');
   });

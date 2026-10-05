@@ -53,18 +53,13 @@ export class RconPacketCodec {
    * Retorna null se os bytes disponíveis forem insuficientes.
    * Suporta respostas de até 4110 bytes (Guarda E-01).
    */
-  public static decode(
-    accumulator: Buffer,
-  ): { packet: RconPacket; bytesConsumed: number } | null {
+  public static decode(accumulator: Buffer): { packet: RconPacket; bytesConsumed: number } | null {
     if (accumulator.length < 14) {
       return null;
     }
 
     const packetLength = accumulator.readInt32LE(0);
-    if (
-      packetLength < this.MIN_PACKET_SIZE ||
-      packetLength > this.MAX_DECODE_PACKET_SIZE
-    ) {
+    if (packetLength < this.MIN_PACKET_SIZE || packetLength > this.MAX_DECODE_PACKET_SIZE) {
       throw new Error(
         `RCON Protocol Error: Illegal packet length ${packetLength} (expected between ${this.MIN_PACKET_SIZE} and ${this.MAX_DECODE_PACKET_SIZE})`,
       );
@@ -79,9 +74,7 @@ export class RconPacketCodec {
     const pad1 = accumulator.readUInt8(totalExpectedBytes - 2);
     const pad2 = accumulator.readUInt8(totalExpectedBytes - 1);
     if (pad1 !== 0 || pad2 !== 0) {
-      throw new Error(
-        'RCON Protocol Error: Invalid packet terminators (expected 0x00 0x00)',
-      );
+      throw new Error('RCON Protocol Error: Invalid packet terminators (expected 0x00 0x00)');
     }
 
     const id = accumulator.readInt32LE(4);

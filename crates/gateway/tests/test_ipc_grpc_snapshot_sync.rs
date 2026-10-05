@@ -1,4 +1,3 @@
-use prost::Message;
 use gateway::ipc::client::apply_route_update_event;
 use gateway::ipc::protocol::{
     ResolvePlayerRequest, ResolvePlayerResponse, RevokeSessionRequest, RevokeSessionResponse,
@@ -7,6 +6,7 @@ use gateway::ipc::protocol::{
 };
 use gateway::ipc::GatewayIpcClient;
 use gateway::routing::{AccessPolicy, RouteTable, RoutingModel, ServerInstanceStatus};
+use prost::Message;
 
 /// Acceptance Criterion: "Gateway reinicia e reconstrói rotas pelo snapshot inicial" (RF-GW-16, RF-MG-04).
 #[test]
@@ -76,7 +76,10 @@ fn test_route_table_rebuild_from_snapshot() {
     assert_eq!(survival.status, ServerInstanceStatus::Ready);
     assert_eq!(survival.access_policy, AccessPolicy::Public);
     assert!(survival.proxy_protocol_upstream);
-    assert_eq!(survival.target_addr, Some("10.0.1.10:25565".parse().unwrap()));
+    assert_eq!(
+        survival.target_addr,
+        Some("10.0.1.10:25565".parse().unwrap())
+    );
 
     // 3. Valida rota com política individual
     let bedrock = route_table.lookup_virtual_host(25565, "bedrock.mine.lan");
@@ -100,7 +103,9 @@ fn test_route_table_rebuild_from_snapshot() {
     let reboot_routes: Vec<_> = initial_events.iter().map(|e| e.to_cached_route()).collect();
     rebooted_table.rebuild_from_snapshot(reboot_routes);
     assert_eq!(rebooted_table.len(), 3);
-    assert!(rebooted_table.lookup_virtual_host(25565, "survival.mine.lan").is_some());
+    assert!(rebooted_table
+        .lookup_virtual_host(25565, "survival.mine.lan")
+        .is_some());
     assert!(rebooted_table.lookup_dedicated(7777).is_some());
 }
 
@@ -147,7 +152,10 @@ fn test_live_route_update_stream_mutations() {
     apply_route_update_event(&route_table, upsert_creative);
     assert_eq!(route_table.len(), 2);
     let found = route_table.lookup_virtual_host(25565, "creative.mine.lan");
-    assert!(found.is_some(), "Novo servidor deve estar acessível sem restart");
+    assert!(
+        found.is_some(),
+        "Novo servidor deve estar acessível sem restart"
+    );
     assert_eq!(found.unwrap().server_id, "srv-creative");
 
     // 3. Control Plane altera status para MAINTENANCE dinamicamente (STATUS_CHANGE)
@@ -167,7 +175,9 @@ fn test_live_route_update_stream_mutations() {
         auto_wake: true,
     };
     apply_route_update_event(&route_table, status_change);
-    let updated = route_table.lookup_virtual_host(25565, "creative.mine.lan").unwrap();
+    let updated = route_table
+        .lookup_virtual_host(25565, "creative.mine.lan")
+        .unwrap();
     assert_eq!(updated.status, ServerInstanceStatus::Stopping);
 
     // 4. Servidor deletado dinamicamente no Control Plane (DELETE)
@@ -188,7 +198,9 @@ fn test_live_route_update_stream_mutations() {
     };
     apply_route_update_event(&route_table, delete_event);
     assert_eq!(route_table.len(), 1);
-    assert!(route_table.lookup_virtual_host(25565, "creative.mine.lan").is_none());
+    assert!(route_table
+        .lookup_virtual_host(25565, "creative.mine.lan")
+        .is_none());
 }
 
 /// Valida serialização e desserialização binária dos payloads protobuf entre Gateway e Control Plane.
@@ -212,7 +224,9 @@ fn test_protobuf_codec_roundtrips() {
     };
 
     let mut buf = Vec::new();
-    route.encode(&mut buf).expect("Serialização protobuf falhou");
+    route
+        .encode(&mut buf)
+        .expect("Serialização protobuf falhou");
     let decoded = RouteUpdateEvent::decode(&buf[..]).expect("Desserialização protobuf falhou");
     assert_eq!(route, decoded);
 
@@ -293,5 +307,8 @@ fn test_protobuf_codec_roundtrips() {
 async fn test_ipc_client_unreachable_endpoint() {
     let client = GatewayIpcClient::connect("http://127.0.0.1:59998").await;
     // O endpoint não tem nenhum servidor escutando, a conexão deve falhar ordenadamente
-    assert!(client.is_err(), "Conexão a porta fechada deve retornar erro");
+    assert!(
+        client.is_err(),
+        "Conexão a porta fechada deve retornar erro"
+    );
 }

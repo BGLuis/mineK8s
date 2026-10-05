@@ -48,8 +48,13 @@ impl AccessDecisionEngine {
         }
 
         // 3. Servidor público (INTERNET é aberto a qualquer um, inclusive a quem entra pela tailnet)
-        if matches!(route.access_policy, AccessPolicy::Public | AccessPolicy::Internet) {
-            return AccessDecision::Allowed { admin_bypass: false };
+        if matches!(
+            route.access_policy,
+            AccessPolicy::Public | AccessPolicy::Internet
+        ) {
+            return AccessDecision::Allowed {
+                admin_bypass: false,
+            };
         }
 
         // 4. Servidor restrito por grupo
@@ -58,7 +63,9 @@ impl AccessDecisionEngine {
                 .iter()
                 .any(|ug| route.allowed_group_ids.iter().any(|rg| rg == ug));
             if has_group {
-                return AccessDecision::Allowed { admin_bypass: false };
+                return AccessDecision::Allowed {
+                    admin_bypass: false,
+                };
             } else {
                 return AccessDecision::Denied {
                     reason: "§cVocê não pertence aos grupos autorizados deste mundo.",
@@ -69,7 +76,9 @@ impl AccessDecisionEngine {
         // 5. Servidor restrito nominalmente (Individual)
         if route.access_policy == AccessPolicy::Individual {
             if route.allowed_user_ids.iter().any(|id| id == user_id) {
-                return AccessDecision::Allowed { admin_bypass: false };
+                return AccessDecision::Allowed {
+                    admin_bypass: false,
+                };
             } else {
                 return AccessDecision::Denied {
                     reason: "§cAcesso restrito nominalmente a convidados específicos.",
@@ -83,10 +92,7 @@ impl AccessDecisionEngine {
     }
 
     /// Valida o nickname declarado contra a identidade do dispositivo/usuário (Anti-Impersonation, RF-ARQ-21).
-    pub fn evaluate_nickname(
-        declared_nick: &str,
-        registered_nick: &str,
-    ) -> NicknameDecision {
+    pub fn evaluate_nickname(declared_nick: &str, registered_nick: &str) -> NicknameDecision {
         // Validação estrita de formato
         if let Err(err) = validate_minecraft_nickname(declared_nick) {
             return NicknameDecision::Invalid(err);
@@ -137,21 +143,27 @@ mod tests {
     #[test]
     fn test_public_access() {
         let route = make_test_route(AccessPolicy::Public);
-        let decision = AccessDecisionEngine::evaluate_access(
-            "usr-bob",
-            "PLAYER",
-            &[],
-            true,
-            &route,
+        let decision =
+            AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
+        assert_eq!(
+            decision,
+            AccessDecision::Allowed {
+                admin_bypass: false
+            }
         );
-        assert_eq!(decision, AccessDecision::Allowed { admin_bypass: false });
     }
 
     #[test]
     fn test_internet_route_is_open_to_tailnet_players() {
         let route = make_test_route(AccessPolicy::Internet);
-        let decision = AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
-        assert_eq!(decision, AccessDecision::Allowed { admin_bypass: false });
+        let decision =
+            AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
+        assert_eq!(
+            decision,
+            AccessDecision::Allowed {
+                admin_bypass: false
+            }
+        );
     }
 
     #[test]
@@ -159,25 +171,18 @@ mod tests {
         let route = make_test_route(AccessPolicy::Maintenance);
 
         // Player regular é negado
-        let player_dec = AccessDecisionEngine::evaluate_access(
-            "usr-bob",
-            "PLAYER",
-            &[],
-            true,
-            &route,
+        let player_dec =
+            AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
+        assert_eq!(
+            player_dec,
+            AccessDecision::Denied {
+                reason: "§cServidor em manutenção técnica programada.",
+            }
         );
-        assert_eq!(player_dec, AccessDecision::Denied {
-            reason: "§cServidor em manutenção técnica programada.",
-        });
 
         // Admin obtém bypass
-        let admin_dec = AccessDecisionEngine::evaluate_access(
-            "usr-admin",
-            "ADMIN",
-            &[],
-            true,
-            &route,
-        );
+        let admin_dec =
+            AccessDecisionEngine::evaluate_access("usr-admin", "ADMIN", &[], true, &route);
         assert_eq!(admin_dec, AccessDecision::Allowed { admin_bypass: true });
     }
 
@@ -193,9 +198,12 @@ mod tests {
             true,
             &route,
         );
-        assert_eq!(denied, AccessDecision::Denied {
-            reason: "§cVocê não pertence aos grupos autorizados deste mundo.",
-        });
+        assert_eq!(
+            denied,
+            AccessDecision::Denied {
+                reason: "§cVocê não pertence aos grupos autorizados deste mundo.",
+            }
+        );
 
         // Interseção de grupos: permitido
         let allowed = AccessDecisionEngine::evaluate_access(
@@ -205,7 +213,12 @@ mod tests {
             true,
             &route,
         );
-        assert_eq!(allowed, AccessDecision::Allowed { admin_bypass: false });
+        assert_eq!(
+            allowed,
+            AccessDecision::Allowed {
+                admin_bypass: false
+            }
+        );
     }
 
     #[test]
@@ -213,26 +226,23 @@ mod tests {
         let route = make_test_route(AccessPolicy::Individual);
 
         // Usuário autorizado nominalmente
-        let allowed = AccessDecisionEngine::evaluate_access(
-            "usr-alice",
-            "PLAYER",
-            &[],
-            true,
-            &route,
+        let allowed =
+            AccessDecisionEngine::evaluate_access("usr-alice", "PLAYER", &[], true, &route);
+        assert_eq!(
+            allowed,
+            AccessDecision::Allowed {
+                admin_bypass: false
+            }
         );
-        assert_eq!(allowed, AccessDecision::Allowed { admin_bypass: false });
 
         // Outro usuário: negado
-        let denied = AccessDecisionEngine::evaluate_access(
-            "usr-bob",
-            "PLAYER",
-            &[],
-            true,
-            &route,
+        let denied = AccessDecisionEngine::evaluate_access("usr-bob", "PLAYER", &[], true, &route);
+        assert_eq!(
+            denied,
+            AccessDecision::Denied {
+                reason: "§cAcesso restrito nominalmente a convidados específicos.",
+            }
         );
-        assert_eq!(denied, AccessDecision::Denied {
-            reason: "§cAcesso restrito nominalmente a convidados específicos.",
-        });
     }
 
     #[test]

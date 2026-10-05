@@ -46,7 +46,16 @@ describe('ModpacksController (RF-ARQ-18)', () => {
   });
 
   it('GET /api/modpacks/search repassa ordenação e filtros normalizados', async () => {
-    await controller.searchModpacks(undefined, undefined, undefined, undefined, 'Downloads', '1.20.1', 'Fabric', 'Adventure');
+    await controller.searchModpacks(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'Downloads',
+      '1.20.1',
+      'Fabric',
+      'Adventure',
+    );
 
     expect(mockCatalogService.search).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -62,7 +71,10 @@ describe('ModpacksController (RF-ARQ-18)', () => {
     ['sort', [undefined, undefined, undefined, undefined, 'newest']],
     ['loader', [undefined, undefined, undefined, undefined, undefined, undefined, 'liteloader']],
     ['gameVersion', [undefined, undefined, undefined, undefined, undefined, '1.20"],["x']],
-    ['category', [undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'a b']],
+    [
+      'category',
+      [undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'a b'],
+    ],
   ])('GET /api/modpacks/search rejeita %s inválido em vez de ignorá-lo', async (_name, args) => {
     await expect((controller.searchModpacks as any)(...args)).rejects.toBeInstanceOf(
       BadRequestException,

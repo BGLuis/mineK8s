@@ -86,7 +86,10 @@ export class AdminLinkService {
       await this.userRepository.update({ id: user.id }, { tailscale_user_id: tailscaleUserId });
     } catch (err) {
       // The check above can lose a race against a concurrent link or a manual SQL write; the unique index settles it.
-      if (err instanceof QueryFailedError && (err.driverError as { code?: string })?.code === UNIQUE_VIOLATION) {
+      if (
+        err instanceof QueryFailedError &&
+        (err.driverError as { code?: string })?.code === UNIQUE_VIOLATION
+      ) {
         throw new AdminLinkError(
           `Tailscale user ID ${tailscaleUserId} was linked to another user while this command ran; one Tailscale account maps to one user`,
         );

@@ -1,8 +1,8 @@
+use gateway::identity::{TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
-use gateway::identity::{TailscaleLocalWhoIs, WhoIsCache, WhoIsIdentity};
 
 /// Acceptance Criterion: "Mock de Unix socket responde em < 5 ms; ENOENT aciona fallback" (RF-GW-08, RF-TS-05).
 #[tokio::test]
@@ -90,11 +90,7 @@ async fn test_unix_socket_whois_under_5ms_and_cache() {
 
     // 3. Consulta subsequente deve ser atendida pelo cache em memória (< 1 ms)
     let cache_start = Instant::now();
-    let cached = driver
-        .query_whois("100.64.0.77")
-        .await
-        .unwrap()
-        .unwrap();
+    let cached = driver.query_whois("100.64.0.77").await.unwrap().unwrap();
     let cache_elapsed = cache_start.elapsed();
 
     assert_eq!(cached, identity);
@@ -157,5 +153,8 @@ fn test_whois_cache_ttl_and_operations() {
     // Expiração por TTL
     cache.insert("100.64.0.1".into(), identity);
     std::thread::sleep(Duration::from_millis(60));
-    assert!(cache.get("100.64.0.1").is_none(), "Entrada expirada por TTL deve retornar None");
+    assert!(
+        cache.get("100.64.0.1").is_none(),
+        "Entrada expirada por TTL deve retornar None"
+    );
 }

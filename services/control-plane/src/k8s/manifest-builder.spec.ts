@@ -126,7 +126,10 @@ describe('ManifestBuilder', () => {
       const affinity = dep.spec.template.spec.affinity;
 
       expect(affinity).toBeDefined();
-      expect(affinity?.nodeAffinity?.requiredDuringSchedulingIgnoredDuringExecution?.nodeSelectorTerms[0].matchExpressions[0].values).toContain('node-nvme-1');
+      expect(
+        affinity?.nodeAffinity?.requiredDuringSchedulingIgnoredDuringExecution?.nodeSelectorTerms[0]
+          .matchExpressions[0].values,
+      ).toContain('node-nvme-1');
     });
 
     it('should adjust startupProbe for modpacks', () => {
@@ -176,7 +179,9 @@ describe('ManifestBuilder', () => {
         )![0].args[0];
 
         expect(script).toContain('https://api.purpurmc.org/v2/purpur/$MC_VERSION/latest/download');
-        expect(script).toContain('https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest');
+        expect(script).toContain(
+          'https://fill.papermc.io/v3/projects/paper/versions/$MC_VERSION/builds/latest',
+        );
         expect(script).toContain('sha256sum -c -');
       });
 
@@ -194,7 +199,11 @@ describe('ManifestBuilder', () => {
         'should not add a jar init container for %s',
         (type) => {
           sampleServer.server_type = type;
-          const dep = ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService);
+          const dep = ManifestBuilder.buildDeployment(
+            sampleServer,
+            sampleSettings,
+            mockConfigService,
+          );
 
           expect(initContainersOf(dep)).toBeUndefined();
         },
@@ -264,7 +273,7 @@ describe('ManifestBuilder', () => {
       expect(script).toContain('cp --reflink=auto -a');
       expect(script).toContain('.snapshot_tmp');
       // Tar compressing from .snapshot_tmp (D-01) with standard exclusions (RF-STO-10)
-      expect(script).toContain("-C /data/.snapshot_tmp .");
+      expect(script).toContain('-C /data/.snapshot_tmp .');
       expect(script).toContain("--exclude='logs/*'");
       expect(script).toContain("--exclude='crash-reports/*'");
       expect(script).toContain("--exclude='.cache/*'");
@@ -274,7 +283,12 @@ describe('ManifestBuilder', () => {
 
     it('should generate valid Job batch/v1 for COLD backup directly compressing from /data', () => {
       const timestamp = 1700000000;
-      const job = ManifestBuilder.buildBackupJob(sampleServer, 'cold', timestamp, mockConfigService);
+      const job = ManifestBuilder.buildBackupJob(
+        sampleServer,
+        'cold',
+        timestamp,
+        mockConfigService,
+      );
 
       expect(job.metadata.name).toBe('backup-smp-cold-1700000000');
       expect(job.metadata.labels['minekubernetes.io/backup-type']).toBe('cold');

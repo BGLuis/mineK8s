@@ -9,7 +9,12 @@ describe('AdminLinkService (#131)', () => {
   let service: AdminLinkService;
 
   const legacyAdmin = () =>
-    ({ id: 'u-legacy', minecraft_nick: 'LegacyAdmin', role: 'ADMIN', tailscale_user_id: null }) as User;
+    ({
+      id: 'u-legacy',
+      minecraft_nick: 'LegacyAdmin',
+      role: 'ADMIN',
+      tailscale_user_id: null,
+    }) as User;
   const linkedPlayer = () =>
     ({ id: 'u-alex', minecraft_nick: 'Alex', role: 'PLAYER', tailscale_user_id: '777' }) as User;
 
@@ -43,7 +48,11 @@ describe('AdminLinkService (#131)', () => {
     it('stores the ID on a user that has none', async () => {
       const result = await service.link({ nick: 'LegacyAdmin', tailscaleUserId: '4242' });
 
-      expect(result).toMatchObject({ outcome: 'linked', tailscaleUserId: '4242', previousTailscaleUserId: null });
+      expect(result).toMatchObject({
+        outcome: 'linked',
+        tailscaleUserId: '4242',
+        previousTailscaleUserId: null,
+      });
       expect(users[0].tailscale_user_id).toBe('4242');
       expect(queryWhoIs).not.toHaveBeenCalled();
     });
@@ -56,7 +65,10 @@ describe('AdminLinkService (#131)', () => {
     });
 
     it('refuses an unknown nickname', async () => {
-      await expectRefused(service.link({ nick: 'Ghost', tailscaleUserId: '4242' }), /No user with Minecraft nickname "Ghost"/);
+      await expectRefused(
+        service.link({ nick: 'Ghost', tailscaleUserId: '4242' }),
+        /No user with Minecraft nickname "Ghost"/,
+      );
     });
 
     it('refuses an ID that belongs to another user, even with --force', async () => {
@@ -77,9 +89,15 @@ describe('AdminLinkService (#131)', () => {
       expect(users[1].tailscale_user_id).toBe('888');
     });
 
-    it.each(['alex@example.com', '12ab', '-5', ' 12'])('refuses "%s", which is not a numeric Tailscale user ID', async (value) => {
-      await expectRefused(service.link({ nick: 'LegacyAdmin', tailscaleUserId: value }), /not a Tailscale user ID/);
-    });
+    it.each(['alex@example.com', '12ab', '-5', ' 12'])(
+      'refuses "%s", which is not a numeric Tailscale user ID',
+      async (value) => {
+        await expectRefused(
+          service.link({ nick: 'LegacyAdmin', tailscaleUserId: value }),
+          /not a Tailscale user ID/,
+        );
+      },
+    );
   });
 
   describe('linking by tailnet IP (WhoIs)', () => {
@@ -105,12 +123,18 @@ describe('AdminLinkService (#131)', () => {
 
     it('refuses an address that WhoIs does not know', async () => {
       queryWhoIs.mockResolvedValue(null);
-      await expectRefused(service.link({ nick: 'LegacyAdmin', ip: '203.0.113.9' }), /does not belong to the tailnet/);
+      await expectRefused(
+        service.link({ nick: 'LegacyAdmin', ip: '203.0.113.9' }),
+        /does not belong to the tailnet/,
+      );
     });
 
     it('refuses a WhoIs answer without a user ID', async () => {
       queryWhoIs.mockResolvedValue({ userId: '', isOwner: true, tags: [] });
-      await expectRefused(service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }), /does not belong to the tailnet/);
+      await expectRefused(
+        service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }),
+        /does not belong to the tailnet/,
+      );
     });
 
     it('explains an unreachable tailscaled instead of crashing', async () => {
@@ -123,17 +147,26 @@ describe('AdminLinkService (#131)', () => {
 
     it('refuses a tagged device, whose owner is not a person', async () => {
       queryWhoIs.mockResolvedValue({ userId: '999', isOwner: false, tags: ['tag:server'] });
-      await expectRefused(service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }), /tagged device \(tag:server\)/);
+      await expectRefused(
+        service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }),
+        /tagged device \(tag:server\)/,
+      );
     });
 
     it('refuses something that is not an IP without calling WhoIs', async () => {
-      await expectRefused(service.link({ nick: 'LegacyAdmin', ip: 'not-an-ip' }), /not a valid IP address/);
+      await expectRefused(
+        service.link({ nick: 'LegacyAdmin', ip: 'not-an-ip' }),
+        /not a valid IP address/,
+      );
       expect(queryWhoIs).not.toHaveBeenCalled();
     });
 
     it('refuses an ID owned by another user', async () => {
       queryWhoIs.mockResolvedValue(owner('777'));
-      await expectRefused(service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }), /already linked to "Alex"/);
+      await expectRefused(
+        service.link({ nick: 'LegacyAdmin', ip: '100.101.102.103' }),
+        /already linked to "Alex"/,
+      );
     });
   });
 

@@ -51,10 +51,15 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
         call.on('end', () => callback(null, {}));
       },
     });
-    closers.push(() => server.forceShutdown(), () => client.close());
+    closers.push(
+      () => server.forceShutdown(),
+      () => client.close(),
+    );
 
     await new Promise<void>((resolve, reject) => {
-      const call = client.StreamSessionEvents((err: Error | null) => (err ? reject(err) : resolve()));
+      const call = client.StreamSessionEvents((err: Error | null) =>
+        err ? reject(err) : resolve(),
+      );
       call.write({
         event_type: 0,
         session_id: 's1',
@@ -80,13 +85,20 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
     const { server, client } = await startServer(GATEWAY_GRPC_LOADER_OPTIONS, {
       GetInitialRoutingSnapshot: (_call: any, callback: any) =>
         callback(null, {
-          routes: [{ server_id: 'srv-1', subdomain: 'hub', access_policy: 'GROUP', auto_wake: true }],
+          routes: [
+            { server_id: 'srv-1', subdomain: 'hub', access_policy: 'GROUP', auto_wake: true },
+          ],
         }),
     });
-    closers.push(() => server.forceShutdown(), () => client.close());
+    closers.push(
+      () => server.forceShutdown(),
+      () => client.close(),
+    );
 
     const snapshot: any = await new Promise((resolve, reject) =>
-      client.GetInitialRoutingSnapshot({}, (err: Error | null, res: any) => (err ? reject(err) : resolve(res))),
+      client.GetInitialRoutingSnapshot({}, (err: Error | null, res: any) =>
+        err ? reject(err) : resolve(res),
+      ),
     );
 
     expect(snapshot.routes[0]).toMatchObject({
@@ -98,7 +110,9 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
   });
 
   it('StreamCommands: o serviço real envia o comando ao Gateway e lê a contagem 0 que o proto omite', async () => {
-    const service = new GatewayIpcService(...(Array(5).fill(undefined) as [any, any, any, any, any]));
+    const service = new GatewayIpcService(
+      ...(Array(5).fill(undefined) as [any, any, any, any, any]),
+    );
     const { server, client } = await startServer(GATEWAY_GRPC_LOADER_OPTIONS, {
       StreamCommands: (call: any) => {
         const results = new Observable<any>((subscriber) => {
@@ -112,7 +126,10 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
         });
       },
     });
-    closers.push(() => server.forceShutdown(), () => client.close());
+    closers.push(
+      () => server.forceShutdown(),
+      () => client.close(),
+    );
 
     const received: any[] = [];
     const gateway = client.StreamCommands();
@@ -120,7 +137,10 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
     gateway.on('data', (command: any) => {
       received.push(command);
       // Contagem zero: o proto3 não serializa os campos zerados, então só chega o sub-objeto vazio.
-      gateway.write({ command_id: command.command_id, revoke_session: { session_found: false, terminated_connections_count: 0 } });
+      gateway.write({
+        command_id: command.command_id,
+        revoke_session: { session_found: false, terminated_connections_count: 0 },
+      });
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -131,20 +151,32 @@ describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
       reason_message: 'kick',
     });
 
-    expect(received[0]).toMatchObject({ revoke_session: { server_id: 'srv-1', minecraft_nick: 'Steve' } });
+    expect(received[0]).toMatchObject({
+      revoke_session: { server_id: 'srv-1', minecraft_nick: 'Steve' },
+    });
     expect(revoked).toEqual({ session_found: false, terminated_connections_count: 0 });
     gateway.end();
   });
 
   it('sem as opções, o snapshot perderia os campos (documenta por que o loader é obrigatório)', async () => {
-    const { server, client } = await startServer({}, {
-      GetInitialRoutingSnapshot: (_call: any, callback: any) =>
-        callback(null, { routes: [{ server_id: 'srv-1', subdomain: 'hub', access_policy: 'GROUP' }] }),
-    });
-    closers.push(() => server.forceShutdown(), () => client.close());
+    const { server, client } = await startServer(
+      {},
+      {
+        GetInitialRoutingSnapshot: (_call: any, callback: any) =>
+          callback(null, {
+            routes: [{ server_id: 'srv-1', subdomain: 'hub', access_policy: 'GROUP' }],
+          }),
+      },
+    );
+    closers.push(
+      () => server.forceShutdown(),
+      () => client.close(),
+    );
 
     const snapshot: any = await new Promise((resolve, reject) =>
-      client.GetInitialRoutingSnapshot({}, (err: Error | null, res: any) => (err ? reject(err) : resolve(res))),
+      client.GetInitialRoutingSnapshot({}, (err: Error | null, res: any) =>
+        err ? reject(err) : resolve(res),
+      ),
     );
 
     expect(snapshot.routes[0].server_id).toBeUndefined();

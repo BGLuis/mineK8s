@@ -1,6 +1,6 @@
+use minecraft_protocol::proxy_protocol::trusted::TrustedProxyFilter;
 use std::net::SocketAddr;
 use std::time::Duration;
-use minecraft_protocol::proxy_protocol::trusted::TrustedProxyFilter;
 
 #[derive(Debug, Clone)]
 pub struct GatewayConfig {

@@ -55,7 +55,9 @@ export class CurseForgeResolverService {
     const data = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
 
     if (!data || data.manifestType !== 'minecraftModpack') {
-      throw new BadRequestException('Invalid CurseForge manifest: manifestType != "minecraftModpack"');
+      throw new BadRequestException(
+        'Invalid CurseForge manifest: manifestType != "minecraftModpack"',
+      );
     }
 
     if (!Array.isArray(data.files)) {
@@ -70,16 +72,21 @@ export class CurseForgeResolverService {
    */
   public isClientOnlyMod(slugOrName: string): boolean {
     const normalized = slugOrName.toLowerCase().trim();
-    return CURSEFORGE_CLIENT_ONLY_BLACKLIST.some((term) =>
-      normalized.includes(term.toLowerCase()),
-    );
+    return CURSEFORGE_CLIENT_ONLY_BLACKLIST.some((term) => normalized.includes(term.toLowerCase()));
   }
 
   /**
    * Avalia metadados de arquivo da CurseForge para detecção de Server Pack oficial (RF-STO-12).
    */
-  public checkServerPack(fileMetadata: any): { isServerPackAvailable: boolean; serverPackFileId?: number } {
-    if (fileMetadata && fileMetadata.serverPackFileId && Number(fileMetadata.serverPackFileId) > 0) {
+  public checkServerPack(fileMetadata: any): {
+    isServerPackAvailable: boolean;
+    serverPackFileId?: number;
+  } {
+    if (
+      fileMetadata &&
+      fileMetadata.serverPackFileId &&
+      Number(fileMetadata.serverPackFileId) > 0
+    ) {
       return {
         isServerPackAvailable: true,
         serverPackFileId: Number(fileMetadata.serverPackFileId),
@@ -104,7 +111,9 @@ export class CurseForgeResolverService {
     for (const ref of manifest.files) {
       const slug = projectSlugMap.get(ref.projectID) || '';
       if (slug && this.isClientOnlyMod(slug)) {
-        this.logger.debug(`[RF-STO-12] Mod CurseForge descartado por blacklist client-only: ${slug} (ID: ${ref.projectID})`);
+        this.logger.debug(
+          `[RF-STO-12] Mod CurseForge descartado por blacklist client-only: ${slug} (ID: ${ref.projectID})`,
+        );
         discarded.push({
           ref,
           slug,
@@ -125,7 +134,11 @@ export class CurseForgeResolverService {
   /**
    * Resolve a URL de download para um arquivo de mod via CurseForge Core API v1 (PR-12, RF-STO-12).
    */
-  public async resolveDownloadUrl(projectId: number, fileId: number, customApiKey?: string): Promise<string> {
+  public async resolveDownloadUrl(
+    projectId: number,
+    fileId: number,
+    customApiKey?: string,
+  ): Promise<string> {
     const apiKey = customApiKey || this.getApiKey();
     const endpoint = `https://api.curseforge.com/v1/mods/${projectId}/files/${fileId}/download-url`;
 
@@ -145,7 +158,9 @@ export class CurseForgeResolverService {
         }
       }
     } catch (err: any) {
-      this.logger.warn(`Falha na chamada direta à CurseForge API para ${projectId}/${fileId}: ${err.message}`);
+      this.logger.warn(
+        `Falha na chamada direta à CurseForge API para ${projectId}/${fileId}: ${err.message}`,
+      );
     }
 
     // Fallback estruturado de borda caso allowModDistribution ou ambiente de testes

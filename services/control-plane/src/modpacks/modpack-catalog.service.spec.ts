@@ -50,7 +50,11 @@ describe('ModpackCatalogService (RF-ARQ-18)', () => {
     global.fetch = fetchMock as any;
     apiKey = 'cf-key';
     ttl = 60000;
-    const config = { get modpackCatalog() { return { cacheTtlMs: ttl, requestTimeoutMs: 1000 }; } };
+    const config = {
+      get modpackCatalog() {
+        return { cacheTtlMs: ttl, requestTimeoutMs: 1000 };
+      },
+    };
     const curseForge = { getApiKey: () => apiKey };
     service = new ModpackCatalogService(config as any, curseForge as any);
   });
@@ -64,8 +68,7 @@ describe('ModpackCatalogService (RF-ARQ-18)', () => {
     it('mescla as duas fontes ordenando por downloads e normaliza versão do MC, loader e data', async () => {
       routes({
         modrinth: () => ok({ total_hits: 30, hits: [modrinthHit('aaa', 100)] }),
-        curseforge: () =>
-          ok({ data: [curseForgeMod(7, 900)], pagination: { totalCount: 12 } }),
+        curseforge: () => ok({ data: [curseForgeMod(7, 900)], pagination: { totalCount: 12 } }),
       });
 
       const res = await service.search({ query: 'all the mods', sort: 'downloads' });
@@ -122,10 +125,8 @@ describe('ModpackCatalogService (RF-ARQ-18)', () => {
 
     it('em relevance intercala as fontes em vez de reordenar por downloads', async () => {
       routes({
-        modrinth: () =>
-          ok({ hits: [modrinthHit('m1', 10), modrinthHit('m2', 5)] }),
-        curseforge: () =>
-          ok({ data: [curseForgeMod(1, 9000), curseForgeMod(2, 8000)] }),
+        modrinth: () => ok({ hits: [modrinthHit('m1', 10), modrinthHit('m2', 5)] }),
+        curseforge: () => ok({ data: [curseForgeMod(1, 9000), curseForgeMod(2, 8000)] }),
       });
 
       const res = await service.search({ limit: 4 });
@@ -150,7 +151,12 @@ describe('ModpackCatalogService (RF-ARQ-18)', () => {
         modrinth: () => ok({ hits: [] }),
         curseforge: () =>
           fetchMock.mock.calls.at(-1)![0].includes('/categories')
-            ? ok({ data: [{ id: 410, slug: 'adventure' }, { id: 411, slug: 'tech' }] })
+            ? ok({
+                data: [
+                  { id: 410, slug: 'adventure' },
+                  { id: 411, slug: 'tech' },
+                ],
+              })
             : ok({ data: [] }),
       });
 
@@ -295,7 +301,9 @@ describe('ModpackCatalogService (RF-ARQ-18)', () => {
 
     it('não cacheia respostas com erro', async () => {
       routes({ modrinth: () => fail(500) });
-      await expect(service.search({ source: 'modrinth' })).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(service.search({ source: 'modrinth' })).rejects.toBeInstanceOf(
+        BadGatewayException,
+      );
 
       routes({ modrinth: () => ok({ hits: [modrinthHit('a', 1)] }) });
       const res = await service.search({ source: 'modrinth' });

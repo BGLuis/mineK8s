@@ -30,10 +30,17 @@ export class AuthController {
   @Post('session')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Open a session for the Tailscale identity that owns the caller IP (no body, no nickname)',
+    summary:
+      'Open a session for the Tailscale identity that owns the caller IP (no body, no nickname)',
   })
-  @ApiResponse({ status: 200, description: 'JWT issued for the account linked to the Tailscale identity' })
-  @ApiResponse({ status: 401, description: 'Caller is not on the tailnet or has no linked account' })
+  @ApiResponse({
+    status: 200,
+    description: 'JWT issued for the account linked to the Tailscale identity',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Caller is not on the tailnet or has no linked account',
+  })
   @ApiResponse({ status: 503, description: 'Tailscale identity lookup is unavailable' })
   async createSession(@Req() req: any) {
     return this.authService.createSession(this.clientIp(req));
@@ -49,6 +56,9 @@ export class AuthController {
   }
 
   private clientIp(req: any): string | null {
-    return this.trustedProxies.resolveClientIp(req.socket?.remoteAddress, req.headers?.['x-forwarded-for']);
+    return this.trustedProxies.resolveClientIp(
+      req.socket?.remoteAddress,
+      req.headers?.['x-forwarded-for'],
+    );
   }
 }

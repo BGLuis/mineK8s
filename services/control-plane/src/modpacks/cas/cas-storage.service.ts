@@ -75,7 +75,9 @@ export class CasStorageService {
 
     // Valida se o arquivo físico ainda existe no disco
     if (!fs.existsSync(entity.storagePath)) {
-      this.logger.warn(`Objeto CAS ${cleanHash} ausente em disco (${entity.storagePath}). Purgando registro órfão.`);
+      this.logger.warn(
+        `Objeto CAS ${cleanHash} ausente em disco (${entity.storagePath}). Purgando registro órfão.`,
+      );
       await this.casRepo.delete(entity.sha256);
       return null;
     }
@@ -130,7 +132,10 @@ export class CasStorageService {
    * Conecta o objeto CAS ao destino desejado (/data/mods).
    * Tenta hardlink em tempo constante (< 10ms); caso falhe (ex: cross-device EXDEV), faz cópia física.
    */
-  public async copyOrLinkTo(hash: string, destinationFilePath: string): Promise<'linked' | 'copied'> {
+  public async copyOrLinkTo(
+    hash: string,
+    destinationFilePath: string,
+  ): Promise<'linked' | 'copied'> {
     const casObj = await this.getByHash(hash);
     if (!casObj) {
       throw new NotFoundException(`CAS object not found for hash: ${hash}`);
@@ -150,7 +155,9 @@ export class CasStorageService {
       await fs.promises.link(casObj.storagePath, destinationFilePath);
       return 'linked';
     } catch (err: any) {
-      this.logger.debug(`Hardlink falhou (${err.code || err.message}), usando cópia segura para ${destinationFilePath}`);
+      this.logger.debug(
+        `Hardlink falhou (${err.code || err.message}), usando cópia segura para ${destinationFilePath}`,
+      );
       await fs.promises.copyFile(casObj.storagePath, destinationFilePath);
       return 'copied';
     }
@@ -160,7 +167,9 @@ export class CasStorageService {
    * Avalia a ocupação do volume /cache e expurga os arquivos menos recentemente usados (LRU)
    * caso a capacidade ultrapasse o limiar (padrão: 85%) (RF-STO-05).
    */
-  public async cleanLru(targetCapacityPercent: number = 85): Promise<{ purgedCount: number; purgedBytes: number }> {
+  public async cleanLru(
+    targetCapacityPercent: number = 85,
+  ): Promise<{ purgedCount: number; purgedBytes: number }> {
     if (!this.casRepo) {
       return { purgedCount: 0, purgedBytes: 0 };
     }
@@ -211,7 +220,9 @@ export class CasStorageService {
       }
     }
 
-    this.logger.log(`[RF-STO-05] Expurgo LRU concluído: ${purgedCount} objetos removidos (${purgedBytes} bytes liberados).`);
+    this.logger.log(
+      `[RF-STO-05] Expurgo LRU concluído: ${purgedCount} objetos removidos (${purgedBytes} bytes liberados).`,
+    );
     return { purgedCount, purgedBytes };
   }
 }

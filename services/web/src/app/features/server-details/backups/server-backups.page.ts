@@ -411,7 +411,9 @@ export class ServerBackupsPage {
           filename: result.filename,
           freezeMs: result.freezeDurationMs,
         });
-        this.toast.success(mode === 'HOT' ? 'Backup a quente concluído.' : 'Backup a frio concluído.');
+        this.toast.success(
+          mode === 'HOT' ? 'Backup a quente concluído.' : 'Backup a frio concluído.',
+        );
         this.reload();
       },
       error: (error) => {

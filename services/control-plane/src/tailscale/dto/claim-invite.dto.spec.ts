@@ -11,7 +11,9 @@ async function nickErrors(minecraftNick: string): Promise<string[]> {
     minecraftNick,
   });
   const errors = await validate(dto);
-  return errors.filter((e) => e.property === 'minecraftNick').flatMap((e) => Object.values(e.constraints ?? {}));
+  return errors
+    .filter((e) => e.property === 'minecraftNick')
+    .flatMap((e) => Object.values(e.constraints ?? {}));
 }
 
 describe('ClaimInviteDto: nickname canônico C-06 (3 a 16)', () => {

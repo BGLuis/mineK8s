@@ -65,7 +65,9 @@ export class TailscaleCloudDriver {
 
       if (response.status === 429 && attempt < retries) {
         const retryAfterHeader = response.headers.get('retry-after');
-        const delaySeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : Math.pow(2, attempt);
+        const delaySeconds = retryAfterHeader
+          ? parseInt(retryAfterHeader, 10)
+          : Math.pow(2, attempt);
         this.logger.warn(
           `Tailscale Cloud API 429 Rate Limit atingido em ${endpoint}. Aguardando ${delaySeconds}s (tentativa ${attempt + 1}/${retries})...`,
         );
@@ -86,7 +88,9 @@ export class TailscaleCloudDriver {
   public async getDevices(): Promise<TailscaleCloudDevice[]> {
     const resp = await this.requestWithRetry(`/api/v2/tailnet/${this.tailnet}/devices`);
     if (!resp.ok) {
-      throw new Error(`Error listing devices on the Cloud API (${resp.status}): ${await resp.text()}`);
+      throw new Error(
+        `Error listing devices on the Cloud API (${resp.status}): ${await resp.text()}`,
+      );
     }
     const data = (await resp.json()) as { devices?: TailscaleCloudDevice[] };
     return data.devices || [];
@@ -149,10 +153,17 @@ export class TailscaleCloudDriver {
     });
 
     if (!resp.ok) {
-      throw new Error(`Error generating AuthKey on the Cloud API (${resp.status}): ${await resp.text()}`);
+      throw new Error(
+        `Error generating AuthKey on the Cloud API (${resp.status}): ${await resp.text()}`,
+      );
     }
 
-    const data = (await resp.json()) as { key: string; id: string; expires: string; capabilities: any };
+    const data = (await resp.json()) as {
+      key: string;
+      id: string;
+      expires: string;
+      capabilities: any;
+    };
     return {
       key: data.key,
       id: data.id,

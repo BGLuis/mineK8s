@@ -16,12 +16,18 @@ describe('ServersStateGateway (/ws/servers)', () => {
 
   beforeEach(() => {
     authService = {
-      validateUserById: jest.fn(async (id: string) => (id === admin.id ? admin : id === player.id ? player : null)),
+      validateUserById: jest.fn(async (id: string) =>
+        id === admin.id ? admin : id === player.id ? player : null,
+      ),
       validateTailscaleUser: jest.fn(async () => null),
     };
     jwtService = {
       verify: jest.fn((token: string) =>
-        token === 'admin-jwt' ? { sub: admin.id } : token === 'player-jwt' ? { sub: player.id } : null,
+        token === 'admin-jwt'
+          ? { sub: admin.id }
+          : token === 'player-jwt'
+            ? { sub: player.id }
+            : null,
       ),
     };
     gateway = new ServersStateGateway(

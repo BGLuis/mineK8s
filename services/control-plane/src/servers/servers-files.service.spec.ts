@@ -121,9 +121,9 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
     });
 
     it('should reject path traversal in readFile with ForbiddenException', async () => {
-      await expect(
-        service.readFile(sampleServer.id, '../../etc/passwd'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.readFile(sampleServer.id, '../../etc/passwd')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('should reject path traversal in writeFile with ForbiddenException', async () => {
@@ -150,15 +150,13 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
       await service.writeFile(sampleServer.id, 'whitelist.json', '[]');
       await service.deleteFile(sampleServer.id, 'whitelist.json');
 
-      await expect(
-        service.readFile(sampleServer.id, 'whitelist.json'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.readFile(sampleServer.id, 'whitelist.json')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should prevent deleting the root server directory', async () => {
-      await expect(service.deleteFile(sampleServer.id, '.')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.deleteFile(sampleServer.id, '.')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -216,9 +214,9 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
 
   describe('RF-STO-09, RF-ARQ-16: Session.lock Protection and Active World Guard', () => {
     it('should strictly prohibit deletion of session.lock with BadRequestException', async () => {
-      await expect(
-        service.deleteFile(sampleServer.id, 'world/session.lock'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.deleteFile(sampleServer.id, 'world/session.lock')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should strictly prohibit manual writing to session.lock with BadRequestException', async () => {
@@ -234,9 +232,9 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
         service.writeFile(sampleServer.id, 'world/data/raids.dat', 'content'),
       ).rejects.toThrow(ConflictException);
 
-      await expect(
-        service.deleteFile(sampleServer.id, 'world/data/raids.dat'),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.deleteFile(sampleServer.id, 'world/data/raids.dat')).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 });

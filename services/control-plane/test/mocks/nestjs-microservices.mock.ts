@@ -1,20 +1,14 @@
 export const GrpcMethod =
-  (_service?: string, _method?: string) =>
-  (_target: any, _key: string, desc: any) =>
+  (_service?: string, _method?: string) => (_target: any, _key: string, desc: any) =>
     desc;
 
 export const GrpcStreamMethod =
-  (_service?: string, _method?: string) =>
-  (_target: any, _key: string, desc: any) =>
+  (_service?: string, _method?: string) => (_target: any, _key: string, desc: any) =>
     desc;
 
-export const MessagePattern =
-  (_pattern: any) => (_target: any, _key: string, desc: any) =>
-    desc;
+export const MessagePattern = (_pattern: any) => (_target: any, _key: string, desc: any) => desc;
 
-export const EventPattern =
-  (_pattern: any) => (_target: any, _key: string, desc: any) =>
-    desc;
+export const EventPattern = (_pattern: any) => (_target: any, _key: string, desc: any) => desc;
 
 export const Payload = () => (_target: any, _key: string, _idx: number) => {};
 

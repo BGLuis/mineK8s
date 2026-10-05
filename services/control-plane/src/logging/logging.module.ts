@@ -1,8 +1,4 @@
-import {
-  IncomingHttpHeaders,
-  IncomingMessage,
-  ServerResponse,
-} from 'node:http';
+import { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
@@ -43,9 +39,7 @@ function redactBody(body: unknown): unknown {
   return out;
 }
 
-function pickHeaders(
-  headers: Record<string, unknown>,
-): Record<string, unknown> {
+function pickHeaders(headers: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(headers ?? {})) {
     out[k] = SAFE_HEADERS.has(k.toLowerCase()) ? v : '[Redacted]';
@@ -122,11 +116,7 @@ const isProduction = process.env.NODE_ENV === 'production';
             statusCode: err.statusCode,
           }),
         },
-        customLogLevel: (
-          _req: IncomingMessage,
-          res: ServerResponse,
-          error?: Error,
-        ) => {
+        customLogLevel: (_req: IncomingMessage, res: ServerResponse, error?: Error) => {
           if (res.statusCode >= 500 || error) return 'error';
           if (res.statusCode >= 400) return 'warn';
           if (res.statusCode >= 300) return 'silent';
@@ -135,8 +125,7 @@ const isProduction = process.env.NODE_ENV === 'production';
         timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
         autoLogging: {
           ignore: (req: IncomingMessage) =>
-            (req.url || '').startsWith('/health') ||
-            (req.url || '').startsWith('/metrics'),
+            (req.url || '').startsWith('/health') || (req.url || '').startsWith('/metrics'),
         },
       },
     }),

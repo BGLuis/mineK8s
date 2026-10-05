@@ -36,10 +36,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
   /**
    * Registra um listener para novos deltas de log aprovados pelo filtro (RF-RCON-09).
    */
-  public subscribeToDeltas(
-    serverId: string,
-    listener: LogDeltaListener,
-  ): () => void {
+  public subscribeToDeltas(serverId: string, listener: LogDeltaListener): () => void {
     let set = this.listeners.get(serverId);
     if (!set) {
       set = new Set();
@@ -103,8 +100,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
       subdomain,
     });
 
-    const namespace =
-      this.configService.kubernetes.namespace || 'minekubernetes';
+    const namespace = this.configService.kubernetes.namespace || 'minekubernetes';
     const podName = `mc-${subdomain}`;
 
     this.logger.log(

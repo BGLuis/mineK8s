@@ -21,9 +21,12 @@ describe('validateNick (C-06: 3 to 16 letters, digits or underscore)', () => {
     expect(validateNick('Steve_99')).toBeNull();
   });
 
-  it.each(['Steve!', 'a b c', 'João', 'x-y-z', '../..'])('rejects symbols and spaces inside: %s', (nick) => {
-    expect(validateNick(nick)).not.toBeNull();
-  });
+  it.each(['Steve!', 'a b c', 'João', 'x-y-z', '../..'])(
+    'rejects symbols and spaces inside: %s',
+    (nick) => {
+      expect(validateNick(nick)).not.toBeNull();
+    },
+  );
 
   it('ignores spaces around the nick, which keyboards tend to add', () => {
     expect(validateNick('  Steve ')).toBeNull();

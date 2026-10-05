@@ -27,7 +27,10 @@ export interface TailscaleWhoIsResponse {
 }
 
 export class LocalSocketUnavailableException extends Error {
-  constructor(message: string, public readonly code: string = 'ENOENT') {
+  constructor(
+    message: string,
+    public readonly code: string = 'ENOENT',
+  ) {
     super(message);
     this.name = 'LocalSocketUnavailableException';
   }

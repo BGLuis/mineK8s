@@ -94,13 +94,13 @@ describe('Log Pipeline Components (RF-RCON-08, RF-RCON-09, RF-RCON-15)', () => {
     });
 
     it('should parse log entry with correct level and timestamp', () => {
-      const raw = '[14:05:30] [Server thread/WARN]: Can\'t keep up! Is the server overloaded?';
+      const raw = "[14:05:30] [Server thread/WARN]: Can't keep up! Is the server overloaded?";
       const entry = LogNoiseFilter.parseLogEntry(raw, 'entry-1');
 
       expect(entry.id).toBe('entry-1');
       expect(entry.level).toBe('WARN');
       expect(entry.timestamp).toBe('14:05:30');
-      expect(entry.message).toContain('Can\'t keep up!');
+      expect(entry.message).toContain("Can't keep up!");
     });
   });
 });

@@ -67,7 +67,9 @@ export class ServersSocket implements OnDestroy {
       socket.on('connect', () => this.bus.next({ type: 'connected' }));
       socket.on('disconnect', () => this.bus.next({ type: 'disconnected' }));
       socket.on('connect_error', () => this.bus.next({ type: 'disconnected' }));
-      socket.on('serverState', (event: ServerStateEvent) => this.bus.next({ type: 'state', event }));
+      socket.on('serverState', (event: ServerStateEvent) =>
+        this.bus.next({ type: 'state', event }),
+      );
       this.socket = socket;
     }
     return this.socket;

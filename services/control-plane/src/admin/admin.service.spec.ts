@@ -58,7 +58,10 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     };
 
     mockGatewayIpcService = {
-      revokePlayerSession: jest.fn(async () => ({ session_found: true, terminated_connections_count: 1 })),
+      revokePlayerSession: jest.fn(async () => ({
+        session_found: true,
+        terminated_connections_count: 1,
+      })),
     };
 
     mockConsoleDriver = {
@@ -82,7 +85,10 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     it('deve criar novo grupo de acesso com sucesso', async () => {
       mockGroupRepo.findOne.mockResolvedValue(null);
 
-      const group = await service.createGroup({ name: 'Veteranos', description: 'Jogadores antigos' });
+      const group = await service.createGroup({
+        name: 'Veteranos',
+        description: 'Jogadores antigos',
+      });
       expect(group.name).toBe('Veteranos');
       expect(mockGroupRepo.save).toHaveBeenCalled();
     });
@@ -254,11 +260,13 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     });
 
     it('propaga a falha do Gateway em vez de responder sucesso', async () => {
-      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(new Error('Gateway is not connected'));
-
-      await expect(service.smartKick({ serverId: 'srv-creative', minecraftNick: 'ToxicPlayer' })).rejects.toThrow(
-        'Gateway is not connected',
+      mockGatewayIpcService.revokePlayerSession.mockRejectedValue(
+        new Error('Gateway is not connected'),
       );
+
+      await expect(
+        service.smartKick({ serverId: 'srv-creative', minecraftNick: 'ToxicPlayer' }),
+      ).rejects.toThrow('Gateway is not connected');
     });
   });
 
@@ -283,7 +291,15 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockUserRepo.find.mockResolvedValue([
         {
           ...user,
-          devices: [{ id: 'dev-1', device_name: 'PC', status: 'ACTIVE', last_seen_at: null, node_ip: '100.64.0.9' }],
+          devices: [
+            {
+              id: 'dev-1',
+              device_name: 'PC',
+              status: 'ACTIVE',
+              last_seen_at: null,
+              node_ip: '100.64.0.9',
+            },
+          ],
           user_groups: [{ user_id: 'user-1', group_id: 'grp-1' }],
         },
       ]);
@@ -303,19 +319,57 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     it('lista só os servidores que a política de acesso libera para o usuário', async () => {
       mockUserRepo.findOne.mockResolvedValue(user);
       mockServerRepo.find.mockResolvedValue([
-        { id: 's-public', name: 'Público', subdomain: 'pub', state: 'READY', access_policy: 'PUBLIC' },
-        { id: 's-group-ok', name: 'Do grupo', subdomain: 'grp', state: 'READY', access_policy: 'GROUP' },
-        { id: 's-group-no', name: 'Outro grupo', subdomain: 'other', state: 'READY', access_policy: 'GROUP' },
-        { id: 's-indiv-ok', name: 'Individual com acesso', subdomain: 'ind', state: 'STOPPED', access_policy: 'INDIVIDUAL' },
-        { id: 's-indiv-no', name: 'Individual sem acesso', subdomain: 'ind2', state: 'READY', access_policy: 'INDIVIDUAL' },
-        { id: 's-maint', name: 'Manutenção', subdomain: 'maint', state: 'READY', access_policy: 'MAINTENANCE' },
+        {
+          id: 's-public',
+          name: 'Público',
+          subdomain: 'pub',
+          state: 'READY',
+          access_policy: 'PUBLIC',
+        },
+        {
+          id: 's-group-ok',
+          name: 'Do grupo',
+          subdomain: 'grp',
+          state: 'READY',
+          access_policy: 'GROUP',
+        },
+        {
+          id: 's-group-no',
+          name: 'Outro grupo',
+          subdomain: 'other',
+          state: 'READY',
+          access_policy: 'GROUP',
+        },
+        {
+          id: 's-indiv-ok',
+          name: 'Individual com acesso',
+          subdomain: 'ind',
+          state: 'STOPPED',
+          access_policy: 'INDIVIDUAL',
+        },
+        {
+          id: 's-indiv-no',
+          name: 'Individual sem acesso',
+          subdomain: 'ind2',
+          state: 'READY',
+          access_policy: 'INDIVIDUAL',
+        },
+        {
+          id: 's-maint',
+          name: 'Manutenção',
+          subdomain: 'maint',
+          state: 'READY',
+          access_policy: 'MAINTENANCE',
+        },
       ]);
       mockServerGroupRepo.find.mockResolvedValue([
         { server_id: 's-group-ok', group_id: 'grp-1' },
         { server_id: 's-group-no', group_id: 'grp-2' },
       ]);
       mockUserGroupRepo.find.mockResolvedValue([{ user_id: 'user-1', group_id: 'grp-1' }]);
-      mockUserServerAccessRepo.find.mockResolvedValue([{ user_id: 'user-1', server_id: 's-indiv-ok' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([
+        { user_id: 'user-1', server_id: 's-indiv-ok' },
+      ]);
 
       const servers = await service.listAccessibleServers('user-1');
 
@@ -325,7 +379,14 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     it('servidor em modo manutenção sai da lista de jogadores, como o Gateway o enxerga', async () => {
       mockUserRepo.findOne.mockResolvedValue(user);
       mockServerRepo.find.mockResolvedValue([
-        { id: 's-1', name: 'Em manutenção', subdomain: 'm', state: 'READY', access_policy: 'PUBLIC', is_maintenance: true },
+        {
+          id: 's-1',
+          name: 'Em manutenção',
+          subdomain: 'm',
+          state: 'READY',
+          access_policy: 'PUBLIC',
+          is_maintenance: true,
+        },
       ]);
 
       expect(await service.listAccessibleServers('user-1')).toEqual([]);
@@ -334,7 +395,13 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     it('administrador enxerga todos os servidores, até os em manutenção', async () => {
       mockUserRepo.findOne.mockResolvedValue({ ...user, role: 'ADMIN' });
       mockServerRepo.find.mockResolvedValue([
-        { id: 's-maint', name: 'Manutenção', subdomain: 'maint', state: 'READY', access_policy: 'MAINTENANCE' },
+        {
+          id: 's-maint',
+          name: 'Manutenção',
+          subdomain: 'maint',
+          state: 'READY',
+          access_policy: 'MAINTENANCE',
+        },
       ]);
 
       const servers = await service.listAccessibleServers('user-1');

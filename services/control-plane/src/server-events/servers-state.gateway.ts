@@ -1,9 +1,5 @@
 import { Logger } from '@nestjs/common';
-import {
-  OnGatewayConnection,
-  WebSocketGateway,
-  WebSocketServer,
-} from '@nestjs/websockets';
+import { OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '../auth/jwt.service';

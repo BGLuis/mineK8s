@@ -10,7 +10,10 @@ export class UniversalModpackDto {
   @ApiProperty({ description: 'Descrição / sumário do modpack' })
   summary: string;
 
-  @ApiProperty({ enum: ['MODRINTH', 'CURSEFORGE', 'VANILLA', 'CUSTOM'], description: 'Origem do catálogo' })
+  @ApiProperty({
+    enum: ['MODRINTH', 'CURSEFORGE', 'VANILLA', 'CUSTOM'],
+    description: 'Origem do catálogo',
+  })
   source: 'MODRINTH' | 'CURSEFORGE' | 'VANILLA' | 'CUSTOM';
 
   @ApiPropertyOptional({ description: 'Autor ou time responsável' })

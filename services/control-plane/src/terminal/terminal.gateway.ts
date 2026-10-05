@@ -20,10 +20,7 @@ import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
-import {
-  CONSOLE_DRIVER_TOKEN,
-  ConsoleDriver,
-} from '../console/console-driver.interface';
+import { CONSOLE_DRIVER_TOKEN, ConsoleDriver } from '../console/console-driver.interface';
 import { K8sLogStreamerService } from '../logging/k8s-log-streamer.service';
 
 export interface JoinTerminalDto {
@@ -41,9 +38,7 @@ const COMMAND_WINDOW_MS = 1000;
 @WebSocketGateway({
   namespace: '/terminal',
 })
-export class TerminalGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(TerminalGateway.name);
 
   @WebSocketServer()
@@ -103,10 +98,7 @@ export class TerminalGateway
    * Valida permissão, insere cliente na sala do servidor e retorna histórico inicial.
    */
   @SubscribeMessage('join_terminal')
-  async handleJoinTerminal(
-    @ConnectedSocket() client: any,
-    @MessageBody() data: JoinTerminalDto,
-  ) {
+  async handleJoinTerminal(@ConnectedSocket() client: any, @MessageBody() data: JoinTerminalDto) {
     const { serverId } = data;
     const user: User | undefined = client.data?.user;
 
@@ -141,10 +133,7 @@ export class TerminalGateway
    * Executa comando via ConsoleDriver e persiste em server_audit_logs.
    */
   @SubscribeMessage('send_command')
-  async handleSendCommand(
-    @ConnectedSocket() client: any,
-    @MessageBody() data: SendCommandDto,
-  ) {
+  async handleSendCommand(@ConnectedSocket() client: any, @MessageBody() data: SendCommandDto) {
     const { serverId, command } = data;
     const user: User | undefined = client.data?.user;
 

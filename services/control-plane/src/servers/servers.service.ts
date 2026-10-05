@@ -13,10 +13,7 @@ import { Repository } from 'typeorm';
 
 import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
-import {
-  ServerAuditLog,
-  ExecutionSource,
-} from '@database/entities/server-audit-log.entity';
+import { ServerAuditLog, ExecutionSource } from '@database/entities/server-audit-log.entity';
 import { User } from '@database/entities/user.entity';
 import { KubernetesService } from '@k8s/k8s.service';
 import {
@@ -67,7 +64,9 @@ export class ServersService {
     private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
-  async create(dto: CreateServerDto): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
+  async create(
+    dto: CreateServerDto,
+  ): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
     const existing = await this.serverRepo.findOne({
       where: { subdomain: dto.subdomain },
     });
@@ -97,10 +96,10 @@ export class ServersService {
     let savedSettings: MinecraftServerSettings | undefined;
 
     if (savedServer.game_type === 'minecraft') {
-      const rconPassword =
-        dto.minecraft_settings?.rcon_password || randomBytes(12).toString('hex');
+      const rconPassword = dto.minecraft_settings?.rcon_password || randomBytes(12).toString('hex');
       // RF-CF-02: Se access_policy for INTERNET, obriga online-mode=true
-      const onlineMode = accessPolicy === 'INTERNET' ? true : (dto.minecraft_settings?.online_mode ?? false);
+      const onlineMode =
+        accessPolicy === 'INTERNET' ? true : (dto.minecraft_settings?.online_mode ?? false);
       const settings = this.settingsRepo.create({
         server_id: savedServer.id,
         motd: dto.minecraft_settings?.motd || `A MineKubernetes Server [${dto.name}]`,
@@ -152,9 +151,7 @@ export class ServersService {
       this.logger.warn(`Could not list k8s deployments: ${err.message}`);
     }
 
-    const deploymentMap = new Map(
-      deployments.map((d) => [d.name, d]),
-    );
+    const deploymentMap = new Map(deployments.map((d) => [d.name, d]));
 
     return servers.map((s) => {
       const depName = `mc-${s.subdomain}`;
@@ -220,7 +217,9 @@ export class ServersService {
       replicas: dep?.replicas ?? 0,
       ready_replicas: dep?.status?.readyReplicas ?? 0,
       players_online: this.playerSessions?.count(server.id) ?? 0,
-      settings: server.minecraft_settings ? toServerSettingsDto(server.minecraft_settings) : undefined,
+      settings: server.minecraft_settings
+        ? toServerSettingsDto(server.minecraft_settings)
+        : undefined,
     };
   }
 
@@ -316,7 +315,8 @@ export class ServersService {
     }
 
     const memoryChanged =
-      dto.allocated_memory_mb !== undefined && dto.allocated_memory_mb !== server.allocated_memory_mb;
+      dto.allocated_memory_mb !== undefined &&
+      dto.allocated_memory_mb !== server.allocated_memory_mb;
     if (memoryChanged && !MEMORY_RESIZABLE_STATES.includes(server.state)) {
       throw new ConflictException(
         `Memory can only change while the server is stopped or running (current state: ${server.state})`,
@@ -377,10 +377,7 @@ export class ServersService {
     return { message: 'Domain updated' };
   }
 
-  async getLogs(
-    id: string,
-    tail: number = 150,
-  ): Promise<{ logs: string; lines: LogEntry[] }> {
+  async getLogs(id: string, tail: number = 150): Promise<{ logs: string; lines: LogEntry[] }> {
     const server = await this.serverRepo.findOne({ where: { id } });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
@@ -430,11 +427,7 @@ export class ServersService {
     let isError = false;
 
     try {
-      response = await this.consoleDriver.sendCommand(
-        server,
-        command,
-        options,
-      );
+      response = await this.consoleDriver.sendCommand(server, command, options);
     } catch (err) {
       response = (err as Error).message;
       isError = true;
@@ -509,11 +502,15 @@ export class ServersService {
       try {
         backupPath = await this.backupService.createPreUpdateBackup(server);
       } catch (err: any) {
-        this.logger.error(`Falha ao gerar backup pre-update para [${server.subdomain}]: ${err.message}`);
+        this.logger.error(
+          `Falha ao gerar backup pre-update para [${server.subdomain}]: ${err.message}`,
+        );
         server.state = previousState;
         await this.serverRepo.save(server);
         this.notifyGateway(server, previousState);
-        throw new BadRequestException(`Failed to create the mandatory pre-update backup: ${err.message}`);
+        throw new BadRequestException(
+          `Failed to create the mandatory pre-update backup: ${err.message}`,
+        );
       }
     } else {
       backupPath = '/dummy/backup';
@@ -593,7 +590,11 @@ export class ServersService {
     }
 
     try {
-      const probe = await this.slpProbeService.probe('127.0.0.1', server.allocated_port || 25565, 3000);
+      const probe = await this.slpProbeService.probe(
+        '127.0.0.1',
+        server.allocated_port || 25565,
+        3000,
+      );
       return probe.ready;
     } catch {
       return false;
@@ -768,7 +769,9 @@ export class ServersService {
     try {
       await this.gatewayIpcService?.publishRoute(server.id);
     } catch (err: any) {
-      this.logger.warn(`Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`);
+      this.logger.warn(
+        `Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`,
+      );
     }
   }
 
@@ -793,7 +796,9 @@ export class ServersService {
         auto_wake: server.auto_wake !== false,
       });
     } catch (err: any) {
-      this.logger.warn(`Erro ao notificar Gateway sobre status ${status} de [${server.subdomain}]: ${err.message}`);
+      this.logger.warn(
+        `Erro ao notificar Gateway sobre status ${status} de [${server.subdomain}]: ${err.message}`,
+      );
     }
   }
 }

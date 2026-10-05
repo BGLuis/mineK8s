@@ -151,7 +151,9 @@ describe('InvitesService', () => {
     it('deve registrar o nickname do administrador que emitiu o convite', async () => {
       const result = await service.createInvite({ name: 'Turma do Discord' }, 'AdminSteve');
 
-      expect(mockInviteRepo.create).toHaveBeenCalledWith(expect.objectContaining({ created_by: 'AdminSteve' }));
+      expect(mockInviteRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ created_by: 'AdminSteve' }),
+      );
       expect(result.createdBy).toBe('AdminSteve');
     });
   });
@@ -208,9 +210,7 @@ describe('InvitesService', () => {
   describe('validateToken (RF-TS-08)', () => {
     it('deve falhar se token não existir no banco', async () => {
       mockInviteRepo.findOne.mockResolvedValue(null);
-      await expect(service.validateToken('invalid-token')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.validateToken('invalid-token')).rejects.toThrow(NotFoundException);
     });
 
     it('deve rejeitar token revogado', async () => {
@@ -222,9 +222,7 @@ describe('InvitesService', () => {
         expires_at: new Date(Date.now() + 100000),
       });
 
-      await expect(service.validateToken('revoked-token')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.validateToken('revoked-token')).rejects.toThrow(BadRequestException);
     });
 
     it('deve rejeitar token esgotado (Depleted)', async () => {
@@ -236,9 +234,7 @@ describe('InvitesService', () => {
         expires_at: new Date(Date.now() + 100000),
       });
 
-      await expect(service.validateToken('depleted-token')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(service.validateToken('depleted-token')).rejects.toThrow(ConflictException);
     });
   });
 

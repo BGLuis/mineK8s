@@ -12,12 +12,15 @@ describe('safeRedirect', () => {
     expect(safeRedirect('/servers/abc/console?tab=logs')).toBe('/servers/abc/console?tab=logs');
   });
 
-  it.each(['https://evil.example', '//evil.example', '/\\evil.example', 'javascript:alert(1)', 'access'])(
-    'refuses to leave the app: %s',
-    (target) => {
-      expect(safeRedirect(target)).toBe('/');
-    },
-  );
+  it.each([
+    'https://evil.example',
+    '//evil.example',
+    '/\\evil.example',
+    'javascript:alert(1)',
+    'access',
+  ])('refuses to leave the app: %s', (target) => {
+    expect(safeRedirect(target)).toBe('/');
+  });
 
   it('does not bounce back to the login screen', () => {
     expect(safeRedirect('/login')).toBe('/');

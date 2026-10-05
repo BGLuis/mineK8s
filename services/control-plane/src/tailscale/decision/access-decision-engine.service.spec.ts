@@ -1,4 +1,8 @@
-import { AccessDecisionEngineService, ServerContext, UserContext } from './access-decision-engine.service';
+import {
+  AccessDecisionEngineService,
+  ServerContext,
+  UserContext,
+} from './access-decision-engine.service';
 import { validateNicknameFormat } from './nickname-validator';
 
 describe('AccessDecisionEngine & NicknameValidator (TS §9.1, RF-TS-02, RF-ARQ-21)', () => {

@@ -22,7 +22,12 @@ import {
   McVoxelScene,
   ToastService,
 } from '../../ui';
-import { copyToClipboard, focusFirstInvalid, formatDateTime, formatShortDate } from '../access/format';
+import {
+  copyToClipboard,
+  focusFirstInvalid,
+  formatDateTime,
+  formatShortDate,
+} from '../access/format';
 import { apiErrorMessage } from './api-error';
 import { TAILSCALE_DOWNLOADS, isTailscaleDeepLink, maskAuthKey } from './auth-key';
 import { InviteErrorView, MISSING_TOKEN_VIEW, inviteErrorView } from './invite-error';
@@ -423,7 +428,9 @@ export class JoinPage {
       this.toast.success('Chave copiada.');
     } else {
       this.keyRevealed.set(true);
-      this.toast.error('Não foi possível copiar a chave. Ela foi exibida por inteiro para você copiar.');
+      this.toast.error(
+        'Não foi possível copiar a chave. Ela foi exibida por inteiro para você copiar.',
+      );
     }
   }
 }

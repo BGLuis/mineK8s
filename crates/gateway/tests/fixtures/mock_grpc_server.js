@@ -96,7 +96,9 @@ server.addService(gatewayService, {
   StreamSessionEvents: (call, callback) => {
     // Cada evento recebido vira uma linha em stdout para os testes do Gateway conferirem.
     call.on('data', (event) => {
-      console.log(`SESSION_EVENT:${event.event_type}:${event.server_id}:${event.minecraft_nick}:${event.client_ip}`);
+      console.log(
+        `SESSION_EVENT:${event.event_type}:${event.server_id}:${event.minecraft_nick}:${event.client_ip}`,
+      );
     });
     call.on('end', () => callback(null, {}));
     call.on('error', () => {});
@@ -107,7 +109,9 @@ server.addService(gatewayService, {
     console.log('COMMANDS_CONNECTED');
     call.on('data', (result) => {
       const revoke = result.revoke_session;
-      const outcome = revoke ? `${revoke.session_found}:${revoke.terminated_connections_count}` : 'none:none';
+      const outcome = revoke
+        ? `${revoke.session_found}:${revoke.terminated_connections_count}`
+        : 'none:none';
       console.log(`COMMAND_RESULT:${result.command_id}:${outcome}:${result.error}`);
     });
     call.on('end', () => call.end());
@@ -131,7 +135,12 @@ require('readline')
     const id = `cmd-${nextCommandId++}`;
     commandStream.write({
       command_id: id,
-      revoke_session: { server_id: serverId, client_ip: clientIp, minecraft_nick: nick, reason_message: 'test' },
+      revoke_session: {
+        server_id: serverId,
+        client_ip: clientIp,
+        minecraft_nick: nick,
+        reason_message: 'test',
+      },
     });
     console.log(`COMMAND_SENT:${id}`);
   });

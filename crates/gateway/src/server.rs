@@ -13,14 +13,14 @@ use crate::identity::{
     IdentityLookup, IdentityResolver, NicknameDecision, TailscaleLocalWhoIs,
 };
 use crate::ipc::GatewayIpcClient;
-use std::time::Duration;
-use tokio::sync::mpsc;
-use minecraft_protocol::error::ProtocolError;
 use crate::limiter::ConnectionRateLimiter;
 use crate::motd::{handle_status_ping, StatusCache};
 use crate::routing::{AccessPolicy, HoldError, RouteTable, RoutingModel, ServerInstanceStatus};
 use crate::session::{handle_login_proxy, SessionManager};
 use crate::telemetry::GatewayMetrics;
+use minecraft_protocol::error::ProtocolError;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 pub struct GatewayServer {
     config: Arc<GatewayConfig>,
@@ -182,7 +182,12 @@ impl GatewayServer {
         Ok(())
     }
 
-    fn spawn_connection(&self, stream: TcpStream, peer_addr: std::net::SocketAddr, is_public: bool) {
+    fn spawn_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: std::net::SocketAddr,
+        is_public: bool,
+    ) {
         let config = Arc::clone(&self.config);
         let rate_limiter = if is_public {
             Arc::clone(&self.public_rate_limiter)
@@ -242,7 +247,10 @@ impl GatewayServer {
         }
 
         // 2. SEC-01 (TS:670): Se listener for privado, rejeita IPs fora da Tailnet (100.64.0.0/10)
-        if !is_public && !is_tailscale_ip(peer_addr.ip()) && !config.trusted_proxies.is_trusted(&peer_addr.ip()) {
+        if !is_public
+            && !is_tailscale_ip(peer_addr.ip())
+            && !config.trusted_proxies.is_trusted(&peer_addr.ip())
+        {
             warn!(peer = %peer_addr, "SEC-01: Conexão privada rejeitada sumariamente por IP fora da Tailnet");
             metrics
                 .connections_total
@@ -261,7 +269,9 @@ impl GatewayServer {
             if dedicated_route.routing_model == RoutingModel::DedicatedPort {
                 if is_public && dedicated_route.access_policy != AccessPolicy::Internet {
                     warn!(peer = %peer_addr, "Rota dedicada rejeitada em listener público: política não é INTERNET");
-                    return Err(GatewayError::InvalidState("Rota dedicada não permitida em listener público".into()));
+                    return Err(GatewayError::InvalidState(
+                        "Rota dedicada não permitida em listener público".into(),
+                    ));
                 }
                 if let Some(target_addr) = dedicated_route.target_addr.as_ref() {
                     metrics
@@ -298,10 +308,7 @@ impl GatewayServer {
 
         // 4. Rota padrão VirtualHost: Processa Handshake streaming do Minecraft L7
         let mut conn = ClientConnection::new(stream, peer_addr);
-        let handshake_res = match conn
-            .process_initial_handshake(&config, &rate_limiter)
-            .await
-        {
+        let handshake_res = match conn.process_initial_handshake(&config, &rate_limiter).await {
             Ok(res) => res,
             Err(GatewayError::Protocol(ProtocolError::InvalidUsername(ref username))) => {
                 warn!(
@@ -320,7 +327,11 @@ impl GatewayServer {
                     peer = %peer_addr,
                     "Login rejeitado por tamanho de string excedido (< 50ms)"
                 );
-                return Self::send_login_disconnect(conn, "§cNickname deve ter no máximo 16 caracteres.").await;
+                return Self::send_login_disconnect(
+                    conn,
+                    "§cNickname deve ter no máximo 16 caracteres.",
+                )
+                .await;
             }
             Err(e) => return Err(e),
         };
@@ -332,13 +343,18 @@ impl GatewayServer {
             .observe(handshake_duration);
 
         match handshake_res {
-            HandshakeResult::Status { handshake, request: _, client_ip } => {
+            HandshakeResult::Status {
+                handshake,
+                request: _,
+                client_ip,
+            } => {
                 metrics
                     .connections_total
                     .with_label_values(&[&handshake.server_address, "accepted"])
                     .inc();
 
-                let mut route = route_table.lookup_virtual_host(local_port, &handshake.server_address);
+                let mut route =
+                    route_table.lookup_virtual_host(local_port, &handshake.server_address);
                 // No listener público, não expõe MOTD de mundos privados (RF-CF-04)
                 if is_public {
                     if let Some(ref r) = route {
@@ -384,7 +400,8 @@ impl GatewayServer {
                             peer = %peer_addr,
                             "Servidor de destino não encontrado na tabela de rotas"
                         );
-                        return Self::send_login_disconnect(conn, "§cServidor não encontrado.").await;
+                        return Self::send_login_disconnect(conn, "§cServidor não encontrado.")
+                            .await;
                     }
                 };
 
@@ -396,19 +413,28 @@ impl GatewayServer {
                         peer = %peer_addr,
                         "Tentativa de acesso via listener público a servidor com política não-INTERNET"
                     );
-                    return Self::send_login_disconnect(conn, "§cEste servidor não aceita conexões públicas.").await;
+                    return Self::send_login_disconnect(
+                        conn,
+                        "§cEste servidor não aceita conexões públicas.",
+                    )
+                    .await;
                 }
 
                 // 3. Identidade, Anti-Impersonation e política de acesso Zero-Trust (apenas no listener privado).
                 // Fail-closed: sem identidade resolvida só passam rotas PUBLIC/INTERNET, que não dependem de
                 // identidade tailnet. Qualquer outra política exige saber quem é o jogador.
                 if !is_public {
-                    let identity_required =
-                        !matches!(route.access_policy, AccessPolicy::Public | AccessPolicy::Internet);
+                    let identity_required = !matches!(
+                        route.access_policy,
+                        AccessPolicy::Public | AccessPolicy::Internet
+                    );
                     match identity.resolve(client_ip).await {
                         IdentityLookup::Resolved(player) => {
                             // Validação de Anti-Impersonation (< 50ms)
-                            match AccessDecisionEngine::evaluate_nickname(&login_start.username, &player.registered_nick) {
+                            match AccessDecisionEngine::evaluate_nickname(
+                                &login_start.username,
+                                &player.registered_nick,
+                            ) {
                                 NicknameDecision::Impersonation { registered_nick } => {
                                     warn!(
                                         declared = %login_start.username,
@@ -419,7 +445,8 @@ impl GatewayServer {
                                     return Self::send_login_disconnect(
                                         conn,
                                         "§cEste nickname não pertence a este dispositivo/conta.",
-                                    ).await;
+                                    )
+                                    .await;
                                 }
                                 NicknameDecision::Invalid(err) => {
                                     return Self::send_login_disconnect(conn, err.message()).await;
@@ -453,7 +480,11 @@ impl GatewayServer {
                                 client_ip = %client_ip,
                                 "Login rejeitado: dispositivo não registrado no Control Plane"
                             );
-                            return Self::send_login_disconnect(conn, "§cSeu dispositivo não está registrado nesta rede.").await;
+                            return Self::send_login_disconnect(
+                                conn,
+                                "§cSeu dispositivo não está registrado nesta rede.",
+                            )
+                            .await;
                         }
                         IdentityLookup::Unavailable if identity_required => {
                             warn!(
@@ -479,7 +510,11 @@ impl GatewayServer {
                                 server = %route.name,
                                 "Login rejeitado: servidor parado e auto-wake desativado"
                             );
-                            return Self::send_login_disconnect(conn, "§cServidor desligado e Auto-Wake desativado.").await;
+                            return Self::send_login_disconnect(
+                                conn,
+                                "§cServidor desligado e Auto-Wake desativado.",
+                            )
+                            .await;
                         }
 
                         info!(
@@ -489,13 +524,19 @@ impl GatewayServer {
                         if let Some(ref tx) = wake_sender {
                             let _ = tx.send(route.server_id.clone());
                         }
-                    } else if route.status == ServerInstanceStatus::Crashed || route.status == ServerInstanceStatus::Failed {
+                    } else if route.status == ServerInstanceStatus::Crashed
+                        || route.status == ServerInstanceStatus::Failed
+                    {
                         warn!(
                             server = %route.name,
                             status = ?route.status,
                             "Login rejeitado: servidor em estado de falha terminal"
                         );
-                        return Self::send_login_disconnect(conn, "§cServidor indisponível (estado de falha).").await;
+                        return Self::send_login_disconnect(
+                            conn,
+                            "§cServidor indisponível (estado de falha).",
+                        )
+                        .await;
                     }
 
                     info!(
@@ -504,7 +545,10 @@ impl GatewayServer {
                         "Iniciando retenção de conexão (Hold Connection até 25s, RF-GW-10)"
                     );
 
-                    match route_table.wait_for_ready(&route.server_id, Duration::from_secs(25)).await {
+                    match route_table
+                        .wait_for_ready(&route.server_id, Duration::from_secs(25))
+                        .await
+                    {
                         Ok(ready_route) => {
                             info!(
                                 server = %ready_route.name,
@@ -526,10 +570,15 @@ impl GatewayServer {
                                 ?status,
                                 "Servidor encerrou com falha durante a inicialização na janela de retenção."
                             );
-                            return Self::send_login_disconnect(conn, "§cO servidor encerrou com falha durante a inicialização.").await;
+                            return Self::send_login_disconnect(
+                                conn,
+                                "§cO servidor encerrou com falha durante a inicialização.",
+                            )
+                            .await;
                         }
                         Err(HoldError::NotFound) => {
-                            return Self::send_login_disconnect(conn, "§cServidor não encontrado.").await;
+                            return Self::send_login_disconnect(conn, "§cServidor não encontrado.")
+                                .await;
                         }
                     }
                 } else {
@@ -564,7 +613,8 @@ impl GatewayServer {
                     original_handshake,
                     original_login_start,
                     &session_manager,
-                ).await;
+                )
+                .await;
 
                 metrics
                     .active_sessions_total

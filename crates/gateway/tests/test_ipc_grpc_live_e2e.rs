@@ -1,9 +1,9 @@
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
-use std::time::Duration;
 use gateway::ipc::client::apply_route_update_event;
 use gateway::ipc::GatewayIpcClient;
 use gateway::routing::RouteTable;
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
 
 struct MockServerGuard {
     child: Child,
@@ -33,7 +33,9 @@ impl MockServerGuard {
             line.clear();
             if reader.read_line(&mut line).is_ok() && line.starts_with("READY_PORT:") {
                 let port_str = line.trim_start_matches("READY_PORT:").trim();
-                port = port_str.parse().expect("Porta inválida impressa pelo servidor mock");
+                port = port_str
+                    .parse()
+                    .expect("Porta inválida impressa pelo servidor mock");
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -73,7 +75,10 @@ async fn test_grpc_live_e2e_snapshot_identity_and_stream() {
     assert_eq!(route_table.len(), 1);
 
     let found = route_table.lookup_virtual_host(25565, "e2e.mine.lan");
-    assert!(found.is_some(), "Rota e2e.mine.lan deve ser encontrada na tabela reconstruída");
+    assert!(
+        found.is_some(),
+        "Rota e2e.mine.lan deve ser encontrada na tabela reconstruída"
+    );
     let route = found.unwrap();
     assert_eq!(route.server_id, "srv-e2e-live");
     assert!(route.proxy_protocol_upstream);
@@ -115,5 +120,8 @@ async fn test_grpc_live_e2e_snapshot_identity_and_stream() {
     apply_route_update_event(&route_table, event);
     assert_eq!(route_table.len(), 2);
     let dynamic_route = route_table.lookup_virtual_host(25565, "dynamic.mine.lan");
-    assert!(dynamic_route.is_some(), "Rota dinâmica deve estar na tabela");
+    assert!(
+        dynamic_route.is_some(),
+        "Rota dinâmica deve estar na tabela"
+    );
 }

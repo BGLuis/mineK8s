@@ -11,11 +11,19 @@ export class UserGroup {
   @PrimaryColumn({ type: 'uuid' })
   group_id: string;
 
-  @ManyToOne(() => User, (user) => user.user_groups, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => User,
+    (user) => user.user_groups,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Group, (group) => group.user_groups, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Group,
+    (group) => group.user_groups,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'group_id' })
   group: Group;
 }

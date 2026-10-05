@@ -17,14 +17,7 @@ import { AdminController } from './admin.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Group,
-      User,
-      Server,
-      UserGroup,
-      ServerGroup,
-      UserServerAccess,
-    ]),
+    TypeOrmModule.forFeature([Group, User, Server, UserGroup, ServerGroup, UserServerAccess]),
     TailscaleModule,
     GatewayIpcModule,
     ConsoleModule,

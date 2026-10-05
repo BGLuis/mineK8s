@@ -182,7 +182,11 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     it('GET :id/players delega para o serviço', async () => {
       mockServersService.getPlayers.mockResolvedValue({ online: 0, max: 20, players: [] });
 
-      await expect(controller.players('srv-1')).resolves.toEqual({ online: 0, max: 20, players: [] });
+      await expect(controller.players('srv-1')).resolves.toEqual({
+        online: 0,
+        max: 20,
+        players: [],
+      });
       expect(mockServersService.getPlayers).toHaveBeenCalledWith('srv-1');
     });
   });
@@ -199,7 +203,9 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     it('POST :id/restart delega para o serviço', async () => {
       mockServersService.restart.mockResolvedValue({ message: 'Instance restarting' });
 
-      await expect(controller.restart('srv-1')).resolves.toEqual({ message: 'Instance restarting' });
+      await expect(controller.restart('srv-1')).resolves.toEqual({
+        message: 'Instance restarting',
+      });
     });
   });
 

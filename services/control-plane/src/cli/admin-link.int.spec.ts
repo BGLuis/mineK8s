@@ -4,7 +4,10 @@ import { DataSource, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '../auth/jwt.service';
 import { User } from '../database/entities';
-import { createIntegrationDataSource, describeWithDatabase } from '../database/testing/integration-datasource';
+import {
+  createIntegrationDataSource,
+  describeWithDatabase,
+} from '../database/testing/integration-datasource';
 import { AdminLinkError, AdminLinkService } from './admin-link.service';
 
 /** The command and the panel login against the same real Postgres, so a link written here is what login reads. */
@@ -68,15 +71,17 @@ describeWithDatabase('admin:link against a real Postgres (#131)', () => {
   });
 
   it('leaves the database untouched when the nickname is unknown', async () => {
-    await expect(link.link({ nick: 'Ghost', tailscaleUserId: ADMIN_TS_ID })).rejects.toThrow(AdminLinkError);
+    await expect(link.link({ nick: 'Ghost', tailscaleUserId: ADMIN_TS_ID })).rejects.toThrow(
+      AdminLinkError,
+    );
 
     expect(await users.countBy({ tailscale_user_id: ADMIN_TS_ID })).toBe(0);
   });
 
   it('leaves the database untouched when the ID already belongs to another user', async () => {
-    await expect(link.link({ nick: 'LegacyAdmin', tailscaleUserId: '777', force: true })).rejects.toThrow(
-      /already linked to "Alex"/,
-    );
+    await expect(
+      link.link({ nick: 'LegacyAdmin', tailscaleUserId: '777', force: true }),
+    ).rejects.toThrow(/already linked to "Alex"/);
 
     expect(await tailscaleIdOf('LegacyAdmin')).toBeNull();
     expect(await tailscaleIdOf('Alex')).toBe('777');
@@ -92,7 +97,9 @@ describeWithDatabase('admin:link against a real Postgres (#131)', () => {
   });
 
   it('keeps an existing link unless forced, then replaces it', async () => {
-    await expect(link.link({ nick: 'Alex', tailscaleUserId: '888' })).rejects.toThrow(/pass --force/);
+    await expect(link.link({ nick: 'Alex', tailscaleUserId: '888' })).rejects.toThrow(
+      /pass --force/,
+    );
     expect(await tailscaleIdOf('Alex')).toBe('777');
 
     await link.link({ nick: 'Alex', tailscaleUserId: '888', force: true });

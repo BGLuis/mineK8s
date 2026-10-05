@@ -26,7 +26,8 @@ export class TasksController {
 
   @Get(':id')
   @ApiOperation({
-    summary: 'Último estado conhecido de uma tarefa; permite retomar o progresso após recarregar a página',
+    summary:
+      'Último estado conhecido de uma tarefa; permite retomar o progresso após recarregar a página',
   })
   @ApiResponse({ status: 200, description: 'Mesmo formato do evento taskProgress de /ws/tasks' })
   @ApiResponse({ status: 404, description: 'Tarefa não encontrada' })

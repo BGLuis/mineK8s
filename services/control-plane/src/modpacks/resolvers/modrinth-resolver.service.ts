@@ -28,8 +28,8 @@ export interface ModrinthIndex {
   dependencies: {
     minecraft?: string;
     'fabric-loader'?: string;
-    'forge'?: string;
-    'neoforge'?: string;
+    forge?: string;
+    neoforge?: string;
     'quilt-loader'?: string;
     [key: string]: string | undefined;
   };
@@ -56,7 +56,9 @@ export class ModrinthResolverService {
     const data = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
 
     if (!data || data.game !== 'minecraft') {
-      throw new BadRequestException('Invalid Modrinth manifest or incompatible game (game != "minecraft")');
+      throw new BadRequestException(
+        'Invalid Modrinth manifest or incompatible game (game != "minecraft")',
+      );
     }
 
     if (!Array.isArray(data.files)) {
@@ -79,9 +81,7 @@ export class ModrinthResolverService {
 
       // Descarte inegociável de mods client-only (Sodium, Iris, Indium, etc.)
       if (serverEnv === 'unsupported') {
-        this.logger.debug(
-          `[RF-STO-11] Descartando mod com env.server=unsupported: ${file.path}`,
-        );
+        this.logger.debug(`[RF-STO-11] Descartando mod com env.server=unsupported: ${file.path}`);
         discardedFiles.push(file);
       } else {
         // "required", "optional" ou indefinido -> aceito para download do servidor
@@ -141,7 +141,11 @@ export class ModrinthResolverService {
             zipfile.openReadStream(entry, (streamErr, readStream) => {
               if (streamErr || !readStream) {
                 zipfile.close();
-                return reject(new BadRequestException(`Failed to read modrinth.index.json: ${streamErr?.message}`));
+                return reject(
+                  new BadRequestException(
+                    `Failed to read modrinth.index.json: ${streamErr?.message}`,
+                  ),
+                );
               }
 
               const chunks: Buffer[] = [];
@@ -183,7 +187,9 @@ export class ModrinthResolverService {
     return new Promise((resolve, reject) => {
       yauzl.fromBuffer(mrpackBuffer, { lazyEntries: true }, (err, zipfile) => {
         if (err || !zipfile) {
-          return reject(new BadRequestException(`Failed to open .mrpack for overrides: ${err?.message}`));
+          return reject(
+            new BadRequestException(`Failed to open .mrpack for overrides: ${err?.message}`),
+          );
         }
 
         const extractedPaths: string[] = [];

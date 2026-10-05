@@ -1,6 +1,8 @@
 use tracing::warn;
 
-use crate::routing::{AccessPolicy, CachedServerRoute, RoutingModel, ServerInstanceStatus, UpstreamAddr};
+use crate::routing::{
+    AccessPolicy, CachedServerRoute, RoutingModel, ServerInstanceStatus, UpstreamAddr,
+};
 
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RouteUpdateEvent {

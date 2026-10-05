@@ -87,7 +87,10 @@ export class MinecraftSlpProbeService implements GameProbeProvider {
           }
 
           let offset = 0;
-          const { value: packetLength, bytesRead: lenBytes } = this.decodeVarInt(responseBuffer, offset);
+          const { value: packetLength, bytesRead: lenBytes } = this.decodeVarInt(
+            responseBuffer,
+            offset,
+          );
           offset += lenBytes;
 
           if (responseBuffer.length < offset + packetLength) {
@@ -105,7 +108,10 @@ export class MinecraftSlpProbeService implements GameProbeProvider {
             return;
           }
 
-          const { value: jsonLength, bytesRead: jsonLenBytes } = this.decodeVarInt(responseBuffer, offset);
+          const { value: jsonLength, bytesRead: jsonLenBytes } = this.decodeVarInt(
+            responseBuffer,
+            offset,
+          );
           offset += jsonLenBytes;
 
           if (responseBuffer.length < offset + jsonLength) {

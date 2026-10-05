@@ -11,10 +11,7 @@ import { HealthBotSchedulerService } from './health-bot-scheduler.service';
 import { HealthBotController } from './health-bot.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Server]),
-    AppConfigModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Server]), AppConfigModule],
   controllers: [HealthBotController],
   providers: [
     MinecraftSlpProbeService,

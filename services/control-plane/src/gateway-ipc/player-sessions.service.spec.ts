@@ -34,7 +34,12 @@ describe('PlayerSessionsService', () => {
     sessions.connected(event({}));
 
     expect(sessions.list('srv-1')).toEqual([
-      { sessionId: 's1', nick: 'Steve', ip: '100.64.0.2', connectedAt: new Date('2026-10-03T12:00:00Z') },
+      {
+        sessionId: 's1',
+        nick: 'Steve',
+        ip: '100.64.0.2',
+        connectedAt: new Date('2026-10-03T12:00:00Z'),
+      },
     ]);
   });
 

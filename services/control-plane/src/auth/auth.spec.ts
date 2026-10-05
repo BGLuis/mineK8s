@@ -203,7 +203,12 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
   });
 
   describe('AuthService.createSession (#91: identity from WhoIs, never from the request)', () => {
-    const admin = { id: 'u-admin', minecraft_nick: 'Boss', role: 'ADMIN', tailscale_user_id: '4242' } as User;
+    const admin = {
+      id: 'u-admin',
+      minecraft_nick: 'Boss',
+      role: 'ADMIN',
+      tailscale_user_id: '4242',
+    } as User;
 
     beforeEach(() => mockUsers.push(admin));
 
@@ -214,14 +219,24 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
 
       expect(tailscaleDriver.queryWhoIs).toHaveBeenCalledWith('100.101.102.103');
       expect(session.user).toBe(admin);
-      expect(jwtService.verify(session.access_token)).toMatchObject({ sub: 'u-admin', role: 'ADMIN' });
+      expect(jwtService.verify(session.access_token)).toMatchObject({
+        sub: 'u-admin',
+        role: 'ADMIN',
+      });
     });
 
     it('refuses a tagged device even when its shared owner id is linked to an admin (#136)', async () => {
-      mockUsers.push({ id: 'u-tagged', minecraft_nick: 'Tagged', role: 'ADMIN', tailscale_user_id: '77' } as User);
+      mockUsers.push({
+        id: 'u-tagged',
+        minecraft_nick: 'Tagged',
+        role: 'ADMIN',
+        tailscale_user_id: '77',
+      } as User);
       tailscaleDriver.queryWhoIs.mockResolvedValue(taggedDevice('77'));
 
-      await expect(authService.createSession('100.101.102.200')).rejects.toThrow(/Tagged devices cannot open/);
+      await expect(authService.createSession('100.101.102.200')).rejects.toThrow(
+        /Tagged devices cannot open/,
+      );
     });
 
     it('refuses an address that is not on the tailnet', async () => {
@@ -239,10 +254,17 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
     });
 
     it('refuses an identity without a user id instead of matching unlinked accounts', async () => {
-      mockUsers.push({ id: 'u-unlinked', minecraft_nick: 'NoLink', role: 'ADMIN', tailscale_user_id: null } as User);
+      mockUsers.push({
+        id: 'u-unlinked',
+        minecraft_nick: 'NoLink',
+        role: 'ADMIN',
+        tailscale_user_id: null,
+      } as User);
       tailscaleDriver.queryWhoIs.mockResolvedValue(personalDevice(''));
 
-      await expect(authService.createSession('100.101.102.103')).rejects.toThrow(UnauthorizedException);
+      await expect(authService.createSession('100.101.102.103')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('fails closed with 503 when the Tailscale daemon cannot be asked', async () => {
@@ -286,11 +308,15 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
       };
 
       it('aceita o socket autenticado no handshake, sem procurar headers HTTP', async () => {
-        await expect(authGuard.canActivate(wsContext({ data: { user: { id: 'u-1' } } }))).resolves.toBe(true);
+        await expect(
+          authGuard.canActivate(wsContext({ data: { user: { id: 'u-1' } } })),
+        ).resolves.toBe(true);
       });
 
       it('recusa socket sem usuário do handshake', async () => {
-        await expect(authGuard.canActivate(wsContext({ data: {} }))).rejects.toThrow(UnauthorizedException);
+        await expect(authGuard.canActivate(wsContext({ data: {} }))).rejects.toThrow(
+          UnauthorizedException,
+        );
       });
     });
 
@@ -347,7 +373,7 @@ describe('Auth & RBAC Module (RF-ARQ-24, PR-15, L-01)', () => {
         const ctx: any = {
           getHandler: () => {},
           getClass: () => {},
-        getType: () => 'http',
+          getType: () => 'http',
           switchToHttp: () => ({ getRequest: () => req }),
         };
         return { req, ctx };

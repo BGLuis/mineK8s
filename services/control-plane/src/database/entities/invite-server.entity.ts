@@ -11,7 +11,11 @@ export class InviteServer {
   @PrimaryColumn({ type: 'uuid' })
   server_id: string;
 
-  @ManyToOne(() => Invite, (invite) => invite.invite_servers, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Invite,
+    (invite) => invite.invite_servers,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'invite_id' })
   invite: Invite;
 

@@ -35,9 +35,7 @@ export class LogNoiseFilter {
     const cleanMessage = this.sanitizeAnsi(rawMessage);
 
     // Se a mensagem for chat de jogador, preserva sempre
-    const isPlayerChat = this.CHAT_PATTERNS.some((pattern) =>
-      pattern.test(cleanMessage),
-    );
+    const isPlayerChat = this.CHAT_PATTERNS.some((pattern) => pattern.test(cleanMessage));
     if (isPlayerChat) {
       return false;
     }
@@ -67,9 +65,7 @@ export class LogNoiseFilter {
 
     // Tenta extrair timestamp no formato [HH:mm:ss] ou similar
     const timestampMatch = cleanLine.match(/^\[?(\d{2}:\d{2}:\d{2})\]?/);
-    const timestamp = timestampMatch
-      ? timestampMatch[1]
-      : new Date().toISOString();
+    const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString();
 
     return {
       id: lineId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

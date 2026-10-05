@@ -36,9 +36,7 @@ describe('LoggerRuleEngine', () => {
   });
 
   it('should handle multi-context rules', () => {
-    const engine = new LoggerRuleEngine(
-      'context=ServerA,ServerB;level=warn/context=*;level=info',
-    );
+    const engine = new LoggerRuleEngine('context=ServerA,ServerB;level=warn/context=*;level=info');
     expect(engine.shouldLog('info', 'ServerA')).toBe(false);
     expect(engine.shouldLog('warn', 'ServerA')).toBe(true);
     expect(engine.shouldLog('info', 'ServerB')).toBe(false);

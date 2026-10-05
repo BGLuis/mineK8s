@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Server } from '../database/entities/server.entity';
 import { RconConnectionPool } from '../rcon/pool/rcon-connection-pool';
-import {
-  CommandOptions,
-  ConsoleDriver,
-} from './console-driver.interface';
+import { CommandOptions, ConsoleDriver } from './console-driver.interface';
 
 @Injectable()
 export class MinecraftRconConsoleDriver implements ConsoleDriver {
@@ -54,10 +51,7 @@ export class MinecraftRconConsoleDriver implements ConsoleDriver {
   /**
    * Guarda L-08: save-all flush em mundos grandes com preset estendido de 60s
    */
-  public async saveFlush(
-    server: Server,
-    timeoutMs: number = 60000,
-  ): Promise<string> {
+  public async saveFlush(server: Server, timeoutMs: number = 60000): Promise<string> {
     return this.sendCommand(server, 'save-all flush', { timeoutMs });
   }
 
@@ -75,12 +69,16 @@ export class MinecraftRconConsoleDriver implements ConsoleDriver {
    * 2. stop (encerramento ordenado da JVM)
    */
   public async gracefulShutdown(server: Server): Promise<void> {
-    this.logger.log(`Iniciando graceful shutdown para o servidor [${server.subdomain}] via RCON (RF-ARQ-08)...`);
+    this.logger.log(
+      `Iniciando graceful shutdown para o servidor [${server.subdomain}] via RCON (RF-ARQ-08)...`,
+    );
     try {
       await this.saveFlush(server, 15000);
       this.logger.log(`save-all flush concluído com sucesso para [${server.subdomain}].`);
     } catch (err: any) {
-      this.logger.warn(`Aviso no save-all flush durante shutdown de [${server.subdomain}]: ${err.message}`);
+      this.logger.warn(
+        `Aviso no save-all flush durante shutdown de [${server.subdomain}]: ${err.message}`,
+      );
     }
 
     try {

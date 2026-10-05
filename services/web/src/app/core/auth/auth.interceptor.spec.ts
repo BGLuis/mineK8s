@@ -71,7 +71,9 @@ describe('authInterceptor', () => {
     tokens.set('still-valid');
     http.post('/api/auth/session', {}).subscribe({ error: () => undefined });
 
-    controller.expectOne('/api/auth/session').flush({}, { status: 401, statusText: 'Unauthorized' });
+    controller
+      .expectOne('/api/auth/session')
+      .flush({}, { status: 401, statusText: 'Unauthorized' });
 
     expect(tokens.token()).toBe('still-valid');
   });

@@ -41,7 +41,9 @@ export class ServerStateSubscriber implements EntitySubscriberInterface<Server> 
   }
 
   afterUpdate(event: UpdateEvent<Server>): void {
-    const changed = event.updatedColumns.some((column) => WATCHED_COLUMNS.includes(column.propertyName));
+    const changed = event.updatedColumns.some((column) =>
+      WATCHED_COLUMNS.includes(column.propertyName),
+    );
     if (!changed) {
       return;
     }

@@ -21,7 +21,10 @@ describe('SkinsProvisionerService (RF-ARQ-22, Armadilha E-05)', () => {
     await fs.promises.mkdir(modsDir, { recursive: true });
 
     // Simula a presença indevida de CustomSkinLoader e Sodium
-    await fs.promises.writeFile(path.join(modsDir, 'CustomSkinLoader_Fabric-14.15.jar'), 'dummy-csl');
+    await fs.promises.writeFile(
+      path.join(modsDir, 'CustomSkinLoader_Fabric-14.15.jar'),
+      'dummy-csl',
+    );
     await fs.promises.writeFile(path.join(modsDir, 'sodium-fabric-0.5.8.jar'), 'dummy-sodium');
     await fs.promises.writeFile(path.join(modsDir, 'valid-server-mod.jar'), 'dummy-valid');
 

@@ -29,7 +29,11 @@ describe('ServerStateSubscriber', () => {
     expect(gateway.emitServerState).not.toHaveBeenCalled();
 
     subscriber.afterTransactionCommit({ queryRunner } as any);
-    expect(gateway.emitServerState).toHaveBeenCalledWith({ id: 'srv-1', status: 'READY', is_maintenance: false });
+    expect(gateway.emitServerState).toHaveBeenCalledWith({
+      id: 'srv-1',
+      status: 'READY',
+      is_maintenance: false,
+    });
 
     gateway.emitServerState.mockClear();
     const rolledBack = transaction();
@@ -63,6 +67,10 @@ describe('ServerStateSubscriber', () => {
       databaseEntity: { id: 'srv-1' },
     } as any);
 
-    expect(gateway.emitServerState).toHaveBeenCalledWith({ id: 'srv-1', status: 'READY', is_maintenance: true });
+    expect(gateway.emitServerState).toHaveBeenCalledWith({
+      id: 'srv-1',
+      status: 'READY',
+      is_maintenance: true,
+    });
   });
 });

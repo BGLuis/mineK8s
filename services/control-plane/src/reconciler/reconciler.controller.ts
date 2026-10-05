@@ -25,6 +25,11 @@ export class ReconcilerController {
   @ApiOperation({ summary: 'Get the last reconciliation cycle execution summary' })
   @ApiResponse({ status: 200, description: 'Last reconciliation summary' })
   async getStatus() {
-    return this.reconcilerService.getLastSummary() || { status: 'idle', message: 'No reconciliation run yet' };
+    return (
+      this.reconcilerService.getLastSummary() || {
+        status: 'idle',
+        message: 'No reconciliation run yet',
+      }
+    );
   }
 }

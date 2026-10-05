@@ -1,13 +1,6 @@
 import * as net from 'net';
-import {
-  RconPacketCodec,
-  RconPacketType,
-} from '../codec/rcon-packet.codec';
-import {
-  RconClient,
-  RconTimeoutException,
-  RconAuthenticationException,
-} from './rcon-client';
+import { RconPacketCodec, RconPacketType } from '../codec/rcon-packet.codec';
+import { RconClient, RconTimeoutException, RconAuthenticationException } from './rcon-client';
 
 describe('RconClient (RF-RCON-03, RF-RCON-04, RF-RCON-05, RF-RCON-06, RF-RCON-15, Guarda L-08)', () => {
   let server: net.Server;
@@ -109,9 +102,7 @@ describe('RconClient (RF-RCON-03, RF-RCON-04, RF-RCON-05, RF-RCON-06, RF-RCON-15
       autoReconnect: false,
     });
 
-    await expect(client.connect()).rejects.toThrow(
-      RconAuthenticationException,
-    );
+    await expect(client.connect()).rejects.toThrow(RconAuthenticationException);
     expect(client.isConnected()).toBe(false);
 
     client.destroy();
@@ -158,9 +149,7 @@ describe('RconClient (RF-RCON-03, RF-RCON-04, RF-RCON-05, RF-RCON-06, RF-RCON-15
 
     await client.connect();
 
-    await expect(client.sendCommand('hang_forever')).rejects.toThrow(
-      RconTimeoutException,
-    );
+    await expect(client.sendCommand('hang_forever')).rejects.toThrow(RconTimeoutException);
     expect(client.isConnected()).toBe(false);
 
     client.destroy();

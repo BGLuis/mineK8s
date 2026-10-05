@@ -100,9 +100,11 @@ describe('ServersService', () => {
 
     const mockLogStreamer = {
       getBuffer: jest.fn().mockReturnValue({
-        getHistory: jest.fn().mockReturnValue([
-          { id: '1', timestamp: '12:00:00', level: 'INFO', message: 'Server initialized' },
-        ]),
+        getHistory: jest
+          .fn()
+          .mockReturnValue([
+            { id: '1', timestamp: '12:00:00', level: 'INFO', message: 'Server initialized' },
+          ]),
       }),
     };
 
@@ -115,7 +117,9 @@ describe('ServersService', () => {
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
       publishRoute: jest.fn().mockResolvedValue(undefined),
-      routeTarget: jest.fn((server: any) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`),
+      routeTarget: jest.fn(
+        (server: any) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`,
+      ),
     };
 
     mockSlpProbeService = {
@@ -239,7 +243,9 @@ describe('ServersService', () => {
       await expect(service.getPlayers('srv-1')).resolves.toEqual({
         online: 1,
         max: 10,
-        players: [{ nick: 'Steve', ip: '100.64.0.2', connectedAt: new Date('2026-10-03T12:00:00Z') }],
+        players: [
+          { nick: 'Steve', ip: '100.64.0.2', connectedAt: new Date('2026-10-03T12:00:00Z') },
+        ],
       });
     });
 
@@ -271,7 +277,9 @@ describe('ServersService', () => {
     it('recusa reiniciar servidor parado, que deveria ser iniciado', async () => {
       serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub', state: 'STOPPED' } as any);
 
-      await expect(service.restart('srv-1')).rejects.toThrow(/Only a running server can be restarted/);
+      await expect(service.restart('srv-1')).rejects.toThrow(
+        /Only a running server can be restarted/,
+      );
       expect(mockK8sService.restartServer).not.toHaveBeenCalled();
     });
 
@@ -302,7 +310,11 @@ describe('ServersService', () => {
 
       await service.update('srv-1', { is_maintenance: true, sleep_timeout_minutes: 30 });
 
-      expect(server).toMatchObject({ is_maintenance: true, sleep_timeout_minutes: 30, auto_wake: true });
+      expect(server).toMatchObject({
+        is_maintenance: true,
+        sleep_timeout_minutes: 30,
+        auto_wake: true,
+      });
       expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
     });
 
@@ -322,7 +334,9 @@ describe('ServersService', () => {
     it('recusa mudar a política de um servidor publicado na internet', async () => {
       seed({ access_policy: 'INTERNET' });
 
-      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/unpublish it/);
+      await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(
+        /unpublish it/,
+      );
     });
 
     it('nova memória num servidor parado só reescreve o Deployment, sem ligá-lo', async () => {
@@ -369,7 +383,9 @@ describe('ServersService', () => {
       async (state) => {
         const server = seed({ state: state as any, allocated_memory_mb: 4096 });
 
-        await expect(service.update('srv-1', { allocated_memory_mb: 8192 })).rejects.toThrow(ConflictException);
+        await expect(service.update('srv-1', { allocated_memory_mb: 8192 })).rejects.toThrow(
+          ConflictException,
+        );
         expect(server.allocated_memory_mb).toBe(4096);
         expect(mockK8sService.applyDeployment).not.toHaveBeenCalled();
       },
@@ -411,9 +427,7 @@ describe('ServersService', () => {
       serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub' } as any);
       serversDb.set('srv-2', { id: 'srv-2', subdomain: 'lobby' } as any);
 
-      await expect(service.updateDomain('srv-1', 'lobby')).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(service.updateDomain('srv-1', 'lobby')).rejects.toThrow(ConflictException);
     });
   });
 
@@ -438,9 +452,9 @@ describe('ServersService', () => {
     });
 
     it('should throw NotFoundException if server does not exist', async () => {
-      await expect(
-        service.sendCommand('srv-missing', 'time set day'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.sendCommand('srv-missing', 'time set day')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -458,9 +472,7 @@ describe('ServersService', () => {
     });
 
     it('should throw NotFoundException if server does not exist', async () => {
-      await expect(service.getLogs('srv-missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.getLogs('srv-missing')).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -46,7 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let public_listen_addr = config.public_listen_addr;
 
     // Com CONTROL_PLANE_GRPC_URL o Gateway sincroniza rotas e publica sessões; sem ela roda isolado.
-    let control_plane_url = std::env::var("CONTROL_PLANE_GRPC_URL").ok().filter(|u| !u.is_empty());
+    let control_plane_url = std::env::var("CONTROL_PLANE_GRPC_URL")
+        .ok()
+        .filter(|u| !u.is_empty());
     let route_table = RouteTable::new();
     let (session_tx, session_rx) = mpsc::unbounded_channel();
     let (wake_tx, wake_rx) = mpsc::unbounded_channel::<String>();
@@ -76,7 +78,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(async move {
         info!("Iniciando servidor de telemetria em {}", metrics_addr);
-        if let Err(err) = telemetry_server.run(metrics_listener, telemetry_shutdown_rx).await {
+        if let Err(err) = telemetry_server
+            .run(metrics_listener, telemetry_shutdown_rx)
+            .await
+        {
             error!("Erro no servidor de telemetria: {}", err);
         }
     });
@@ -113,7 +118,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => None,
     };
 
-    if let Err(err) = server.run_dual(listener, public_listener, shutdown_rx).await {
+    if let Err(err) = server
+        .run_dual(listener, public_listener, shutdown_rx)
+        .await
+    {
         error!("Erro fatal no GatewayServer: {}", err);
     }
 

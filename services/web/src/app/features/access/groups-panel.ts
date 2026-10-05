@@ -2,14 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 
 import { AdminApi, Group } from '../../core/api';
-import {
-  DialogService,
-  McBanner,
-  McButton,
-  McDialog,
-  McTextField,
-  ToastService,
-} from '../../ui';
+import { DialogService, McBanner, McButton, McDialog, McTextField, ToastService } from '../../ui';
 import { apiErrorMessage } from '../join/api-error';
 import { AccessStore } from './access.store';
 import { ToggleChange, ToggleGroup, ToggleOption } from './toggle-group';

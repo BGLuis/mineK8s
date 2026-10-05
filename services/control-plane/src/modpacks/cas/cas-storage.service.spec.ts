@@ -34,7 +34,10 @@ describe('CasStorageService (RF-STO-05, L-07)', () => {
         }
         if (Array.isArray(options?.where)) {
           for (const cond of options.where) {
-            const found = inMemoryCas.find((e) => (cond.sha256 && e.sha256 === cond.sha256) || (cond.sha1 && e.sha1 === cond.sha1));
+            const found = inMemoryCas.find(
+              (e) =>
+                (cond.sha256 && e.sha256 === cond.sha256) || (cond.sha1 && e.sha1 === cond.sha1),
+            );
             if (found) return found;
           }
         }

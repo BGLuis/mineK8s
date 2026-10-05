@@ -57,7 +57,9 @@ describe('isForceableDeleteError', () => {
 
 describe('formatting', () => {
   it('shortens the SHA-256 to head and tail', () => {
-    expect(shortHash('3fa9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7c21')).toBe('3fa9…7c21');
+    expect(shortHash('3fa9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7c21')).toBe(
+      '3fa9…7c21',
+    );
     expect(shortHash('')).toBe('');
   });
 
@@ -69,7 +71,9 @@ describe('formatting', () => {
 
   it('sums the storage used by the history', () => {
     const backup = (sizeBytes: number) => ({ sizeBytes }) as ServerBackup;
-    expect(storageSummary([backup(1024 ** 3), backup(1024 ** 3)])).toBe('2 backups · 2,00 GB usados');
+    expect(storageSummary([backup(1024 ** 3), backup(1024 ** 3)])).toBe(
+      '2 backups · 2,00 GB usados',
+    );
   });
 });
 

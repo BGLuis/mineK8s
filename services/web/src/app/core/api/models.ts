@@ -347,7 +347,12 @@ export interface UserSummary {
   minecraftNick: string;
   realName: string | null;
   role: UserRole;
-  devices: { id: string; deviceName: string | null; status: DeviceStatus; lastSeenAt: string | null }[];
+  devices: {
+    id: string;
+    deviceName: string | null;
+    status: DeviceStatus;
+    lastSeenAt: string | null;
+  }[];
   groupIds: string[];
 }
 

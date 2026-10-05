@@ -21,7 +21,8 @@ class PingController {
 
 /** #94 over real HTTP: the SPA build and the API share one Nest app, wired the way main.ts wires them. */
 describe('SPA served by the control plane (#94)', () => {
-  const INDEX = '<!doctype html><html><body><mc-root></mc-root><script src="main-ABC.js" type="module"></script></body></html>';
+  const INDEX =
+    '<!doctype html><html><body><mc-root></mc-root><script src="main-ABC.js" type="module"></script></body></html>';
   let distDir: string;
   let app: NestExpressApplication;
 

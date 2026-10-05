@@ -65,7 +65,12 @@ impl ClientConnection {
 
         // 2. Timeout estrito de 5.0 segundos para a conclusão de Handshake + Status/Login (RF-GW-04)
         let timeout_duration = config.handshake_timeout;
-        match tokio::time::timeout(timeout_duration, self.read_handshake_and_next_packet(config)).await {
+        match tokio::time::timeout(
+            timeout_duration,
+            self.read_handshake_and_next_packet(config),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(_) => Err(GatewayError::HandshakeTimeout),
         }
@@ -183,9 +188,9 @@ impl ClientConnection {
                         }
                     } else {
                         // Se não for confiável, rejeitar conexão para evitar spoofing
-                        return Err(GatewayError::Protocol(
-                            ProtocolError::UntrustedProxy(self.peer_addr.ip()),
-                        ));
+                        return Err(GatewayError::Protocol(ProtocolError::UntrustedProxy(
+                            self.peer_addr.ip(),
+                        )));
                     }
                     return Ok(());
                 }

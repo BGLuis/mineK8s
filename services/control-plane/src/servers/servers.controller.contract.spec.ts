@@ -93,7 +93,11 @@ describe('ServersController - response contract (#93)', () => {
     const detail = await controller.findOne('srv-1');
 
     expect(detail.access_policy).toBe('INTERNET');
-    expect(detail.settings).toMatchObject({ online_mode: true, rcon_port: 25575, enable_rcon: true });
+    expect(detail.settings).toMatchObject({
+      online_mode: true,
+      rcon_port: 25575,
+      enable_rcon: true,
+    });
     expectNoRconPassword(detail);
   });
 

@@ -9,7 +9,13 @@ const invalidFields = async (body: object) =>
 
 describe('UpdateServerDto', () => {
   it('aceita atualização parcial dentro dos limites da criação', async () => {
-    expect(await invalidFields({ sleep_timeout_minutes: 1440, auto_wake: false, access_policy: 'PUBLIC' })).toEqual([]);
+    expect(
+      await invalidFields({
+        sleep_timeout_minutes: 1440,
+        auto_wake: false,
+        access_policy: 'PUBLIC',
+      }),
+    ).toEqual([]);
   });
 
   it('recusa timeout fora de 0 a 1440 minutos', async () => {

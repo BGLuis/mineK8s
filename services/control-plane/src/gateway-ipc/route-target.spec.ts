@@ -32,17 +32,38 @@ describe('target_ip_port igual em todas as origens de rota (#137)', () => {
     };
     const emptyRepo = { find: jest.fn(async () => []) };
     gatewayIpc = new GatewayIpcService(
-      serverRepo as any, emptyRepo as any, emptyRepo as any, emptyRepo as any, emptyRepo as any,
-      undefined, { startServer: jest.fn() } as any, undefined, config,
+      serverRepo as any,
+      emptyRepo as any,
+      emptyRepo as any,
+      emptyRepo as any,
+      emptyRepo as any,
+      undefined,
+      { startServer: jest.fn() } as any,
+      undefined,
+      config,
     );
     events = [];
     gatewayIpc.getRouteUpdatesStream().subscribe((event) => events.push(event));
   });
 
   it('aponta para o Service mc-<subdomínio> no namespace configurado, na porta alocada', async () => {
-    const reconciler = new ReconcilerService({} as any, {} as any, config, {} as any, {} as any, gatewayIpc);
+    const reconciler = new ReconcilerService(
+      {} as any,
+      {} as any,
+      config,
+      {} as any,
+      {} as any,
+      gatewayIpc,
+    );
     const servers = new ServersService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, undefined, gatewayIpc,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      undefined,
+      gatewayIpc,
     );
 
     const snapshot = await gatewayIpc.getInitialRoutingSnapshot();

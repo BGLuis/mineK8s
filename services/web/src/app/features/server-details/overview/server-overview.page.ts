@@ -389,7 +389,10 @@ export class ServerOverviewPage {
       ) {
         return;
       }
-      if (Object.keys(changes.patch).length > 0 && !(await this.saveSettings(server.id, changes.patch))) {
+      if (
+        Object.keys(changes.patch).length > 0 &&
+        !(await this.saveSettings(server.id, changes.patch))
+      ) {
         return;
       }
       this.initial.update((initial) => initial && { ...initial, ...this.patchedFields() });

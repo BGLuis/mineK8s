@@ -55,7 +55,8 @@ export class CreateInviteDto {
   expiresInDays?: number = 7;
 
   @ApiProperty({
-    description: 'Lista de IDs de grupos atribuídos automaticamente ao usuário resgatante (RF-TS-03)',
+    description:
+      'Lista de IDs de grupos atribuídos automaticamente ao usuário resgatante (RF-TS-03)',
     type: [String],
     example: ['b1a95e7c-88eb-4b2a-b60f-21f4df463e2a'],
     required: false,

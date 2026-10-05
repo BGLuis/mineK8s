@@ -18,9 +18,7 @@ export class RconConnectionPool implements OnModuleDestroy {
    * Obtém conexão existente ou cria e autentica uma nova para o servidor (RF-RCON-03).
    * Resolução de DNS ClusterIP e credenciais de banco (PR-14).
    */
-  public async getOrCreateConnection(
-    server: Server,
-  ): Promise<RconClient> {
+  public async getOrCreateConnection(server: Server): Promise<RconClient> {
     const existing = this.clients.get(server.id);
     if (existing && existing.isConnected()) {
       return existing;
@@ -33,20 +31,15 @@ export class RconConnectionPool implements OnModuleDestroy {
 
     const namespace = this.configService.kubernetes.namespace || 'minekubernetes';
     const serviceName = `mc-${server.subdomain}`;
-    
+
     // Suporte para homelab / mock k8s rodando fora do cluster
     const isMock = this.configService.kubernetes.useMockDriver;
-    const host = isMock
-      ? '127.0.0.1'
-      : `${serviceName}.${namespace}.svc.cluster.local`;
+    const host = isMock ? '127.0.0.1' : `${serviceName}.${namespace}.svc.cluster.local`;
 
     const port = server.minecraft_settings?.rcon_port || 25575;
-    const password =
-      server.minecraft_settings?.rcon_password || 'minek8s-rcon-default';
+    const password = server.minecraft_settings?.rcon_password || 'minek8s-rcon-default';
 
-    this.logger.log(
-      `Criando nova conexão RCON no pool para [${server.id}] ${host}:${port}`,
-    );
+    this.logger.log(`Criando nova conexão RCON no pool para [${server.id}] ${host}:${port}`);
 
     const client = new RconClient({
       serverId: server.id,

@@ -35,11 +35,17 @@ async fn test_client_close_terminates_upstream_and_deregisters_session() {
         // 1. Ler o Handshake e LoginStart reinjetados pelo Gateway
         let mut buf = [0u8; 512];
         let n = stream.read(&mut buf).await.unwrap();
-        assert!(n > 0, "Deveria ter recebido replay de Handshake e LoginStart");
+        assert!(
+            n > 0,
+            "Deveria ter recebido replay de Handshake e LoginStart"
+        );
 
         // 2. Aguardar que o cliente feche o outro lado do pipe
         let n_after_client_close = stream.read(&mut buf).await.unwrap_or(0);
-        assert_eq!(n_after_client_close, 0, "Upstream deveria receber EOF quando o cliente encerra");
+        assert_eq!(
+            n_after_client_close, 0,
+            "Upstream deveria receber EOF quando o cliente encerra"
+        );
         upstream_closed_clone.store(true, Ordering::SeqCst);
     });
 
@@ -104,14 +110,21 @@ async fn test_client_close_terminates_upstream_and_deregisters_session() {
 
     // Aguardar o proxy registrar a sessão
     sleep(Duration::from_millis(50)).await;
-    assert_eq!(session_mgr.active_count(), 1, "Sessão deve estar registrada no DashMap");
+    assert_eq!(
+        session_mgr.active_count(),
+        1,
+        "Sessão deve estar registrada no DashMap"
+    );
 
     // Fechar explicitamente o socket do cliente
     drop(client_stream);
 
     // Aguardar o teardown simétrico do proxy
     upstream_task.await.unwrap();
-    assert!(upstream_closed.load(Ordering::SeqCst), "Upstream deve ter sido fechado");
+    assert!(
+        upstream_closed.load(Ordering::SeqCst),
+        "Upstream deve ter sido fechado"
+    );
 
     sleep(Duration::from_millis(50)).await;
     assert_eq!(
@@ -362,14 +375,26 @@ async fn test_anti_cloning_session_eviction() {
 
     // 1. Cliente 1 conecta com nick "Steve"
     let mut client1 = tokio::net::TcpStream::connect(gateway_addr).await.unwrap();
-    send_login(&mut client1, gateway_addr.port(), "survival.mine.lan", "Steve").await;
+    send_login(
+        &mut client1,
+        gateway_addr.port(),
+        "survival.mine.lan",
+        "Steve",
+    )
+    .await;
 
     sleep(Duration::from_millis(50)).await;
     assert_eq!(session_mgr.active_count(), 1, "Sessão 1 deve estar ativa");
 
     // 2. Cliente 2 conecta com o mesmo nick "Steve"
     let mut client2 = tokio::net::TcpStream::connect(gateway_addr).await.unwrap();
-    send_login(&mut client2, gateway_addr.port(), "survival.mine.lan", "Steve").await;
+    send_login(
+        &mut client2,
+        gateway_addr.port(),
+        "survival.mine.lan",
+        "Steve",
+    )
+    .await;
 
     sleep(Duration::from_millis(50)).await;
 
@@ -379,7 +404,11 @@ async fn test_anti_cloning_session_eviction() {
     assert_eq!(n, 0, "Cliente 1 deve ter sido despejado e desconectado");
 
     // Total de sessões ativas deve permanecer 1 (apenas a nova)
-    assert_eq!(session_mgr.active_count(), 1, "Apenas a sessão mais recente deve estar ativa");
+    assert_eq!(
+        session_mgr.active_count(),
+        1,
+        "Apenas a sessão mais recente deve estar ativa"
+    );
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
@@ -410,4 +439,3 @@ async fn send_login(stream: &mut tokio::net::TcpStream, port: u16, host: &str, n
 
     stream.write_all(&wire).await.unwrap();
 }
-

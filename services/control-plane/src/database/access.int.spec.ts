@@ -17,7 +17,10 @@ import {
   UserGroup,
   UserServerAccess,
 } from './entities';
-import { createIntegrationDataSource, describeWithDatabase } from './testing/integration-datasource';
+import {
+  createIntegrationDataSource,
+  describeWithDatabase,
+} from './testing/integration-datasource';
 
 /** Consultas e relações do TypeORM contra um Postgres real; o resto da suíte usa repositórios falsos. */
 describeWithDatabase('Acesso e convites contra Postgres real', () => {
@@ -35,32 +38,74 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
     const repo = <T extends object>(entity: new () => T) => ds.getRepository(entity);
     const engine = new AccessDecisionEngineService();
     admin = new AdminService(
-      repo(Group), repo(User), repo(Server), repo(UserGroup), repo(ServerGroup), repo(UserServerAccess),
-      engine, {} as any, {} as any,
+      repo(Group),
+      repo(User),
+      repo(Server),
+      repo(UserGroup),
+      repo(ServerGroup),
+      repo(UserServerAccess),
+      engine,
+      {} as any,
+      {} as any,
     );
     invites = new InvitesService(
-      repo(Invite), repo(InviteGroup), repo(InviteServer), repo(User), repo(UserGroup),
-      repo(UserServerAccess), repo(TailscaleDevice), {} as any, repo(Server),
+      repo(Invite),
+      repo(InviteGroup),
+      repo(InviteServer),
+      repo(User),
+      repo(UserGroup),
+      repo(UserServerAccess),
+      repo(TailscaleDevice),
+      {} as any,
+      repo(Server),
     );
     sessions = new PlayerSessionsService();
     gatewayIpc = new GatewayIpcService(
-      repo(Server), repo(User), repo(ServerGroup), repo(UserServerAccess), repo(UserGroup),
-      undefined, undefined, sessions, { kubernetes: { namespace: 'minekubernetes' } } as any,
+      repo(Server),
+      repo(User),
+      repo(ServerGroup),
+      repo(UserServerAccess),
+      repo(UserGroup),
+      undefined,
+      undefined,
+      sessions,
+      { kubernetes: { namespace: 'minekubernetes' } } as any,
     );
 
-    const server = (name: string, access_policy: Server['access_policy'], extra: Partial<Server> = {}) =>
+    const server = (
+      name: string,
+      access_policy: Server['access_policy'],
+      extra: Partial<Server> = {},
+    ) =>
       repo(Server).save(
-        repo(Server).create({ name, subdomain: name.toLowerCase(), server_type: 'PAPER', game_version: '1.20.4', access_policy, ...extra }),
+        repo(Server).create({
+          name,
+          subdomain: name.toLowerCase(),
+          server_type: 'PAPER',
+          game_version: '1.20.4',
+          access_policy,
+          ...extra,
+        }),
       );
     const pub = await server('Publico', 'PUBLIC');
     const grp = await server('DoGrupo', 'GROUP');
     const outro = await server('OutroGrupo', 'GROUP');
     const indiv = await server('Individual', 'INDIVIDUAL');
     const manut = await server('Manutencao', 'GROUP', { is_maintenance: true });
-    Object.assign(ids, { pub: pub.id, grp: grp.id, outro: outro.id, indiv: indiv.id, manut: manut.id });
+    Object.assign(ids, {
+      pub: pub.id,
+      grp: grp.id,
+      outro: outro.id,
+      indiv: indiv.id,
+      manut: manut.id,
+    });
 
-    const steve = await repo(User).save(repo(User).create({ minecraft_nick: 'Steve', real_name: 'Steve S', role: 'PLAYER' }));
-    const alex = await repo(User).save(repo(User).create({ minecraft_nick: 'Alex', role: 'ADMIN' }));
+    const steve = await repo(User).save(
+      repo(User).create({ minecraft_nick: 'Steve', real_name: 'Steve S', role: 'PLAYER' }),
+    );
+    const alex = await repo(User).save(
+      repo(User).create({ minecraft_nick: 'Alex', role: 'ADMIN' }),
+    );
     ids.steve = steve.id;
     ids.alex = alex.id;
 
@@ -75,7 +120,12 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
     ]);
     await repo(UserServerAccess).save({ user_id: steve.id, server_id: indiv.id });
     await repo(TailscaleDevice).save(
-      repo(TailscaleDevice).create({ user_id: steve.id, tailscale_tag: 'tag:mc-player-steve', device_name: 'PC', status: 'ACTIVE' }),
+      repo(TailscaleDevice).create({
+        user_id: steve.id,
+        tailscale_tag: 'tag:mc-player-steve',
+        device_name: 'PC',
+        status: 'ACTIVE',
+      }),
     );
   });
 
@@ -89,7 +139,9 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
     expect(users.map((u) => u.minecraftNick)).toEqual(['Alex', 'Steve']);
     const steve = users.find((u) => u.minecraftNick === 'Steve')!;
     expect(steve.groupIds).toEqual([ids.amigos]);
-    expect(steve.devices).toEqual([expect.objectContaining({ deviceName: 'PC', status: 'ACTIVE' })]);
+    expect(steve.devices).toEqual([
+      expect.objectContaining({ deviceName: 'PC', status: 'ACTIVE' }),
+    ]);
   });
 
   it('listAccessibleServers aplica as regras do gateway sobre dados reais', async () => {
@@ -120,7 +172,11 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
     await gatewayIpc.publishRoute(ids.manut);
     await gatewayIpc.publishRoute(ids.indiv);
 
-    expect(events[0]).toMatchObject({ access_policy: 'GROUP', allowed_group_ids: [ids.amigos], allowed_user_ids: [] });
+    expect(events[0]).toMatchObject({
+      access_policy: 'GROUP',
+      allowed_group_ids: [ids.amigos],
+      allowed_user_ids: [],
+    });
     expect(events[1]).toMatchObject({ access_policy: 'MAINTENANCE' });
     expect(events[2]).toMatchObject({ access_policy: 'INDIVIDUAL', allowed_user_ids: [ids.steve] });
   });

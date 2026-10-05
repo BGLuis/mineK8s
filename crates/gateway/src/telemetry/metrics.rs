@@ -40,9 +40,8 @@ impl GatewayMetrics {
             "minecraft_gateway_connections_total",
             "Total acumulado de tentativas de conexão recebidas",
         );
-        let connections_total =
-            IntCounterVec::new(connections_opts, &["subdomain", "status"])
-                .expect("Falha ao criar connections_total");
+        let connections_total = IntCounterVec::new(connections_opts, &["subdomain", "status"])
+            .expect("Falha ao criar connections_total");
         registry
             .register(Box::new(connections_total.clone()))
             .expect("Falha ao registrar connections_total");
@@ -52,9 +51,8 @@ impl GatewayMetrics {
             "minecraft_gateway_bytes_transferred_total",
             "Total acumulado de bytes transferidos pelo proxy",
         );
-        let bytes_transferred_total =
-            IntCounterVec::new(bytes_opts, &["direction", "server_id"])
-                .expect("Falha ao criar bytes_transferred_total");
+        let bytes_transferred_total = IntCounterVec::new(bytes_opts, &["direction", "server_id"])
+            .expect("Falha ao criar bytes_transferred_total");
         registry
             .register(Box::new(bytes_transferred_total.clone()))
             .expect("Falha ao registrar bytes_transferred_total");
@@ -67,8 +65,8 @@ impl GatewayMetrics {
         .buckets(vec![
             0.001, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0, 2.5, 5.0,
         ]);
-        let handshake_duration_seconds =
-            Histogram::with_opts(handshake_opts).expect("Falha ao criar handshake_duration_seconds");
+        let handshake_duration_seconds = Histogram::with_opts(handshake_opts)
+            .expect("Falha ao criar handshake_duration_seconds");
         registry
             .register(Box::new(handshake_duration_seconds.clone()))
             .expect("Falha ao registrar handshake_duration_seconds");

@@ -43,9 +43,7 @@ export class AuthService implements OnModuleInit {
       if (adminCount === 0) {
         const configuredToken = this.configService.jwt.initialBootstrapToken;
         this.activeBootstrapToken =
-          configuredToken && configuredToken.trim().length > 0
-            ? configuredToken.trim()
-            : uuidv4();
+          configuredToken && configuredToken.trim().length > 0 ? configuredToken.trim() : uuidv4();
 
         this.logger.warn(
           `[SECURITY ALERT] No administrator found! INITIAL_BOOTSTRAP_TOKEN is: ${this.activeBootstrapToken}`,
@@ -122,7 +120,9 @@ export class AuthService implements OnModuleInit {
     // Every tagged node reports the same "tagged-devices" owner, so its userId names no person: a user
     // linked to it would be shared by every server and gateway on the tailnet.
     if (!identity.isOwner) {
-      throw new UnauthorizedException('Tagged devices cannot open a panel session; sign in from a personal device');
+      throw new UnauthorizedException(
+        'Tagged devices cannot open a panel session; sign in from a personal device',
+      );
     }
 
     const user = await this.validateTailscaleUser(identity.userId);
@@ -169,7 +169,9 @@ export class AuthService implements OnModuleInit {
     try {
       const identity = await this.tailscaleDriver.queryWhoIs(clientIp);
       if (identity && !identity.isOwner) {
-        this.logger.warn(`Admin bootstrapped without a Tailscale link: ${clientIp} is a tagged device`);
+        this.logger.warn(
+          `Admin bootstrapped without a Tailscale link: ${clientIp} is a tagged device`,
+        );
         return null;
       }
       return identity?.userId || null;

@@ -28,7 +28,10 @@ describe('TailscaleLocalDriver (RF-GW-08, RF-TS-05)', () => {
   });
 
   beforeAll((done) => {
-    socketPath = path.join(os.tmpdir(), `test-tailscale-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`);
+    socketPath = path.join(
+      os.tmpdir(),
+      `test-tailscale-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`,
+    );
 
     // Inicia um mock de Unix Domain Socket HTTP compatível com a LocalAPI do Tailscale
     mockServer = net.createServer((socket) => {
@@ -104,9 +107,7 @@ describe('TailscaleLocalDriver (RF-GW-08, RF-TS-05)', () => {
     const nonExistentPath = path.join(os.tmpdir(), `non-existent-${Date.now()}.sock`);
     driver.setSocketPath(nonExistentPath);
 
-    await expect(driver.queryWhoIs('100.64.0.99')).rejects.toThrow(
-      LocalSocketUnavailableException,
-    );
+    await expect(driver.queryWhoIs('100.64.0.99')).rejects.toThrow(LocalSocketUnavailableException);
 
     try {
       await driver.queryWhoIs('100.64.0.99');

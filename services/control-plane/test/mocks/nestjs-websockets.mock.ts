@@ -1,17 +1,13 @@
-export const WebSocketGateway =
-  (_options?: any) => (target: any) => target;
+export const WebSocketGateway = (_options?: any) => (target: any) => target;
 
-export const WebSocketServer =
-  () => (target: any, key: string | symbol) => {};
+export const WebSocketServer = () => (target: any, key: string | symbol) => {};
 
-export const SubscribeMessage =
-  (_message: string) => (_target: any, _key: string, desc: any) => desc;
+export const SubscribeMessage = (_message: string) => (_target: any, _key: string, desc: any) =>
+  desc;
 
-export const MessageBody =
-  () => (_target: any, _key: string, _idx: number) => {};
+export const MessageBody = () => (_target: any, _key: string, _idx: number) => {};
 
-export const ConnectedSocket =
-  () => (_target: any, _key: string, _idx: number) => {};
+export const ConnectedSocket = () => (_target: any, _key: string, _idx: number) => {};
 
 export interface OnGatewayConnection {
   handleConnection(client: any, ...args: any[]): any;

@@ -53,9 +53,7 @@ describe('TailscaleController', () => {
         usedCount: 0,
         status: 'Active',
       })),
-      listInvites: jest.fn(async () => [
-        { id: 'inv-1', token: 'token-abc', status: 'Active' },
-      ]),
+      listInvites: jest.fn(async () => [{ id: 'inv-1', token: 'token-abc', status: 'Active' }]),
       getInviteById: jest.fn(async (id) => ({
         id,
         token: 'token-abc',
@@ -82,8 +80,14 @@ describe('TailscaleController', () => {
     mockDevicesService = {
       listDevices: jest.fn(async () => [{ id: 'dev-1', status: 'ACTIVE' }]),
       getDeviceById: jest.fn(async (id: string) => ({ id, status: 'ACTIVE' })),
-      revokeDevice: jest.fn(async (id: string) => ({ message: 'Dispositivo revogado', deviceId: id })),
-      cleanInactiveDevices: jest.fn(async (days: number) => ({ removedCount: 2, removedDeviceIds: ['dev-old-1', 'dev-old-2'] })),
+      revokeDevice: jest.fn(async (id: string) => ({
+        message: 'Dispositivo revogado',
+        deviceId: id,
+      })),
+      cleanInactiveDevices: jest.fn(async (days: number) => ({
+        removedCount: 2,
+        removedDeviceIds: ['dev-old-1', 'dev-old-2'],
+      })),
     };
 
     controller = new TailscaleController(
@@ -121,7 +125,9 @@ describe('TailscaleController', () => {
   describe('Gestão de Convites (/api/tailscale/invites)', () => {
     it('deve delegar criação de convite para InvitesService', async () => {
       const dto = { name: 'Discord Amigos', maxUses: 3 };
-      const res = await controller.createInvite(dto as any, { user: { minecraft_nick: 'AdminSteve' } });
+      const res = await controller.createInvite(dto as any, {
+        user: { minecraft_nick: 'AdminSteve' },
+      });
       expect(res.name).toBe('Discord Amigos');
       expect(mockInvitesService.createInvite).toHaveBeenCalledWith(dto, 'AdminSteve');
     });

@@ -24,19 +24,13 @@ export class CloudflareDnsDriver implements IDnsDriver {
 
   constructor(private readonly configService?: AppConfigService) {
     this.apiToken =
-      process.env.CLOUDFLARE_API_TOKEN ||
-      this.configService?.cloudflare?.apiToken ||
-      '';
-    this.zoneId =
-      process.env.CLOUDFLARE_ZONE_ID ||
-      this.configService?.cloudflare?.zoneId ||
-      '';
+      process.env.CLOUDFLARE_API_TOKEN || this.configService?.cloudflare?.apiToken || '';
+    this.zoneId = process.env.CLOUDFLARE_ZONE_ID || this.configService?.cloudflare?.zoneId || '';
     this.rootDomain =
       process.env.CLOUDFLARE_ROOT_DOMAIN ||
       this.configService?.cloudflare?.rootDomain ||
       'minek8s.net';
-    this.baseUrl =
-      process.env.CLOUDFLARE_API_URL || 'https://api.cloudflare.com/client/v4';
+    this.baseUrl = process.env.CLOUDFLARE_API_URL || 'https://api.cloudflare.com/client/v4';
   }
 
   public setConfig(apiToken: string, zoneId: string, rootDomain?: string, baseUrl?: string): void {
@@ -81,7 +75,9 @@ export class CloudflareDnsDriver implements IDnsDriver {
 
       if (response.status === 429 && attempt < retries) {
         const retryAfterHeader = response.headers.get('retry-after');
-        const delaySeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : Math.pow(2, attempt);
+        const delaySeconds = retryAfterHeader
+          ? parseInt(retryAfterHeader, 10)
+          : Math.pow(2, attempt);
         this.logger.warn(
           `Cloudflare API 429 Rate Limit atingido em ${endpoint}. Aguardando ${delaySeconds}s (tentativa ${attempt + 1}/${retries})...`,
         );

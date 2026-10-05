@@ -25,7 +25,11 @@ export class ServerAuditLog {
   @Column({ type: 'uuid' })
   server_id: string;
 
-  @ManyToOne(() => Server, (server) => server.audit_logs, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Server,
+    (server) => server.audit_logs,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'server_id' })
   server: Server;
 

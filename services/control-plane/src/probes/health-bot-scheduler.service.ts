@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -120,7 +115,9 @@ export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModu
         const report = await this.probeServer(server.id);
         results.push(report);
       } catch (err: any) {
-        this.logger.warn(`Failed to execute health bot probe for ${server.subdomain}: ${err.message}`);
+        this.logger.warn(
+          `Failed to execute health bot probe for ${server.subdomain}: ${err.message}`,
+        );
       }
     }
 
@@ -161,8 +158,7 @@ export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModu
         totalChecks > 0 ? Math.round((successfulChecks / totalChecks) * 1000) / 10 : 100;
 
       const totalDurationSum = reports.reduce((acc, r) => acc + r.latencies.totalDurationMs, 0);
-      const avgTotalDurationMs =
-        totalChecks > 0 ? Math.round(totalDurationSum / totalChecks) : 0;
+      const avgTotalDurationMs = totalChecks > 0 ? Math.round(totalDurationSum / totalChecks) : 0;
 
       const latestReport = reports[0];
 

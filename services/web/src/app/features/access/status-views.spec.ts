@@ -1,5 +1,10 @@
 import { InviteStatus } from '../../core/api';
-import { DEVICE_STATUS_VIEW, INVITE_STATUS_VIEW, inviteUsageText, isInviteActionable } from './status-views';
+import {
+  DEVICE_STATUS_VIEW,
+  INVITE_STATUS_VIEW,
+  inviteUsageText,
+  isInviteActionable,
+} from './status-views';
 
 describe('invite status view', () => {
   it('maps every backend status to its pt-BR label and tone', () => {

@@ -63,9 +63,7 @@ export class TailscaleLocalDriver {
 
             if (res.statusCode !== 200) {
               return reject(
-                new Error(
-                  `Tailscale LocalAPI WhoIs retornou status ${res.statusCode}: ${rawData}`,
-                ),
+                new Error(`Tailscale LocalAPI WhoIs retornou status ${res.statusCode}: ${rawData}`),
               );
             }
 
@@ -77,9 +75,7 @@ export class TailscaleLocalDriver {
               );
               resolve(identity);
             } catch (err: any) {
-              reject(
-                new Error(`Failed to decode WhoIs JSON: ${err.message}`),
-              );
+              reject(new Error(`Failed to decode WhoIs JSON: ${err.message}`));
             }
           });
         },
@@ -142,10 +138,7 @@ export class TailscaleLocalDriver {
     }
   }
 
-  private mapWhoIsToIdentity(
-    whois: TailscaleWhoIsResponse,
-    queryIp: string,
-  ): NetworkIdentity {
+  private mapWhoIsToIdentity(whois: TailscaleWhoIsResponse, queryIp: string): NetworkIdentity {
     const node = whois.Node || {};
     const user = whois.UserProfile || {};
 

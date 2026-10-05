@@ -1,10 +1,6 @@
 import * as net from 'net';
 import { Logger } from '@nestjs/common';
-import {
-  RconPacket,
-  RconPacketCodec,
-  RconPacketType,
-} from '../codec/rcon-packet.codec';
+import { RconPacket, RconPacketCodec, RconPacketType } from '../codec/rcon-packet.codec';
 
 export class RconTimeoutException extends Error {
   constructor(message: string) {
@@ -104,9 +100,7 @@ export class RconClient {
     return new Promise<void>((resolve, reject) => {
       abort = reject;
       this.abortConnect = reject;
-      const socket = this.options.createSocket
-        ? this.options.createSocket()
-        : new net.Socket();
+      const socket = this.options.createSocket ? this.options.createSocket() : new net.Socket();
       this.socket = socket;
 
       const connectErrorHandler = (err: Error) => {
@@ -179,9 +173,7 @@ export class RconClient {
     });
 
     socket.on('error', (err: Error) => {
-      this.logger.warn(
-        `Erro de socket RCON [${this.options.serverId}]: ${err.message}`,
-      );
+      this.logger.warn(`Erro de socket RCON [${this.options.serverId}]: ${err.message}`);
     });
 
     socket.on('close', () => {
@@ -202,9 +194,7 @@ export class RconClient {
 
     return new Promise((resolve, reject) => {
       const authTimeout = setTimeout(() => {
-        this.forceResetSocket(
-          new RconTimeoutException('Timeout during RCON authentication'),
-        );
+        this.forceResetSocket(new RconTimeoutException('Timeout during RCON authentication'));
         reject(new RconTimeoutException('Timeout during RCON authentication'));
       }, this.options.defaultTimeoutMs);
 
@@ -219,9 +209,7 @@ export class RconClient {
             this.logger.error(
               `Autenticação RCON recusada para servidor ${this.options.serverId}: Senha inválida`,
             );
-            this.forceResetSocket(
-              new RconAuthenticationException('RCON password invalid'),
-            );
+            this.forceResetSocket(new RconAuthenticationException('RCON password invalid'));
             reject(new RconAuthenticationException('RCON password invalid'));
             return true;
           }
@@ -230,9 +218,7 @@ export class RconClient {
             clearTimeout(authTimeout);
             this.state = RconConnectionState.CONNECTED;
             this.reconnectAttempts = 0;
-            this.logger.log(
-              `RCON autenticado e conectado com sucesso [${this.options.serverId}]`,
-            );
+            this.logger.log(`RCON autenticado e conectado com sucesso [${this.options.serverId}]`);
             resolve();
             this.processQueue();
             return true;
@@ -260,9 +246,7 @@ export class RconClient {
         this.handleIncomingPacket(decoded.packet);
       }
     } catch (err) {
-      this.logger.error(
-        `Erro no processamento do fluxo RCON: ${(err as Error).message}`,
-      );
+      this.logger.error(`Erro no processamento do fluxo RCON: ${(err as Error).message}`);
       this.forceResetSocket(err as Error);
     }
   }
@@ -352,11 +336,7 @@ export class RconClient {
     this.state = RconConnectionState.DISCONNECTED;
     this.failPendingCommands(new Error('RCON connection closed'));
 
-    if (
-      !this.isDestroyed &&
-      this.options.autoReconnect &&
-      !wasAuthFailed
-    ) {
+    if (!this.isDestroyed && this.options.autoReconnect && !wasAuthFailed) {
       this.scheduleReconnect();
     }
   }

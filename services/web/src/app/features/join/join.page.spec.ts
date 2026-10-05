@@ -32,7 +32,9 @@ describe('JoinPage', () => {
   let http: HttpTestingController;
 
   async function setup(token: string | undefined) {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     http = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(JoinPage);
     fixture.componentRef.setInput('token', token);
@@ -49,7 +51,8 @@ describe('JoinPage', () => {
     input.dispatchEvent(new Event('input'));
   }
 
-  const submit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+  const submit = (el: HTMLElement) =>
+    el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
 
   afterEach(() => http.verify());
 
@@ -65,7 +68,10 @@ describe('JoinPage', () => {
 
     http
       .expectOne('/api/tailscale/invites/validate/tok')
-      .flush({ code: 'INVITE_EXPIRED', message: 'This invite has expired' }, { status: 400, statusText: 'Bad Request' });
+      .flush(
+        { code: 'INVITE_EXPIRED', message: 'This invite has expired' },
+        { status: 400, statusText: 'Bad Request' },
+      );
     await fixture.whenStable();
 
     expect(el.querySelector('h1')?.textContent).toContain('Este convite expirou');
@@ -112,7 +118,9 @@ describe('JoinPage', () => {
     http.expectOne('/api/tailscale/invites/validate/tok').flush(invite);
     await fixture.whenStable();
 
-    expect(el.textContent).toContain('Um administrador chamou você para jogar nos servidores dele.');
+    expect(el.textContent).toContain(
+      'Um administrador chamou você para jogar nos servidores dele.',
+    );
   });
 
   it('does not claim with a 2 character nick', async () => {
@@ -139,7 +147,11 @@ describe('JoinPage', () => {
     submit(el);
 
     const req = http.expectOne('/api/tailscale/claim');
-    expect(req.request.body).toEqual({ token: 'tok', realName: 'Bia Souza', minecraftNick: 'bia_mc' });
+    expect(req.request.body).toEqual({
+      token: 'tok',
+      realName: 'Bia Souza',
+      minecraftNick: 'bia_mc',
+    });
     req.flush(claimResult);
     await fixture.whenStable();
 

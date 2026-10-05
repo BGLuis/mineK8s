@@ -1,11 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('cas_objects')
 @Index(['lastAccessedAt'])
@@ -29,7 +22,12 @@ export class CasObjectEntity {
   @Column({ name: 'file_name', type: 'varchar', length: 255 })
   fileName: string;
 
-  @Column({ name: 'content_type', type: 'varchar', length: 100, default: 'application/java-archive' })
+  @Column({
+    name: 'content_type',
+    type: 'varchar',
+    length: 100,
+    default: 'application/java-archive',
+  })
   contentType: string;
 
   @Column({ name: 'storage_path', type: 'varchar', length: 500 })
