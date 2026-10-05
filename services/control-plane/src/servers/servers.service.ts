@@ -183,7 +183,9 @@ export class ServersService {
   async findOne(id: string): Promise<ServerDetailDto> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     if (!server) {
@@ -230,7 +232,9 @@ export class ServersService {
   }> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
@@ -298,7 +302,9 @@ export class ServersService {
   async update(id: string, dto: UpdateServerDto) {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
@@ -416,7 +422,9 @@ export class ServersService {
   }> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
@@ -464,7 +472,9 @@ export class ServersService {
   ): Promise<{ message: string; version: string; rolledBack: boolean }> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     if (!server) {
@@ -662,7 +672,9 @@ export class ServersService {
   }> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new NotFoundException(`Server with ID ${id} not found`);
@@ -722,7 +734,9 @@ export class ServersService {
   }> {
     const server = await this.serverRepo.findOne({
       where: { id },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new NotFoundException(`Server with ID ${id} not found`);

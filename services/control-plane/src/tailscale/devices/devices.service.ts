@@ -30,7 +30,9 @@ export class DevicesService {
    */
   async listDevices(): Promise<TailscaleDevice[]> {
     return this.deviceRepo.find({
-      relations: ['user'],
+      relations: {
+        user: true,
+      },
       order: { created_at: 'DESC' },
     });
   }
@@ -41,7 +43,9 @@ export class DevicesService {
   async getDeviceById(id: string): Promise<TailscaleDevice> {
     const device = await this.deviceRepo.findOne({
       where: { id },
-      relations: ['user'],
+      relations: {
+        user: true,
+      },
     });
 
     if (!device) {
@@ -57,7 +61,9 @@ export class DevicesService {
   async revokeDevice(deviceId: string): Promise<{ message: string; deviceId: string }> {
     const device = await this.deviceRepo.findOne({
       where: { id: deviceId },
-      relations: ['user'],
+      relations: {
+        user: true,
+      },
     });
 
     if (!device) {
@@ -75,7 +81,9 @@ export class DevicesService {
     // 2. Destrói forçosamente qualquer sessão ativa em todos os servidores do cluster (Smart Kick total)
     if (device.user) {
       const servers = await this.serverRepo.find({
-        relations: ['minecraft_settings'],
+        relations: {
+          minecraft_settings: true,
+        },
       });
 
       const banMessage = '§cDispositivo banido da rede privada pelo administrador.';

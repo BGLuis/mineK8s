@@ -107,7 +107,9 @@ export class GatewayIpcService {
     this.logger.log('Recebida requisição de snapshot inicial de rotas (GetInitialRoutingSnapshot)');
 
     const servers = await this.serverRepository.find({
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     const routes: RouteUpdateEvent[] = [];
@@ -129,7 +131,9 @@ export class GatewayIpcService {
   async publishRoute(serverId: string): Promise<void> {
     const server = await this.serverRepository.findOne({
       where: { id: serverId },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       return;
@@ -274,7 +278,9 @@ export class GatewayIpcService {
   async handleWakeRequest(serverId: string): Promise<void> {
     const server = await this.serverRepository.findOne({
       where: { id: serverId },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     if (!server) {

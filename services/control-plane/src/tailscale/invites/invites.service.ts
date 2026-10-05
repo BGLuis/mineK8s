@@ -108,7 +108,10 @@ export class InvitesService {
    */
   async listInvites(): Promise<InviteSummaryDto[]> {
     const invites = await this.inviteRepo.find({
-      relations: ['invite_groups', 'invite_servers'],
+      relations: {
+        invite_groups: true,
+        invite_servers: true,
+      },
       order: { created_at: 'DESC' },
     });
 
@@ -127,7 +130,10 @@ export class InvitesService {
   async getInviteById(id: string): Promise<InviteSummaryDto> {
     const invite = await this.inviteRepo.findOne({
       where: { id },
-      relations: ['invite_groups', 'invite_servers'],
+      relations: {
+        invite_groups: true,
+        invite_servers: true,
+      },
     });
 
     if (!invite) {
@@ -147,7 +153,10 @@ export class InvitesService {
   async revokeInvite(id: string): Promise<InviteSummaryDto> {
     const invite = await this.inviteRepo.findOne({
       where: { id },
-      relations: ['invite_groups', 'invite_servers'],
+      relations: {
+        invite_groups: true,
+        invite_servers: true,
+      },
     });
 
     if (!invite) {
@@ -170,7 +179,10 @@ export class InvitesService {
   async validateToken(token: string): Promise<InviteSummaryDto> {
     const invite = await this.inviteRepo.findOne({
       where: { token },
-      relations: ['invite_groups', 'invite_servers'],
+      relations: {
+        invite_groups: true,
+        invite_servers: true,
+      },
     });
 
     if (!invite) {
@@ -264,7 +276,10 @@ export class InvitesService {
     // Carrega o convite completo e suas permissões pré-vinculadas
     const invite = await this.inviteRepo.findOne({
       where: { token: dto.token },
-      relations: ['invite_groups', 'invite_servers'],
+      relations: {
+        invite_groups: true,
+        invite_servers: true,
+      },
     });
 
     if (!invite) {

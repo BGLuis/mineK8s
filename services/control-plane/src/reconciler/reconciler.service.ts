@@ -124,7 +124,9 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
 
     try {
       const servers = await this.serverRepo.find({
-        relations: ['minecraft_settings'],
+        relations: {
+          minecraft_settings: true,
+        },
       });
 
       let deployments: any[] = [];
