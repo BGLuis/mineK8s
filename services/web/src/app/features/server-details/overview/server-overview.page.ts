@@ -14,8 +14,7 @@ import { Router } from '@angular/router';
 import { catchError, firstValueFrom, map, of, switchMap } from 'rxjs';
 
 import { AdminApi } from '../../../core/api/admin.api';
-import { MockApi } from '../../../core/api/mock-api';
-import { OnlinePlayer, UpdateServerRequest } from '../../../core/api/models';
+import { OnlinePlayer, ServerState, UpdateServerRequest } from '../../../core/api/models';
 import { ServersApi } from '../../../core/api/servers.api';
 import {
   DialogService,
@@ -66,6 +65,9 @@ const TEXT_CLASSES = {
   warning: 'text-status-warning',
   danger: 'text-status-danger',
 } as const;
+
+/** States in which the control plane restarts the server to apply a new memory size. */
+const RUNNING_STATES: ReadonlySet<ServerState> = new Set(['READY', 'CRASHED']);
 
 function avatarColor(nick: string): string {
   let hash = 0;
@@ -159,7 +161,6 @@ function avatarColor(nick: string): string {
             <div class="flex flex-col gap-5">
               <div>
                 <mc-ram-slider [ngModel]="memory()" (ngModelChange)="memory.set($event)" />
-                <mc-no-api-tag class="mt-2" detail="memória" />
               </div>
 
               <div>
@@ -223,7 +224,6 @@ function avatarColor(nick: string): string {
 })
 export class ServerOverviewPage {
   protected readonly store = inject(ServerDetailStore);
-  private readonly mock = inject(MockApi);
   private readonly serversApi = inject(ServersApi);
   private readonly admin = inject(AdminApi);
   private readonly dialog = inject(DialogService);
@@ -382,12 +382,15 @@ export class ServerOverviewPage {
       if (changes.domain !== null && !(await this.saveDomain(server.id, changes.domain))) {
         return;
       }
-      if (Object.keys(changes.patch).length > 0 && !(await this.saveSettings(server.id, changes.patch))) {
+      if (
+        changes.patch.allocated_memory_mb !== undefined &&
+        RUNNING_STATES.has(server.state) &&
+        !(await this.confirmMemoryRestart(server.name))
+      ) {
         return;
       }
-      if (Object.keys(changes.memory).length > 0) {
-        await firstValueFrom(this.mock.updateServerSettings(server.id, changes.memory));
-        this.toast.warning('A memória ainda não é gravada no servidor (SEM API).');
+      if (Object.keys(changes.patch).length > 0 && !(await this.saveSettings(server.id, changes.patch))) {
+        return;
       }
       this.initial.update((initial) => initial && { ...initial, ...this.patchedFields() });
     } finally {
@@ -405,6 +408,15 @@ export class ServerOverviewPage {
     this.toast.success('Configurações salvas.');
     this.store.refresh();
     return true;
+  }
+
+  private confirmMemoryRestart(name: string): Promise<boolean> {
+    return this.dialog.confirm({
+      title: 'Reiniciar para trocar a memória?',
+      message: `A JVM só lê a memória ao ligar: "${name}" será salvo, desligado e ligado de novo. Quem estiver jogando cai.`,
+      confirmLabel: 'Salvar e reiniciar',
+      confirmVariant: 'warning',
+    });
   }
 
   /** Returns false when the user cancelled or the control plane rejected the change. */
