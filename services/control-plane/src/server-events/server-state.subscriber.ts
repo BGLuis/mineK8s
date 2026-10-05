@@ -54,7 +54,7 @@ export class ServerStateSubscriber implements EntitySubscriberInterface<Server> 
   afterTransactionCommit(event: TransactionCommitEvent): void {
     const events = this.pending.get(event.queryRunner) ?? [];
     this.pending.delete(event.queryRunner);
-    events.forEach((serverEvent) => this.gateway.emitServerState(serverEvent));
+    for (const serverEvent of events) this.gateway.emitServerState(serverEvent);
   }
 
   afterTransactionRollback(event: TransactionRollbackEvent): void {

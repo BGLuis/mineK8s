@@ -39,7 +39,9 @@ async function startServer(loaderOptions: protoLoader.Options, handlers: Record<
 
 describe('Contrato gRPC com o Gateway (loader do main.ts)', () => {
   const closers: Array<() => void> = [];
-  afterEach(() => closers.splice(0).forEach((close) => close()));
+  afterEach(() => {
+    for (const close of closers.splice(0)) close();
+  });
 
   it('entrega eventos de sessão em snake_case, com o timestamp como number', async () => {
     const received: any[] = [];

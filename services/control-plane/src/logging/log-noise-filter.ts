@@ -1,5 +1,12 @@
 import { LogEntry } from './circular-log-buffer';
 
+const ESC = '\u001b';
+const CSI = '\u009b';
+const ANSI_ESCAPE_SEQUENCE = new RegExp(
+  `[${ESC}${CSI}][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]`,
+  'g',
+);
+
 /**
  * Filtro de ruído RCON e sanitizador de logs do servidor Minecraft (RF-RCON-09).
  */
@@ -42,10 +49,7 @@ export class LogNoiseFilter {
    * Remove sequências de escape ANSI corrompidas ou de controle de terminal.
    */
   public static sanitizeAnsi(rawMessage: string): string {
-    return rawMessage.replace(
-      /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
-      '',
-    );
+    return rawMessage.replace(ANSI_ESCAPE_SEQUENCE, '');
   }
 
   /**

@@ -81,4 +81,4 @@ export interface ResolvePlayerResponse {
   is_mojang_verified: boolean;
 }
 
-export interface Empty {}
+export type Empty = Record<string, never>;
