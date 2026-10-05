@@ -17,6 +17,8 @@ import { User } from '@database/entities/user.entity';
 import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
+import { AppConfigService } from '@config/app-config.service';
+import { ManifestBuilder } from '@k8s/manifest-builder';
 import { NETWORK_IDENTITY_PROVIDER, NetworkIdentityProvider } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
@@ -75,6 +77,7 @@ export class GatewayIpcService {
     private readonly k8sService?: KubernetesService,
     @Optional()
     private readonly playerSessions?: PlayerSessionsService,
+    private readonly configService?: AppConfigService,
   ) {}
 
   /**
@@ -129,6 +132,14 @@ export class GatewayIpcService {
     this.broadcastRouteUpdate(await this.buildUpsertEvent(server));
   }
 
+  /** O destino de toda rota publicada ao Gateway, seja por UPSERT ou STATUS_CHANGE, sai daqui. */
+  routeTarget(server: Server): string {
+    if (!this.configService) {
+      throw new Error('GatewayIpcService needs AppConfigService to build route targets');
+    }
+    return ManifestBuilder.routeTarget(server, this.configService);
+  }
+
   private async buildUpsertEvent(server: Server): Promise<RouteUpdateEvent> {
     const serverGroups = await this.serverGroupRepository.find({
       where: { server_id: server.id },
@@ -137,14 +148,11 @@ export class GatewayIpcService {
       where: { server_id: server.id },
     });
 
-    const targetPort = 25565;
-    const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
-
     return {
       action: RouteAction.UPSERT,
       server_id: server.id,
       subdomain: server.subdomain,
-      target_ip_port: `${targetHost}:${targetPort}`,
+      target_ip_port: this.routeTarget(server),
       status: String(server.state || 'STOPPED').toUpperCase(),
       access_policy: effectiveAccessPolicy(server),
       allowed_group_ids: serverGroups.map((sg) => sg.group_id),
@@ -281,14 +289,11 @@ export class GatewayIpcService {
       server.last_player_active_at = new Date();
       await this.serverRepository.save(server);
 
-      const targetPort = 25565;
-      const targetHost = `mc-${server.subdomain}.minekubernetes.svc.cluster.local`;
-
       this.broadcastRouteUpdate({
         action: RouteAction.STATUS_CHANGE,
         server_id: server.id,
         subdomain: server.subdomain,
-        target_ip_port: `${targetHost}:${targetPort}`,
+        target_ip_port: this.routeTarget(server),
         status: 'STARTING',
         access_policy: server.access_policy || 'GROUP',
         allowed_group_ids: [],

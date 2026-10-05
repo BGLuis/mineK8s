@@ -114,6 +114,7 @@ describe('ServersService', () => {
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
       publishRoute: jest.fn().mockResolvedValue(undefined),
+      routeTarget: jest.fn((server: any) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`),
     };
 
     mockSlpProbeService = {
