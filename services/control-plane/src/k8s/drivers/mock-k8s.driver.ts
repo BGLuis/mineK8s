@@ -28,6 +28,12 @@ export class MockKubernetesDriver implements IKubernetesDriver {
     this.logger.debug(`[MockK8s] Created Deployment: ${key}`);
   }
 
+  async replaceDeployment(manifest: any): Promise<void> {
+    const key = `${manifest.metadata.namespace || 'default'}/${manifest.metadata.name}`;
+    this.deployments.set(key, manifest);
+    this.logger.debug(`[MockK8s] Replaced Deployment: ${key}`);
+  }
+
   async createService(manifest: any): Promise<void> {
     const key = `${manifest.metadata.namespace || 'default'}/${manifest.metadata.name}`;
     this.services.set(key, manifest);

@@ -1,13 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, delay, map, of, take, timer } from 'rxjs';
 
-import {
-  ServerSettingsPatch,
-  DiskAlert,
-  NodeMetrics,
-  ServerRuntimeStats,
-  TaskProgress,
-} from './models';
+import { DiskAlert, NodeMetrics, ServerRuntimeStats, TaskProgress } from './models';
 
 const LATENCY_MS = 250;
 
@@ -53,14 +47,6 @@ export class MockApi {
       jvmMaxMb: 4096,
       uptimeSeconds: 3 * 3600 + 14 * 60 + serverId.length,
     }).pipe(delay(LATENCY_MS));
-  }
-
-  /** MISSING: changing allocated_memory_mb after creation; PATCH /api/servers/:id does not accept it yet. */
-  updateServerSettings(
-    _serverId: string,
-    patch: ServerSettingsPatch,
-  ): Observable<ServerSettingsPatch> {
-    return of(patch).pipe(delay(LATENCY_MS));
   }
 
   /** MISSING: progress events for backup/restore on /ws/tasks (only modpack installs emit taskProgress). */

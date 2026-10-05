@@ -4,6 +4,12 @@ import { IsBoolean, IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 export class UpdateServerDto {
   @IsOptional()
   @IsInt()
+  @Min(1024)
+  @Max(65536)
+  allocated_memory_mb?: number;
+
+  @IsOptional()
+  @IsInt()
   @Min(0)
   @Max(1440)
   sleep_timeout_minutes?: number;

@@ -50,7 +50,7 @@ describe('diffSettings', () => {
     expect(hasChanges(diffSettings(INITIAL, { ...INITIAL }))).toBe(false);
   });
 
-  it('routes subdomain and settings to the real endpoints and only memory to the mock', () => {
+  it('sends the subdomain to PATCH /domain and every other field, memory included, to PATCH /:id', () => {
     const changes = diffSettings(INITIAL, {
       memoryMb: 6144,
       sleepMinutes: '30',
@@ -61,19 +61,18 @@ describe('diffSettings', () => {
 
     expect(changes.domain).toBe('novo');
     expect(changes.patch).toEqual({
+      allocated_memory_mb: 6144,
       sleep_timeout_minutes: 30,
       is_maintenance: true,
       auto_wake: false,
     });
-    expect(changes.memory).toEqual({ allocated_memory_mb: 6144 });
   });
 
-  it('keeps domain and patch empty when only memory changed, which is still mock-backed', () => {
+  it('sends only the memory when nothing else changed', () => {
     const changes = diffSettings(INITIAL, { ...INITIAL, memoryMb: 8192 });
 
     expect(changes.domain).toBeNull();
-    expect(changes.patch).toEqual({});
-    expect(changes.memory).toEqual({ allocated_memory_mb: 8192 });
+    expect(changes.patch).toEqual({ allocated_memory_mb: 8192 });
     expect(hasChanges(changes)).toBe(true);
   });
 });

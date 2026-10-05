@@ -66,6 +66,8 @@ export class RconClient {
   } | null = null;
 
   private authRequestId: number | null = null;
+  // destroy() strips the socket listeners, so the pending connect() would otherwise never settle.
+  private abortConnect: ((reason: Error) => void) | null = null;
 
   constructor(private readonly options: RconClientOptions) {
     this.options.defaultTimeoutMs = this.options.defaultTimeoutMs ?? 5000;
@@ -98,7 +100,10 @@ export class RconClient {
     this.state = RconConnectionState.CONNECTING;
     this.clearReconnectTimer();
 
-    return new Promise((resolve, reject) => {
+    let abort: ((reason: Error) => void) | null = null;
+    return new Promise<void>((resolve, reject) => {
+      abort = reject;
+      this.abortConnect = reject;
       const socket = this.options.createSocket
         ? this.options.createSocket()
         : new net.Socket();
@@ -121,6 +126,10 @@ export class RconClient {
           .then(() => resolve())
           .catch((err) => reject(err));
       });
+    }).finally(() => {
+      if (this.abortConnect === abort) {
+        this.abortConnect = null;
+      }
     });
   }
 
@@ -152,6 +161,7 @@ export class RconClient {
     this.isDestroyed = true;
     this.clearReconnectTimer();
     this.failPendingCommands(new Error('RconClient destroyed'));
+    this.abortConnect?.(new Error('RconClient destroyed'));
 
     if (this.socket) {
       this.socket.removeAllListeners();

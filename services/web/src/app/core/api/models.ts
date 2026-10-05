@@ -569,13 +569,10 @@ export interface DiskAlert {
 
 /** PATCH /api/servers/:id. INTERNET is not accepted here: publishing goes through /publish. */
 export interface UpdateServerRequest {
+  /** A running server restarts to pick up the new heap. */
+  allocated_memory_mb?: number;
   sleep_timeout_minutes?: number;
   auto_wake?: boolean;
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
-}
-
-/** Memory is still MockApi-only: the backend has no way to reapply the Deployment yet (issue 98). */
-export interface ServerSettingsPatch {
-  allocated_memory_mb?: number;
 }

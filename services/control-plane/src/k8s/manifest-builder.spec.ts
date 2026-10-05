@@ -102,6 +102,12 @@ describe('ManifestBuilder', () => {
       expect((container.resources.limits as any).cpu).toBeUndefined();
     });
 
+    it('should recreate the pod instead of rolling it, so two JVMs never share the world volume', () => {
+      const dep = ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService);
+
+      expect(dep.spec.strategy).toEqual({ type: 'Recreate' });
+    });
+
     it('should include Aikar flags including AlwaysPreTouch and G1GC parameters (RF-ARQ-10)', () => {
       const dep = ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService);
       const container = dep.spec.template.spec.containers[0];
