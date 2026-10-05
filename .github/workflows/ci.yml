@@ -9,7 +9,7 @@ permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,7 +17,7 @@ env:
 jobs:
   changes:
     name: changes
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read # checkout on push events
@@ -210,9 +210,9 @@ jobs:
   # The ONLY required status check. always(): a failed dependency must not turn it into a (passing) skip.
   ci-ok:
     name: ci-ok
-    if: always()
+    if: always() && !cancelled()
     needs: [changes, lint, control-plane, web, gateway, workflows]
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
     steps:
