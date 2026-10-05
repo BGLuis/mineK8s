@@ -325,6 +325,26 @@ describe('ManifestBuilder', () => {
     });
   });
 
+  // Só a chave tem padrão (kubernetes.io/hostname): exigir hostname vazio deixaria o Job sem nó para rodar.
+  it.each([
+    [
+      'backup',
+      (config: AppConfigService) => ManifestBuilder.buildBackupJob(sampleServer, 'cold', 1, config),
+    ],
+    [
+      'restore',
+      (config: AppConfigService) =>
+        ManifestBuilder.buildRestoreJob(sampleServer, 'x.tar.gz', undefined, 1, config),
+    ],
+  ])('o Job de %s não exige nó quando KUBERNETES_NODE_AFFINITY_VALUE está vazia', (_, build) => {
+    const config = {
+      ...mockConfigService,
+      kubernetes: { ...mockConfigService.kubernetes, nodeAffinityValue: undefined },
+    } as AppConfigService;
+
+    expect(build(config).spec.template.spec.affinity).toBeUndefined();
+  });
+
   describe('buildRestoreJob (RF-STO-04, D-05)', () => {
     it('should generate valid Job batch/v1 for transactional restore with staging and rollback script', () => {
       const timestamp = 1700000000;

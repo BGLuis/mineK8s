@@ -311,7 +311,7 @@ export class ManifestBuilder {
   ) {
     const namespace = configService.kubernetes.namespace;
     const filename = `${server.subdomain}_${backupType}_${timestamp}.tar.gz`;
-    const affinity = configService.kubernetes.nodeAffinityKey
+    const affinity = configService.kubernetes.nodeAffinityValue
       ? {
           nodeAffinity: {
             requiredDuringSchedulingIgnoredDuringExecution: {
@@ -462,7 +462,7 @@ echo "Cold backup concluido com sucesso."
     configService: AppConfigService,
   ) {
     const namespace = configService.kubernetes.namespace;
-    const affinity = configService.kubernetes.nodeAffinityKey
+    const affinity = configService.kubernetes.nodeAffinityValue
       ? {
           nodeAffinity: {
             requiredDuringSchedulingIgnoredDuringExecution: {
