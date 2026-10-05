@@ -12,6 +12,7 @@ export const appConfigSchema = Joi.object({
   APP_URL: Joi.string().uri().default('http://localhost:4200'),
   ALLOWED_ORIGINS: Joi.string().default('http://localhost:4200'),
   ENABLE_SWAGGER: Joi.boolean().default(true),
+  WEB_DIST_DIR: Joi.string().optional(),
 
   // Database PostgreSQL 16
   DB_HOST: Joi.string().default('localhost'),
