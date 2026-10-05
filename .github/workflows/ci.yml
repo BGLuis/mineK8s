@@ -64,6 +64,20 @@ jobs:
     defaults:
       run:
         working-directory: services/control-plane
+    # The *.int.spec.ts suites run only when TEST_DATABASE_URL is set; this database exists for them.
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,6 +94,8 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck
       - run: npx jest --ci
+        env:
+          TEST_DATABASE_URL: postgres://postgres@localhost:5432/verify
       - run: npm run test:e2e -- --ci
       - run: npm run build
 
