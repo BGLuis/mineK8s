@@ -27,7 +27,7 @@ npm run admin:link -- --nick <nick> --ip 100.x.y.z
 node dist/cli/admin-link.js --nick <nick> --ip 100.x.y.z
 ```
 
-Precisa das mesmas variáveis de ambiente da API (`DB_*`, `JWT_SECRET`, e `TAILSCALE_SOCKET_PATH` para `--ip`). Com `--ip`, rode no host que tem o socket do tailscaled (padrão `/run/tailscale/tailscaled.sock`). Fora de produção o boot aplica as migrações pendentes, como a API.
+Precisa das mesmas variáveis de ambiente da API (`DB_*`, `JWT_SECRET`, e `TAILSCALE_SOCKET_PATH` para `--ip`). Com `--ip`, rode no host que tem o socket do tailscaled (padrão `/run/tailscale/tailscaled.sock`). O boot aplica as migrações pendentes, como a API.
 
 Para descobrir o ID numérico sem `--ip`: `tailscale whois --json <ip-tailnet>` e o campo `UserProfile.ID`.
 

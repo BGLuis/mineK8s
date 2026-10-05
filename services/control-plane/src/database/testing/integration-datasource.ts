@@ -17,13 +17,12 @@ export const describeWithDatabase = integrationDatabaseUrl ? describe : describe
 const SHARED_EXTENSIONS = ['pgcrypto', 'uuid-ossp'];
 const BOOTSTRAP_LOCK_KEY = 0x6d6b3873;
 
-/**
- * Um schema próprio por spec: o Jest roda arquivos em paralelo e eles não podem disputar as mesmas tabelas.
- * Sobe um Postgres com:
- *   docker run --rm -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=verify -p 55432:5432 postgres:16-alpine
- *   TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/verify npx jest int.spec
- */
-export async function createIntegrationDataSource(schema: string): Promise<DataSource> {
+export const integrationEntities = Object.values(entityModule).filter(
+  (value) => typeof value === 'function',
+) as any[];
+
+/** Recria `schema` vazio, com as extensões compartilhadas já em `public`. */
+export async function prepareIntegrationSchema(schema: string): Promise<void> {
   const { Client } = require('pg');
   const bootstrap = new Client({ connectionString: integrationDatabaseUrl });
   await bootstrap.connect();
@@ -38,14 +37,20 @@ export async function createIntegrationDataSource(schema: string): Promise<DataS
   } finally {
     await bootstrap.end();
   }
+}
 
-  const entities = Object.values(entityModule).filter(
-    (value) => typeof value === 'function',
-  ) as any[];
+/**
+ * Um schema próprio por spec: o Jest roda arquivos em paralelo e eles não podem disputar as mesmas tabelas.
+ * Sobe um Postgres com:
+ *   docker run --rm -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=verify -p 55432:5432 postgres:16-alpine
+ *   TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/verify npx jest int.spec
+ */
+export async function createIntegrationDataSource(schema: string): Promise<DataSource> {
+  await prepareIntegrationSchema(schema);
   const dataSource = new DataSource({
     type: 'postgres',
     url: integrationDatabaseUrl,
-    entities,
+    entities: integrationEntities,
     migrations,
     extra: { options: `-c search_path=${schema}` },
   });
