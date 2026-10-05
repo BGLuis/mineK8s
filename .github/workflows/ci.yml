@@ -38,6 +38,7 @@ jobs:
             control-plane:
               - 'services/control-plane/**'
               - 'proto/**'
+              - 'k8s/storageclass.yaml'
               - '.github/workflows/ci.yml'
             web:
               - 'services/web/**'
@@ -109,10 +110,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The gRPC contract spec loads proto/gateway_control.proto from the repo root.
+          # The gRPC contract spec loads proto/gateway_control.proto from the repo root, and the
+          # servers-files spec checks the data directory against k8s/storageclass.yaml.
           sparse-checkout: |
             services/control-plane
             proto
+            k8s
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24

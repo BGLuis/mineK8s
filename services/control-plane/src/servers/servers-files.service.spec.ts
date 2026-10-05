@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { ServersFilesService } from './servers-files.service';
+import { ManifestBuilder } from '@k8s/manifest-builder';
+import { serverDataDirectory } from '@k8s/server-data-volume';
 
 function createMockZip(files: Array<{ name: string; content: string }>): Buffer {
   const localHeaders: Buffer[] = [];
@@ -112,6 +114,32 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
     await fs.promises.rm(tempStorageRoot, { recursive: true, force: true });
   });
 
+  describe('getServerDataDir', () => {
+    // No cluster, o local-path provisiona cada PVC em <storage>/ + pathPattern da StorageClass, e o control
+    // plane monta <storage>/<namespace> como SERVERS_DATA_ROOT: arquivos e mundo só coincidem se o
+    // diretório for o que o pathPattern gera para o PVC do servidor.
+    it('é o diretório que a StorageClass local-nvme cria para o PVC do servidor', () => {
+      const storageClass = fs.readFileSync(
+        path.resolve(__dirname, '../../../../k8s/storageclass.yaml'),
+        'utf-8',
+      );
+      const pathPattern = /pathPattern: "(.+)"/.exec(storageClass)?.[1];
+      const pvc = ManifestBuilder.buildPVC(sampleServer, {
+        kubernetes: { namespace: 'minekubernetes' },
+      } as any);
+      const provisionedPath = pathPattern
+        ?.replace('{{ .PVC.Namespace }}', pvc.metadata.namespace)
+        .replace('{{ .PVC.Name }}', pvc.metadata.name);
+
+      expect(provisionedPath).toBe(
+        path.join(
+          'minekubernetes',
+          path.relative(tempStorageRoot, service.getServerDataDir(sampleServer)),
+        ),
+      );
+    });
+  });
+
   describe('writeFile and readFile', () => {
     it('should write and read files atomically inside server /data', async () => {
       await service.writeFile(sampleServer.id, 'server.properties', 'server-port=25565');
@@ -203,7 +231,7 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
       expect(res.message).toBe('Extraction completed successfully');
       expect(res.extractedCount).toBe(2);
 
-      const serverDir = path.join(tempStorageRoot, sampleServer.subdomain);
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
       const levelDat = await fs.promises.readFile(
         path.join(serverDir, 'world', 'level.dat'),
         'utf-8',

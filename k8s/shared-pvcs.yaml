@@ -7,8 +7,9 @@ metadata:
     app.kubernetes.io/name: minekubernetes
     app.kubernetes.io/component: storage-cache
 spec:
+  # local-path only provisions ReadWriteOnce; on a single node that still lets every pod mount it.
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   storageClassName: local-nvme
   resources:
     requests:

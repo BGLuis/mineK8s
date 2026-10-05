@@ -79,13 +79,11 @@ export class RealKubernetesDriver implements IKubernetesDriver {
     replicas: number,
     namespace = this.configService.kubernetes.namespace,
   ): Promise<void> {
-    await this.appsV1Api.patchNamespacedDeploymentScale({
-      name,
-      namespace,
-      body: {
-        spec: { replicas },
-      },
-    });
+    // The client defaults PATCH to JSON Patch, which expects a list of operations, not this object.
+    await this.appsV1Api.patchNamespacedDeploymentScale(
+      { name, namespace, body: { spec: { replicas } } },
+      k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch),
+    );
   }
 
   async deleteDeployment(

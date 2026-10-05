@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -195,6 +199,26 @@ describe('ManifestBuilder', () => {
         expect(script).toContain('mv /data/server.jar.tmp /data/server.jar');
       });
 
+      it('aceita o EULA mesmo quando o jar já está instalado', () => {
+        const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-data-'));
+        try {
+          fs.writeFileSync(path.join(dataDir, 'server.jar'), 'jar');
+          fs.writeFileSync(path.join(dataDir, '.server-jar'), 'PAPER-1.20.4\n');
+          fs.writeFileSync(path.join(dataDir, 'eula.txt'), 'eula=false\n');
+          const script = initContainersOf(
+            ManifestBuilder.buildDeployment(sampleServer, sampleSettings, mockConfigService),
+          )![0].args[0];
+
+          execFileSync('sh', ['-c', script.replaceAll('/data', dataDir)], {
+            env: { ...process.env, SERVER_TYPE: 'PAPER', MC_VERSION: '1.20.4' },
+          });
+
+          expect(fs.readFileSync(path.join(dataDir, 'eula.txt'), 'utf-8')).toBe('eula=true\n');
+        } finally {
+          fs.rmSync(dataDir, { recursive: true, force: true });
+        }
+      });
+
       it.each(['FORGE', 'NEOFORGE', 'FABRIC', 'VANILLA'])(
         'should not add a jar init container for %s',
         (type) => {
@@ -299,6 +323,26 @@ describe('ManifestBuilder', () => {
       expect(script).toContain('sha256sum');
       expect(script).not.toContain('.snapshot_worker_ready');
     });
+  });
+
+  // Só a chave tem padrão (kubernetes.io/hostname): exigir hostname vazio deixaria o Job sem nó para rodar.
+  it.each([
+    [
+      'backup',
+      (config: AppConfigService) => ManifestBuilder.buildBackupJob(sampleServer, 'cold', 1, config),
+    ],
+    [
+      'restore',
+      (config: AppConfigService) =>
+        ManifestBuilder.buildRestoreJob(sampleServer, 'x.tar.gz', undefined, 1, config),
+    ],
+  ])('o Job de %s não exige nó quando KUBERNETES_NODE_AFFINITY_VALUE está vazia', (_, build) => {
+    const config = {
+      ...mockConfigService,
+      kubernetes: { ...mockConfigService.kubernetes, nodeAffinityValue: undefined },
+    } as AppConfigService;
+
+    expect(build(config).spec.template.spec.affinity).toBeUndefined();
   });
 
   describe('buildRestoreJob (RF-STO-04, D-05)', () => {

@@ -6,5 +6,11 @@ metadata:
     app.kubernetes.io/name: minekubernetes
     app.kubernetes.io/part-of: minekubernetes
 provisioner: rancher.io/local-path
+parameters:
+  # Predictable directory per PVC: the control plane mounts <storage>/minekubernetes as
+  # SERVERS_DATA_ROOT and finds each server there (serverDataDirectory in the control plane).
+  # local-path (CVE-2025-62878 fix) requires a directory below <namespace>/<PVC name>/.
+  # StorageClass parameters are immutable; an existing local-nvme has to be deleted first.
+  pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/volume"
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Retain
