@@ -24,7 +24,6 @@ const BOOTSTRAP_LOCK_KEY = 0x6d6b3873;
  *   TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/verify npx jest int.spec
  */
 export async function createIntegrationDataSource(schema: string): Promise<DataSource> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Client } = require('pg');
   const bootstrap = new Client({ connectionString: integrationDatabaseUrl });
   await bootstrap.connect();

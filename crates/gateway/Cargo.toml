@@ -23,4 +23,5 @@ tonic = "0.12"
 tokio-stream = "0.1"
 
 [dev-dependencies]
+gateway-test-support = { path = "../gateway-test-support" }
 tokio-test = "0.4"

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -15,7 +13,7 @@ use minecraft_protocol::types::varint::VarInt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UnixListener};
 
-/// Control Plane simulado em Node (tests/fixtures/mock_grpc_server.js).
+/// Control Plane simulado em Node (crates/gateway/tests/fixtures/mock_grpc_server.js).
 /// Linhas `PREFIXO:...` do stdout viram eventos; comandos entram por stdin.
 pub struct MockControlPlane {
     child: Child,
@@ -33,7 +31,7 @@ impl MockControlPlane {
                 format!("{}/../../services/control-plane/node_modules", manifest_dir),
             )
             .arg(format!(
-                "{}/tests/fixtures/mock_grpc_server.js",
+                "{}/../gateway/tests/fixtures/mock_grpc_server.js",
                 manifest_dir
             ))
             .stdin(Stdio::piped())

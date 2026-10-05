@@ -1,17 +1,15 @@
-mod common;
-
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
-use common::{
-    dead_socket_path, hold_upstream, login_outcome, FakeTailscaled, LoginOutcome, MockControlPlane,
-};
 use gateway::identity::TailscaleLocalWhoIs;
 use gateway::ipc::GatewayIpcClient;
 use gateway::routing::{
     AccessPolicy, CachedServerRoute, RouteTable, RoutingModel, ServerInstanceStatus,
 };
 use gateway::{GatewayConfig, GatewayServer};
+use gateway_test_support::{
+    dead_socket_path, hold_upstream, login_outcome, FakeTailscaled, LoginOutcome, MockControlPlane,
+};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
 

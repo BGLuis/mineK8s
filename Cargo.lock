@@ -239,6 +239,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "dashmap",
+ "gateway-test-support",
  "governor",
  "minecraft-protocol",
  "prometheus",
@@ -253,6 +254,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "gateway-test-support"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "minecraft-protocol",
+ "tokio",
 ]
 
 [[package]]

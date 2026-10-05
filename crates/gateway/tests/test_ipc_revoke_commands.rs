@@ -1,12 +1,10 @@
-mod common;
-
 use std::net::IpAddr;
 use std::time::Duration;
 
-use common::MockControlPlane;
 use gateway::ipc::run_control_plane_link;
 use gateway::routing::RouteTable;
 use gateway::session::SessionManager;
+use gateway_test_support::MockControlPlane;
 use tokio::sync::{mpsc, oneshot, watch};
 
 fn open_session(

@@ -1,0 +1,12 @@
+[package]
+name = "gateway-test-support"
+version = "0.1.0"
+edition = "2021"
+authors = ["mineK8s team"]
+description = "Helpers shared by the gateway integration tests"
+publish = false
+
+[dependencies]
+minecraft-protocol = { path = "../minecraft-protocol" }
+bytes = "1.6"
+tokio = { version = "1.38", features = ["full"] }
