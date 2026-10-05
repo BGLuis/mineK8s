@@ -59,7 +59,10 @@ export class AdminService {
    */
   async listUsers(): Promise<UserSummaryDto[]> {
     const users = await this.userRepo.find({
-      relations: ['devices', 'user_groups'],
+      relations: {
+        devices: true,
+        user_groups: true,
+      },
       order: { minecraft_nick: 'ASC' },
     });
 
@@ -125,7 +128,10 @@ export class AdminService {
    */
   async listGroups(): Promise<Group[]> {
     return this.groupRepo.find({
-      relations: ['user_groups', 'server_groups'],
+      relations: {
+        user_groups: true,
+        server_groups: true,
+      },
       order: { created_at: 'ASC' },
     });
   }
@@ -178,7 +184,10 @@ export class AdminService {
 
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      relations: ['user_groups', 'server_accesses'],
+      relations: {
+        user_groups: true,
+        server_accesses: true,
+      },
     });
 
     if (!user) {
@@ -200,7 +209,10 @@ export class AdminService {
     for (const sg of serverGroups) {
       const server = await this.serverRepo.findOne({
         where: { id: sg.server_id },
-        relations: ['server_groups', 'minecraft_settings'],
+        relations: {
+          server_groups: true,
+          minecraft_settings: true,
+        },
       });
 
       if (!server) continue;
@@ -297,7 +309,9 @@ export class AdminService {
   ): Promise<{ success: boolean; terminated_connections: number }> {
     const server = await this.serverRepo.findOne({
       where: { id: dto.serverId },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     if (!server) {

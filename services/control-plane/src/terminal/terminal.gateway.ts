@@ -147,7 +147,9 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
 
     const server = await this.serverRepo.findOne({
       where: { id: serverId },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
     if (!server) {
       throw new WsException(`Server ${serverId} not found`);
