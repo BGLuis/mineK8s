@@ -44,7 +44,8 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.4",
     "typeorm": "^0.3.28",
-    "uuid": "^11.0.5"
+    "uuid": "^11.0.5",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.8",
