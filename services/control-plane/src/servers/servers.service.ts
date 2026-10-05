@@ -38,6 +38,8 @@ import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
 
+const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
+
 @Injectable()
 export class ServersService {
   private readonly logger = new Logger(ServersService.name);
@@ -313,12 +315,37 @@ export class ServersService {
       );
     }
 
+    const memoryChanged =
+      dto.allocated_memory_mb !== undefined && dto.allocated_memory_mb !== server.allocated_memory_mb;
+    if (memoryChanged && !MEMORY_RESIZABLE_STATES.includes(server.state)) {
+      throw new ConflictException(
+        `Memory can only change while the server is stopped or running (current state: ${server.state})`,
+      );
+    }
+
     Object.assign(server, Object.fromEntries(changes));
     await this.serverRepo.save(server);
 
+    if (memoryChanged) {
+      await this.applyMemory(server);
+    }
     await this.republishRoute(server);
 
     return this.findOne(id);
+  }
+
+  /** The JVM reads -Xmx only at boot, so a running server is stopped gracefully and started on the new Deployment. */
+  private async applyMemory(server: Server): Promise<void> {
+    if (server.state === 'STOPPED') {
+      await this.k8sService.applyDeployment(server, server.minecraft_settings);
+      return;
+    }
+    server.state = 'STOPPING';
+    await this.serverRepo.save(server);
+    await this.k8sService.stopServer(server);
+    server.state = 'STARTING';
+    await this.serverRepo.save(server);
+    await this.k8sService.applyDeployment(server, server.minecraft_settings);
   }
 
   async delete(id: string): Promise<{ message: string }> {

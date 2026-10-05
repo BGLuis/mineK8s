@@ -69,6 +69,19 @@ describe('KubernetesService', () => {
     expect(dep?.replicas).toBe(0);
   });
 
+  it('applyDeployment rewrites heap and container limit and keeps replicas in line with the state', async () => {
+    await service.provisionServer(server, settings);
+    server.allocated_memory_mb = 6144;
+    server.state = 'STARTING';
+
+    await service.applyDeployment(server, settings);
+
+    const container = driver.deployments.get('minekubernetes/mc-lobby').spec.template.spec.containers[0];
+    expect(container.args[0]).toContain('-Xmx6144M');
+    expect(container.resources.limits.memory).toBe(`${6144 + 1536}Mi`);
+    expect((await driver.getDeployment('mc-lobby', 'minekubernetes'))?.replicas).toBe(1);
+  });
+
   it('should deprovision server by deleting deployment, service, and PVC', async () => {
     await service.provisionServer(server, settings);
     expect(driver.deployments.size).toBe(1);

@@ -57,6 +57,15 @@ export class RealKubernetesDriver implements IKubernetesDriver {
     });
   }
 
+  async replaceDeployment(manifest: any): Promise<void> {
+    const ns = manifest.metadata.namespace || this.configService.kubernetes.namespace;
+    await this.appsV1Api.replaceNamespacedDeployment({
+      name: manifest.metadata.name,
+      namespace: ns,
+      body: manifest,
+    });
+  }
+
   async createService(manifest: any): Promise<void> {
     const ns = manifest.metadata.namespace || this.configService.kubernetes.namespace;
     await this.coreV1Api.createNamespacedService({

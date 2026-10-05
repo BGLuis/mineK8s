@@ -17,6 +17,13 @@ describe('UpdateServerDto', () => {
     expect(await invalidFields({ sleep_timeout_minutes: -1 })).toEqual(['sleep_timeout_minutes']);
   });
 
+  it('recusa memória fora de 1 a 64 GiB, o mesmo intervalo da criação', async () => {
+    expect(await invalidFields({ allocated_memory_mb: 1024 })).toEqual([]);
+    expect(await invalidFields({ allocated_memory_mb: 65536 })).toEqual([]);
+    expect(await invalidFields({ allocated_memory_mb: 1023 })).toEqual(['allocated_memory_mb']);
+    expect(await invalidFields({ allocated_memory_mb: 65537 })).toEqual(['allocated_memory_mb']);
+  });
+
   it('não deixa INTERNET passar por aqui, pois publicar exige DNS e online-mode', async () => {
     expect(await invalidFields({ access_policy: 'INTERNET' })).toEqual(['access_policy']);
   });

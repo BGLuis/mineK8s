@@ -35,6 +35,7 @@ export interface K8sJobInfo {
 export interface IKubernetesDriver {
   createPersistentVolumeClaim(manifest: any): Promise<void>;
   createDeployment(manifest: any): Promise<void>;
+  replaceDeployment(manifest: any): Promise<void>;
   createService(manifest: any): Promise<void>;
   scaleDeployment(name: string, replicas: number, namespace?: string): Promise<void>;
   deleteDeployment(name: string, namespace?: string): Promise<void>;

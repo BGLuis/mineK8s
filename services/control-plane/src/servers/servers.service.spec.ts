@@ -68,6 +68,7 @@ describe('ServersService', () => {
       startServer: jest.fn().mockResolvedValue(undefined),
       stopServer: jest.fn().mockResolvedValue(undefined),
       restartServer: jest.fn().mockResolvedValue(undefined),
+      applyDeployment: jest.fn().mockResolvedValue(undefined),
       deprovisionServer: jest.fn().mockResolvedValue(undefined),
       getServerDeployment: jest.fn().mockResolvedValue({
         replicas: 1,
@@ -323,6 +324,56 @@ describe('ServersService', () => {
 
       await expect(service.update('srv-1', { access_policy: 'GROUP' })).rejects.toThrow(/unpublish it/);
     });
+
+    it('nova memória num servidor parado só reescreve o Deployment, sem ligá-lo', async () => {
+      const server = seed({ state: 'STOPPED', allocated_memory_mb: 4096 });
+
+      await service.update('srv-1', { allocated_memory_mb: 6144 });
+
+      expect(mockK8sService.applyDeployment).toHaveBeenCalledWith(
+        expect.objectContaining({ allocated_memory_mb: 6144, state: 'STOPPED' }),
+        undefined,
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(server.state).toBe('STOPPED');
+    });
+
+    it('nova memória num servidor ligado faz parada graciosa antes de subir o Deployment novo', async () => {
+      const server = seed({ state: 'READY', allocated_memory_mb: 4096 });
+      const calls: string[] = [];
+      mockK8sService.stopServer.mockImplementation(async (s: Server) => {
+        calls.push(`stop:${s.state}`);
+      });
+      mockK8sService.applyDeployment.mockImplementation(async (s: Server) => {
+        calls.push(`apply:${s.state}:${s.allocated_memory_mb}`);
+      });
+
+      await service.update('srv-1', { allocated_memory_mb: 8192 });
+
+      // stopServer só faz save-all/stop por RCON quando o estado é READY ou STOPPING.
+      expect(calls).toEqual(['stop:STOPPING', 'apply:STARTING:8192']);
+      expect(server.state).toBe('STARTING');
+    });
+
+    it('memória igual à atual não reinicia o servidor', async () => {
+      seed({ state: 'READY', allocated_memory_mb: 4096 });
+
+      await service.update('srv-1', { allocated_memory_mb: 4096, auto_wake: false });
+
+      expect(mockK8sService.applyDeployment).not.toHaveBeenCalled();
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+    });
+
+    it.each(['STARTING', 'STOPPING', 'UPDATING', 'PROVISIONING', 'FAILED'])(
+      'recusa trocar a memória em %s, sem gravar nada',
+      async (state) => {
+        const server = seed({ state: state as any, allocated_memory_mb: 4096 });
+
+        await expect(service.update('srv-1', { allocated_memory_mb: 8192 })).rejects.toThrow(ConflictException);
+        expect(server.allocated_memory_mb).toBe(4096);
+        expect(mockK8sService.applyDeployment).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('delete', () => {

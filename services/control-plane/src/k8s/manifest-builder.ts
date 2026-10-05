@@ -186,6 +186,8 @@ export class ManifestBuilder {
       },
       spec: {
         replicas: server.state === 'READY' || server.state === 'STARTING' ? 1 : 0,
+        // A rolling update would boot the new pod while the old JVM still holds the same world on the RWO volume.
+        strategy: { type: 'Recreate' },
         selector: {
           matchLabels: {
             'app.kubernetes.io/name': `mc-${server.subdomain}`,

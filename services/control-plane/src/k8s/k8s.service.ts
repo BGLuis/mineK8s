@@ -44,6 +44,14 @@ export class KubernetesService {
     this.logger.log(`Successfully provisioned resources for [${server.subdomain}].`);
   }
 
+  /** Rewrites the Deployment from the current server record; replicas follow server.state. */
+  async applyDeployment(server: Server, settings?: MinecraftServerSettings): Promise<void> {
+    this.logger.log(`Applying Deployment for [${server.subdomain}] with ${server.allocated_memory_mb} MiB heap...`);
+    await this.driver.replaceDeployment(
+      ManifestBuilder.buildDeployment(server, settings, this.configService),
+    );
+  }
+
   async startServer(server: Server): Promise<void> {
     this.logger.log(`Starting server [${server.subdomain}]: scaling deployment to 1...`);
     await this.driver.scaleDeployment(
