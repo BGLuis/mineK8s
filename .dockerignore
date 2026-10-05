@@ -1,0 +1,20 @@
+# Allowlist: the repo root also holds Minecraft world data, docs and local env files.
+*
+!Cargo.toml
+!Cargo.lock
+!crates/
+!proto/
+!k8s/tailscale/policy.hujson
+!services/control-plane/
+!services/web/
+
+**/node_modules
+**/dist
+**/target
+**/coverage
+**/test-results
+**/.angular
+**/*.log
+**/.env*
+**/Dockerfile*
+**/.dockerignore
