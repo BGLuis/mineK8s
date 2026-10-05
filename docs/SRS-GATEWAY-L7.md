@@ -230,7 +230,7 @@ pub struct CachedServerRoute {
     pub server_id: String,
     pub name: String,
     pub subdomain: String,
-    pub target_addr: Option<SocketAddr>, // None se dormente (replicas=0)
+    pub target_addr: Option<UpstreamAddr>, // host:porta (IP ou hostname, resolvido a cada conexão); None se dormente (replicas=0)
     pub status: ServerInstanceStatus,    // Stopped, Starting, Ready, Crashed
     pub access_policy: AccessPolicy,     // Public, Group, Individual, Maintenance
     pub allowed_group_ids: HashSet<String>,

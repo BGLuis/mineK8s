@@ -426,7 +426,7 @@ pub fn apply_route_update_event(route_table: &RouteTable, event: RouteUpdateEven
             if let Some(mut existing) = route_table.get_by_server_id(&event.server_id) {
                 existing.status = ServerInstanceStatus::from(event.status.as_str());
                 if !event.target_ip_port.is_empty() {
-                    existing.target_addr = event.target_ip_port.parse().ok();
+                    existing.target_addr = event.parse_target();
                 }
                 route_table.insert(existing);
             }

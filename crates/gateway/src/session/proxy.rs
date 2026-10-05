@@ -1,9 +1,9 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use bytes::BytesMut;
 use tokio::io::{copy, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use minecraft_protocol::packets::handshake::HandshakePacket;
 use minecraft_protocol::packets::login::LoginStartPacket;
@@ -11,38 +11,41 @@ use minecraft_protocol::proxy_protocol::header::ProxyHeader;
 
 use crate::connection::ClientConnection;
 use crate::error::{GatewayError, Result};
-use crate::routing::CachedServerRoute;
+use crate::routing::{CachedServerRoute, UpstreamAddr};
+use crate::server::GatewayServer;
 use crate::session::manager::SessionManager;
 
 /// Conecta à JVM interna, reinjeta Handshake e Login Start, e opcionalmente insere cabeçalho PROXY v2 (RF-GW-11).
 pub async fn establish_and_replay_upstream(
-    target_addr: SocketAddr,
+    target_addr: &UpstreamAddr,
     client_ip: IpAddr,
     client_port: u16,
     inject_proxy_v2: bool,
     original_handshake: &[u8],
     original_login_start: &[u8],
 ) -> Result<TcpStream> {
-    let mut upstream = TcpStream::connect(target_addr).await?;
+    let mut upstream = target_addr.connect().await?;
 
     // Injeção opcional do cabeçalho binário PROXY Protocol v2 (GW:384-398)
     if inject_proxy_v2 {
+        // O destino do cabeçalho é o IP para o qual a conexão realmente abriu, não o nome da rota.
+        let resolved = upstream.peer_addr()?;
         let mut proxy_wire = BytesMut::new();
         match client_ip {
             IpAddr::V4(v4) => {
-                let dst_v4 = match target_addr.ip() {
+                let dst_v4 = match resolved.ip() {
                     IpAddr::V4(d) => d,
                     IpAddr::V6(_) => "127.0.0.1".parse().unwrap(),
                 };
-                let header = ProxyHeader::new_ipv4_proxy(v4, client_port, dst_v4, target_addr.port());
+                let header = ProxyHeader::new_ipv4_proxy(v4, client_port, dst_v4, resolved.port());
                 header.encode(&mut proxy_wire);
             }
             IpAddr::V6(v6) => {
-                let dst_v6 = match target_addr.ip() {
+                let dst_v6 = match resolved.ip() {
                     IpAddr::V6(d) => d,
                     IpAddr::V4(_) => "::1".parse().unwrap(),
                 };
-                let header = ProxyHeader::new_ipv6_proxy(v6, client_port, dst_v6, target_addr.port());
+                let header = ProxyHeader::new_ipv6_proxy(v6, client_port, dst_v6, resolved.port());
                 header.encode(&mut proxy_wire);
             }
         }
@@ -112,7 +115,7 @@ pub async fn handle_login_proxy(
         }
     };
 
-    let target_addr = match route.target_addr {
+    let target_addr = match route.target_addr.as_ref() {
         Some(addr) => addr,
         None => {
             return Err(GatewayError::InvalidState(format!(
@@ -124,22 +127,15 @@ pub async fn handle_login_proxy(
 
     let client_ip = conn.client_ip;
     let client_port = conn.peer_addr.port();
-    let (session_id, abort_rx) = session_manager.register_session(
-        client_ip,
-        route.subdomain.clone(),
-        route.server_id.clone(),
-        login_start.username.clone(),
-    );
 
     info!(
-        session_id = %session_id,
         user = %login_start.username,
         server = %route.name,
         target = %target_addr,
         "Estabelecendo conexão upstream e iniciando proxy duplex"
     );
 
-    let upstream = establish_and_replay_upstream(
+    let upstream = match establish_and_replay_upstream(
         target_addr,
         client_ip,
         client_port,
@@ -147,7 +143,34 @@ pub async fn handle_login_proxy(
         &original_handshake,
         &original_login_start,
     )
-    .await?;
+    .await
+    {
+        Ok(upstream) => upstream,
+        Err(err) => {
+            warn!(
+                user = %login_start.username,
+                server = %route.name,
+                target = %target_addr,
+                error = %err,
+                "Falha ao conectar no upstream"
+            );
+            let reason = match &err {
+                GatewayError::UpstreamResolution { .. } => "§cNão foi possível localizar o servidor de destino.",
+                _ => "§cServidor indisponível no momento. Tente novamente em instantes.",
+            };
+            let _ = GatewayServer::send_login_disconnect(conn, reason).await;
+            return Err(err);
+        }
+    };
+
+    // Só registra depois de conectar: sessão que nunca abriu upstream não pode ficar no mapa nem
+    // anunciar evento de conexão.
+    let (session_id, abort_rx) = session_manager.register_session(
+        client_ip,
+        route.subdomain.clone(),
+        route.server_id.clone(),
+        login_start.username.clone(),
+    );
 
     // Executar proxy bidirecional com destruição mútua imediata
     let proxy_res = run_duplex_proxy(conn.stream, upstream, abort_rx).await;

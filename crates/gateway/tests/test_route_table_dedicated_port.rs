@@ -90,7 +90,7 @@ async fn test_dedicated_port_l4_forward_without_parser() {
         subdomain: "".into(),
         listener_port: gateway_addr.port(),
         routing_model: RoutingModel::DedicatedPort,
-        target_addr: Some(upstream_addr),
+        target_addr: Some(upstream_addr.into()),
         status: ServerInstanceStatus::Ready,
         proxy_protocol_upstream: false,
         max_players: 8,

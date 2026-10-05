@@ -1,5 +1,6 @@
-use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
+
+use super::upstream::UpstreamAddr;
 
 /// Política de acesso ao servidor (RF-ID-02, RF-ID-06, RF-CF-01).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -103,7 +104,7 @@ pub struct CachedServerRoute {
     pub subdomain: String,
     pub listener_port: u16,
     pub routing_model: RoutingModel,
-    pub target_addr: Option<SocketAddr>,
+    pub target_addr: Option<UpstreamAddr>,
     pub status: ServerInstanceStatus,
     pub proxy_protocol_upstream: bool,
     pub max_players: u32,

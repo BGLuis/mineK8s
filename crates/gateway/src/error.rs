@@ -9,6 +9,13 @@ pub enum GatewayError {
     #[error("Minecraft protocol error: {0}")]
     Protocol(#[from] minecraft_protocol::ProtocolError),
 
+    #[error("Falha ao resolver o endereço do upstream {host}: {source}")]
+    UpstreamResolution {
+        host: String,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("Handshake timeout: conexão excedeu limite de 5.0 segundos")]
     HandshakeTimeout,
 

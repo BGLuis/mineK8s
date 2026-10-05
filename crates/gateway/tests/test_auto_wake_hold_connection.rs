@@ -60,7 +60,7 @@ async fn test_auto_wake_hold_connection_success() {
         subdomain: "hibernating.mine.lan".into(),
         listener_port: gateway_addr.port(),
         routing_model: RoutingModel::VirtualHost,
-        target_addr: Some(upstream_addr),
+        target_addr: Some(upstream_addr.into()),
         status: ServerInstanceStatus::Stopped,
         auto_wake: true,
         ..Default::default()

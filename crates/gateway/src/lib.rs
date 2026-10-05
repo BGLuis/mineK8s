@@ -21,7 +21,7 @@ pub use ipc::{GatewayIpcClient, RouteAction, RouteUpdateEvent};
 pub use limiter::ConnectionRateLimiter;
 pub use motd::{build_synthetic_status, handle_status_ping, StatusCache};
 pub use routing::{
-    AccessPolicy, CachedServerRoute, HoldError, RouteKey, RouteTable, RoutingModel, ServerInstanceStatus,
+    AccessPolicy, CachedServerRoute, HoldError, RouteKey, RouteTable, RoutingModel, ServerInstanceStatus, UpstreamAddr,
 };
 pub use server::GatewayServer;
 pub use session::{handle_login_proxy, ActiveSessionHandle, SessionManager};
