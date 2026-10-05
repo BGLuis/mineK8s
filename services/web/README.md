@@ -15,6 +15,22 @@ npm test -- --watch=false      # Vitest
 `proxy.conf.json` forwards `/api`, `/socket.io`, `/ws` and `/terminal` to `http://localhost:3000`
 (WebSocket enabled). `/join` is an SPA route and is not proxied.
 
+## Integrated e2e (Playwright)
+
+```bash
+npx playwright install chromium   # once
+npm run e2e
+```
+
+Runs the SPA under `ng serve` against the real control plane, built from `services/control-plane`
+and started by `e2e/global-setup.ts` on a throwaway Postgres (`e2e/docker-compose.e2e.yml`, tmpfs).
+Needs Docker. The control plane uses the mock Kubernetes driver; `e2e/fakes/` stands in for what
+lives outside this machine: tailscaled's LocalAPI (Unix socket, every address is the admin's laptop),
+the Tailscale Cloud API (pre-auth keys) and the game server's RCON (`127.0.0.1:25575`) and Server List
+Ping (`127.0.0.1:25565`) ports. Those two ports are fixed by the mock driver, so a local Minecraft
+server must be stopped first. The other ports are in `e2e/env.ts` and can be overridden with
+`E2E_*` variables. The control plane log of the last run is `test-results/control-plane.log`.
+
 `/dev/ui` (development builds only, not linked in the navigation) shows every UI component and state.
 
 ## Layout

@@ -1,0 +1,17 @@
+# Throwaway Postgres for the e2e suite: tmpfs storage, so every run starts from an empty database.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: minek8s
+      POSTGRES_PASSWORD: minek8s_e2e
+      POSTGRES_DB: minekubernetes
+    ports:
+      - '127.0.0.1:${E2E_POSTGRES_PORT:-55490}:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U minek8s -d minekubernetes']
+      interval: 1s
+      timeout: 3s
+      retries: 30
