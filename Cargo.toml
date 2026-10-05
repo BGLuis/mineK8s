@@ -2,5 +2,6 @@
 members = [
     "crates/minecraft-protocol",
     "crates/gateway",
+    "crates/gateway-test-support",
 ]
 resolver = "2"

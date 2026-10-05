@@ -1,14 +1,12 @@
-mod common;
-
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use common::{open_login, LoginOutcome};
 use gateway::ipc::client::apply_route_update_event;
 use gateway::ipc::protocol::{RouteAction, RouteUpdateEvent};
 use gateway::routing::RouteTable;
 use gateway::session::SessionManager;
 use gateway::{GatewayConfig, GatewayServer};
+use gateway_test_support::{open_login, LoginOutcome};
 use minecraft_protocol::frame::RawPacket;
 use minecraft_protocol::packets::disconnect::DisconnectPacket;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
