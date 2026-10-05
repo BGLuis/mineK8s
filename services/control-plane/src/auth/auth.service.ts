@@ -119,6 +119,11 @@ export class AuthService implements OnModuleInit {
     if (!identity?.userId) {
       throw new UnauthorizedException('This address does not belong to the tailnet');
     }
+    // Every tagged node reports the same "tagged-devices" owner, so its userId names no person: a user
+    // linked to it would be shared by every server and gateway on the tailnet.
+    if (!identity.isOwner) {
+      throw new UnauthorizedException('Tagged devices cannot open a panel session; sign in from a personal device');
+    }
 
     const user = await this.validateTailscaleUser(identity.userId);
     if (!user) {
@@ -162,7 +167,12 @@ export class AuthService implements OnModuleInit {
       return null;
     }
     try {
-      return (await this.tailscaleDriver.queryWhoIs(clientIp))?.userId || null;
+      const identity = await this.tailscaleDriver.queryWhoIs(clientIp);
+      if (identity && !identity.isOwner) {
+        this.logger.warn(`Admin bootstrapped without a Tailscale link: ${clientIp} is a tagged device`);
+        return null;
+      }
+      return identity?.userId || null;
     } catch (err) {
       this.logger.warn(
         `Admin bootstrapped without a Tailscale link, WhoIs failed for ${clientIp}: ${(err as Error).message}`,
