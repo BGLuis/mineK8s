@@ -61,19 +61,17 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
             is_mojang_verified: true,
           };
         }
+        if (where.devices?.node_id === 'node-999') {
+          return {
+            id: 'user-uuid-2',
+            minecraft_nick: 'NodePlayer',
+            role: 'ADMIN',
+            tailscale_user_id: null,
+            is_mojang_verified: false,
+          };
+        }
         return null;
       }),
-      createQueryBuilder: jest.fn(() => ({
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn(async () => ({
-          id: 'user-uuid-2',
-          minecraft_nick: 'NodePlayer',
-          role: 'ADMIN',
-          tailscale_user_id: null,
-          is_mojang_verified: false,
-        })),
-      })),
     };
 
     mockServerGroupRepo = {
@@ -279,11 +277,6 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
 
     it('deve retornar found: false para nós desconhecidos', async () => {
       mockUserRepo.findOne = jest.fn(async () => null);
-      mockUserRepo.createQueryBuilder = jest.fn(() => ({
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn(async () => null),
-      }));
 
       const resp = await service.resolvePlayerIdentity({
         tailscale_user_id: 'non-existent',

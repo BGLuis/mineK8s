@@ -174,11 +174,7 @@ export class GatewayIpcService {
     }
 
     if (!user && req.node_id) {
-      user = await this.userRepository
-        .createQueryBuilder('user')
-        .innerJoin('user.devices', 'device')
-        .where('device.tailscale_node_id = :nodeId', { nodeId: req.node_id })
-        .getOne();
+      user = await this.findUserByNodeId(req.node_id);
     }
 
     if (!user && req.client_ip && this.identityProvider) {
@@ -191,11 +187,7 @@ export class GatewayIpcService {
             });
           }
           if (!user && netId.nodeId) {
-            user = await this.userRepository
-              .createQueryBuilder('user')
-              .innerJoin('user.devices', 'device')
-              .where('device.tailscale_node_id = :nodeId', { nodeId: netId.nodeId })
-              .getOne();
+            user = await this.findUserByNodeId(netId.nodeId);
           }
         }
       } catch (err: any) {
@@ -228,6 +220,11 @@ export class GatewayIpcService {
       is_active: true,
       is_mojang_verified: (user as any).is_mojang_verified || false,
     };
+  }
+
+  /** O `where` tipado pela entidade faz o compilador acusar se a coluna do dispositivo mudar de nome. */
+  private findUserByNodeId(nodeId: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { devices: { node_id: nodeId } } });
   }
 
   /**
