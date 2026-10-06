@@ -39,6 +39,7 @@ export const appConfigSchema = Joi.object({
   TAILSCALE_AUTH_ENABLED: Joi.boolean().default(true),
   TAILSCALE_API_KEY: Joi.string().allow('').optional(),
   TAILNET_NAME: Joi.string().allow('').optional(),
+  TAILNET_DEVICE_LIMIT: Joi.number().integer().min(1).default(50),
   TRUSTED_PROXY_IPS: Joi.string().default('127.0.0.1/32,100.64.0.0/10'),
 
   // Kubernetes
