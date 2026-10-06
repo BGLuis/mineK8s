@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -11,6 +13,7 @@ import {
   KUBERNETES_DRIVER,
 } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
+import { serverDataDirectory } from './server-data-volume';
 
 @Injectable()
 export class KubernetesService {
@@ -29,15 +32,25 @@ export class KubernetesService {
       `Provisioning Kubernetes resources for server [${server.name}] (${server.subdomain})...`,
     );
 
-    // 1. Create Persistent Volume Claim
+    // 1. Own the server's directory before its PVC exists: local-path chmods the PVC directory to 700
+    // when it provisions the volume, which would lock the control plane out unless it owns it.
+    await fs.promises.mkdir(
+      path.resolve(
+        this.configService.storage.serversDataRoot,
+        serverDataDirectory(server.subdomain),
+      ),
+      { recursive: true },
+    );
+
+    // 2. Create Persistent Volume Claim
     const pvcManifest = ManifestBuilder.buildPVC(server, this.configService);
     await this.driver.createPersistentVolumeClaim(pvcManifest);
 
-    // 2. Create Service
+    // 3. Create Service
     const serviceManifest = ManifestBuilder.buildService(server, this.configService);
     await this.driver.createService(serviceManifest);
 
-    // 3. Create Deployment
+    // 4. Create Deployment
     const deploymentManifest = ManifestBuilder.buildDeployment(
       server,
       settings,

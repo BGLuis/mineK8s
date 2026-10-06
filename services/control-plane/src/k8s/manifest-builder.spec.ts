@@ -275,7 +275,7 @@ describe('ManifestBuilder', () => {
 
           expect(run.status).not.toBe(0);
           expect(run.stderr).toContain('nao confere');
-          expect(fs.readdirSync(dataDir)).toEqual([]);
+          expect(fs.readdirSync(dataDir)).toEqual(['eula.txt']);
         });
 
         it('keeps the installed jar when a refetch does not match', () => {
@@ -296,6 +296,18 @@ describe('ManifestBuilder', () => {
 
           expect(run.status).toBe(0);
           expect(fs.readFileSync(wgetLog, 'utf8').trim().split('\n')).toHaveLength(1);
+        });
+
+        it('accepts the EULA even when the jar is already installed', () => {
+          const checksum = `sha1:${digest('sha1')}`;
+          fs.writeFileSync(path.join(dataDir, 'server.jar'), JAR);
+          fs.writeFileSync(path.join(dataDir, '.server-jar'), `${checksum}\n`);
+          fs.writeFileSync(path.join(dataDir, 'eula.txt'), 'eula=false\n');
+
+          const run = runScript(checksum);
+
+          expect(run.status).toBe(0);
+          expect(fs.readFileSync(path.join(dataDir, 'eula.txt'), 'utf8')).toBe('eula=true\n');
         });
 
         it('refuses a checksum without a known algorithm', () => {
@@ -417,6 +429,26 @@ describe('ManifestBuilder', () => {
       expect(script).toContain('sha256sum');
       expect(script).not.toContain('.snapshot_worker_ready');
     });
+  });
+
+  // Só a chave tem padrão (kubernetes.io/hostname): exigir hostname vazio deixaria o Job sem nó para rodar.
+  it.each([
+    [
+      'backup',
+      (config: AppConfigService) => ManifestBuilder.buildBackupJob(sampleServer, 'cold', 1, config),
+    ],
+    [
+      'restore',
+      (config: AppConfigService) =>
+        ManifestBuilder.buildRestoreJob(sampleServer, 'x.tar.gz', undefined, 1, config),
+    ],
+  ])('o Job de %s não exige nó quando KUBERNETES_NODE_AFFINITY_VALUE está vazia', (_, build) => {
+    const config = {
+      ...mockConfigService,
+      kubernetes: { ...mockConfigService.kubernetes, nodeAffinityValue: undefined },
+    } as AppConfigService;
+
+    expect(build(config).spec.template.spec.affinity).toBeUndefined();
   });
 
   describe('buildRestoreJob (RF-STO-04, D-05)', () => {

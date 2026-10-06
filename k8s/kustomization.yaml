@@ -6,3 +6,19 @@ resources:
   - storageclass.yaml
   - shared-pvcs.yaml
   - rbac.yaml
+  - postgres.yaml
+  - control-plane.yaml
+  - gateway.yaml
+
+# The hash suffix on generated names restarts the pods that use them when a value changes.
+configMapGenerator:
+  - name: control-plane-config
+    namespace: minekubernetes
+    envs:
+      - control-plane.env
+
+secretGenerator:
+  - name: control-plane-site
+    namespace: minekubernetes
+    envs:
+      - site.env

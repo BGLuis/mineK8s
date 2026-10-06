@@ -33,12 +33,8 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY services/web ./
 RUN npm run build
 
-# Distroless has no shell to mkdir; these are the paths the control plane writes to by default
-# (SERVERS_DATA_ROOT, BACKUPS_PATH, SHARED_CACHE_PATH), owned by nonroot so empty volumes inherit it.
-FROM base AS writable-dirs
-RUN mkdir -p /out/app/storage/servers /out/backups /out/cache
-
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:9eeb7f5887d0e239e78264b06f7f11d2e14be534050481803a9e4728fcdd278e AS runtime
+# Not distroless: backup and restore run the tar binary (servers-backup.service.ts).
+FROM base AS runtime
 LABEL org.opencontainers.image.source="https://github.com/BGLuis/mineK8s" \
       org.opencontainers.image.title="minekubernetes-control-plane"
 WORKDIR /app
@@ -49,8 +45,11 @@ COPY --link services/control-plane/package.json services/control-plane/
 COPY --link --from=web /app/services/web/dist/web/browser services/web/dist/web/browser
 COPY --link proto proto
 COPY --link k8s/tailscale/policy.hujson k8s/tailscale/
-COPY --link --from=writable-dirs --chown=65532:65532 /out/ /
+# Default write paths (SERVERS_DATA_ROOT, BACKUPS_PATH, SHARED_CACHE_PATH); empty volumes inherit the owner.
+RUN mkdir -p /app/storage/servers /backups /cache \
+    && chown 65532:65532 /app/storage/servers /backups /cache
+USER 65532:65532
 # 3000: API + SPA; 50051: gRPC for the gateway.
 EXPOSE 3000 50051
-# The distroless entrypoint is already node.
+ENTRYPOINT ["node"]
 CMD ["services/control-plane/dist/main.js"]

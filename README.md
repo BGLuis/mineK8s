@@ -49,7 +49,7 @@ docker build -f services/control-plane/Dockerfile -t minekubernetes/control-plan
 docker build -f crates/gateway/Dockerfile -t minekubernetes/gateway .                 # Gateway L7
 ```
 
-Ambas rodam como `nonroot` (UID 65532) sobre distroless, sem shell.
+Ambas rodam sem root (UID 65532). O gateway usa distroless; o control plane usa `node:24-trixie-slim`, porque backup e restore executam `tar`. Para o deploy no k3s, veja [`k8s/README.md`](k8s/README.md).
 
 **Control plane** (`3000` API e SPA, `50051` gRPC do gateway). Com `NODE_ENV=production` (padrão da imagem) o boot **não** aplica migrações; rode-as antes de cada versão nova, por exemplo num init container:
 

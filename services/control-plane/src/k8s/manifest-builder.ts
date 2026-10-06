@@ -2,12 +2,16 @@ import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
 
+import { serverDataVolumeName } from './server-data-volume';
+
 // Servers created before the Java version was resolved per server all ran on Java 21.
 const LEGACY_RUNNER_JAVA = 21;
 
 // URL and checksum arrive by env so they are never interpolated into the shell script.
 const FETCH_SERVER_JAR_SCRIPT = [
   'set -eu',
+  // Mesma aceitação que o instalador de modpacks grava (RF-STO-14); sem ela a JVM cria eula=false e encerra.
+  "printf 'eula=true\\n' > /data/eula.txt",
   'if [ -s /data/server.jar ] && [ "$(cat /data/.server-jar 2>/dev/null)" = "$SERVER_JAR_CHECKSUM" ]; then echo "server.jar $SERVER_JAR_CHECKSUM ja presente"; exit 0; fi',
   'case "${SERVER_JAR_CHECKSUM%%:*}" in',
   '  sha1) sum=sha1sum ;;',
@@ -33,7 +37,7 @@ export class ManifestBuilder {
       apiVersion: 'v1',
       kind: 'PersistentVolumeClaim',
       metadata: {
-        name: `data-${server.subdomain}`,
+        name: serverDataVolumeName(server.subdomain),
         namespace,
         labels: {
           'app.kubernetes.io/name': `mc-${server.subdomain}`,
@@ -271,7 +275,7 @@ export class ManifestBuilder {
               {
                 name: 'server-data',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
             ],
@@ -307,7 +311,7 @@ export class ManifestBuilder {
   ) {
     const namespace = configService.kubernetes.namespace;
     const filename = `${server.subdomain}_${backupType}_${timestamp}.tar.gz`;
-    const affinity = configService.kubernetes.nodeAffinityKey
+    const affinity = configService.kubernetes.nodeAffinityValue
       ? {
           nodeAffinity: {
             requiredDuringSchedulingIgnoredDuringExecution: {
@@ -434,7 +438,7 @@ echo "Cold backup concluido com sucesso."
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
               {
@@ -458,7 +462,7 @@ echo "Cold backup concluido com sucesso."
     configService: AppConfigService,
   ) {
     const namespace = configService.kubernetes.namespace;
-    const affinity = configService.kubernetes.nodeAffinityKey
+    const affinity = configService.kubernetes.nodeAffinityValue
       ? {
           nodeAffinity: {
             requiredDuringSchedulingIgnoredDuringExecution: {
@@ -588,7 +592,7 @@ fi
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: `data-${server.subdomain}`,
+                  claimName: serverDataVolumeName(server.subdomain),
                 },
               },
               {

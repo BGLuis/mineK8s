@@ -2,10 +2,10 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::client::Grpc;
-use tonic::codec::ProstCodec;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Request, Status};
+use tonic_prost::ProstCodec;
 use tracing::{error, info, warn};
 
 use crate::ipc::commands::execute_command;

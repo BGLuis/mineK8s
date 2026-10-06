@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
+import { serverDataDirectory } from '@k8s/server-data-volume';
 import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
@@ -34,7 +35,7 @@ export class ModpackInstallerService {
 
   public getServerDataDir(server: Server): string {
     const baseRoot = path.resolve(this.configService.storage.serversDataRoot);
-    const serverDir = path.resolve(baseRoot, server.subdomain);
+    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.subdomain));
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
     }
@@ -54,7 +55,9 @@ export class ModpackInstallerService {
 
     const server = await this.serverRepo.findOne({
       where: { id: serverId },
-      relations: ['minecraft_settings'],
+      relations: {
+        minecraft_settings: true,
+      },
     });
 
     if (!server) {

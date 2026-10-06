@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: minekubernetes
+  labels:
+    app.kubernetes.io/name: minekubernetes
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 1
+  # hostNetwork: a second pod could not bind :25565 while the old one runs.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minekubernetes
+        app.kubernetes.io/component: gateway
+    spec:
+      # SEC-01 accepts only 100.64.0.0/10 sources and asks the host's tailscaled who they are, so
+      # the gateway listens on the node itself instead of behind a Service that would SNAT them.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+      containers:
+        - name: gateway
+          image: minekubernetes/gateway:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTROL_PLANE_GRPC_URL
+              value: http://control-plane.minekubernetes.svc.cluster.local:50051
+            - name: TAILSCALE_SOCKET_PATH
+              value: /run/tailscale/tailscaled.sock
+          ports:
+            - name: minecraft
+              containerPort: 25565
+            - name: metrics
+              containerPort: 9090
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: tailscale
+              mountPath: /run/tailscale
+      volumes:
+        - name: tailscale
+          hostPath:
+            path: /run/tailscale
+            type: Directory

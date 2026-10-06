@@ -1,8 +1,12 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { KubernetesService } from './k8s.service';
 import { MockKubernetesDriver } from './drivers/mock-k8s.driver';
+import { serverDataDirectory } from './server-data-volume';
 
 describe('KubernetesService', () => {
   let service: KubernetesService;
@@ -10,10 +14,13 @@ describe('KubernetesService', () => {
   let mockConfigService: AppConfigService;
   let server: Server;
   let settings: MinecraftServerSettings;
+  let serversDataRoot: string;
 
   beforeEach(() => {
     driver = new MockKubernetesDriver();
+    serversDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'k8s-servers-'));
     mockConfigService = {
+      storage: { serversDataRoot },
       kubernetes: {
         namespace: 'minekubernetes',
         nodeAffinityKey: 'kubernetes.io/hostname',
@@ -42,6 +49,24 @@ describe('KubernetesService', () => {
       motd: 'Lobby server',
       max_players: 50,
     } as MinecraftServerSettings;
+  });
+
+  afterEach(() => fs.rmSync(serversDataRoot, { recursive: true, force: true }));
+
+  // local-path faz chmod 700 no diretório do PVC ao provisionar: o control plane só continua entrando
+  // nele se já for o dono, ou seja, se criou o diretório antes de o PVC existir.
+  it('cria o diretório do servidor antes do PVC', async () => {
+    const serverDir = path.join(serversDataRoot, serverDataDirectory(server.subdomain));
+    let existedWhenPvcWasCreated = false;
+    const createPvc = driver.createPersistentVolumeClaim.bind(driver);
+    driver.createPersistentVolumeClaim = async (manifest) => {
+      existedWhenPvcWasCreated = fs.existsSync(serverDir);
+      return createPvc(manifest);
+    };
+
+    await service.provisionServer(server, settings);
+
+    expect(existedWhenPvcWasCreated).toBe(true);
   });
 
   it('should provision PVC, Service, and Deployment', async () => {

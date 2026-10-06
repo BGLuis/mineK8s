@@ -16,6 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
+import { serverDataDirectory } from '@k8s/server-data-volume';
 import {
   ServerBackupEntity,
   BackupType,
@@ -71,7 +72,7 @@ export class ServersBackupService {
 
   public getServerDataDir(server: Server): string {
     const baseRoot = path.resolve(this.configService.storage.serversDataRoot);
-    const serverDir = path.resolve(baseRoot, server.subdomain);
+    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.subdomain));
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
     }
