@@ -1,0 +1,47 @@
+[
+  {
+    "id": 157,
+    "time": "2026-10-05T17:25:28Z",
+    "channel": "BETA",
+    "downloads": {
+      "server:default": {
+        "name": "paper-26.3-157.jar",
+        "checksums": {
+          "sha256": "77cdcd758777734b0b64db74974f68e56cb08637f3c36b26734842cb8521cc2e"
+        },
+        "size": 54177127,
+        "url": "https://fill-data.papermc.io/v1/objects/77cdcd758777734b0b64db74974f68e56cb08637f3c36b26734842cb8521cc2e/paper-26.3-157.jar"
+      }
+    }
+  },
+  {
+    "id": 156,
+    "time": "2026-10-05T15:17:11Z",
+    "channel": "BETA",
+    "downloads": {
+      "server:default": {
+        "name": "paper-26.3-156.jar",
+        "checksums": {
+          "sha256": "f34cf5ddc90fabda14a944446808a29eb24d39b187a1f40df9051df41f8eebad"
+        },
+        "size": 54177078,
+        "url": "https://fill-data.papermc.io/v1/objects/f34cf5ddc90fabda14a944446808a29eb24d39b187a1f40df9051df41f8eebad/paper-26.3-156.jar"
+      }
+    }
+  },
+  {
+    "id": 153,
+    "time": "2026-10-05T15:13:10Z",
+    "channel": "BETA",
+    "downloads": {
+      "server:default": {
+        "name": "paper-26.3-153.jar",
+        "checksums": {
+          "sha256": "a0e25f7ca6e6c358a81b554942b28c55fac1ac98dd38c26640630a0143b8c659"
+        },
+        "size": 54174358,
+        "url": "https://fill-data.papermc.io/v1/objects/a0e25f7ca6e6c358a81b554942b28c55fac1ac98dd38c26640630a0143b8c659/paper-26.3-153.jar"
+      }
+    }
+  }
+]

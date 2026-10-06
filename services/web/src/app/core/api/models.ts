@@ -60,6 +60,9 @@ export interface MinecraftServerSettings {
 
 /** GET /api/servers/:id. */
 export interface ServerDetail extends ServerSummary {
+  java_version: number | null;
+  server_build: string | null;
+  server_build_channel: string | null;
   settings?: MinecraftServerSettings;
 }
 

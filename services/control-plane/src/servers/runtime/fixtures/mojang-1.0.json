@@ -1,0 +1,15 @@
+{
+  "id": "1.0",
+  "type": "release",
+  "javaVersion": {
+    "component": "jre-legacy",
+    "majorVersion": 8
+  },
+  "downloads": {
+    "client": {
+      "sha1": "b679fea27f2284836202e9365e13a82552092e5d",
+      "size": 2362837,
+      "url": "https://launcher.mojang.com/v1/objects/b679fea27f2284836202e9365e13a82552092e5d/client.jar"
+    }
+  }
+}

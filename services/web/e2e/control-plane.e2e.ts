@@ -55,6 +55,8 @@ test('criar servidor Vanilla e ligá-lo até READY', async () => {
   await expect(page).toHaveURL(/\/servers\/[0-9a-f-]{36}$/);
   serverPath = new URL(page.url()).pathname;
   await expect(page.getByRole('heading', { name: SERVER_NAME })).toBeVisible();
+  // Resolved from the version metadata at creation (fakes/mojang.ts), not fixed by the runner image.
+  await expect(page.getByText('Java 21', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Ligar' }).click();
   // The reconciler promotes STARTING to READY only after a successful Server List Ping.

@@ -26,7 +26,7 @@ describe('KubernetesService', () => {
         nodeAffinityKey: 'kubernetes.io/hostname',
       },
       registry: {
-        jvmRunnerImage: 'eclipse-temurin:21-jre-jammy',
+        jvmRunnerImage: 'eclipse-temurin:{java}-jre-jammy',
       },
     } as any;
 
@@ -83,6 +83,27 @@ describe('KubernetesService', () => {
 
     const dep = await driver.getDeployment('mc-lobby', 'minekubernetes');
     expect(dep?.replicas).toBe(1);
+  });
+
+  it('should start a server created before a manifest change on the new manifest (#155)', async () => {
+    await service.provisionServer(server, settings);
+    const before = driver.deployments.get('minekubernetes/mc-lobby').spec.template.spec;
+    expect(before.containers[0].image).toBe('eclipse-temurin:21-jre-jammy');
+    expect(before.initContainers).toBeUndefined();
+
+    server.java_version = 25;
+    server.server_jar_url = 'https://fill-data.papermc.io/v1/objects/abc/paper-26.2-129.jar';
+    server.server_jar_checksum = 'sha256:abc';
+    server.state = 'STARTING';
+    await service.startServer(server);
+
+    const after = driver.deployments.get('minekubernetes/mc-lobby');
+    expect(after.spec.template.spec.containers[0].image).toBe('eclipse-temurin:25-jre-jammy');
+    expect(after.spec.template.spec.initContainers[0].env).toContainEqual({
+      name: 'SERVER_JAR_URL',
+      value: 'https://fill-data.papermc.io/v1/objects/abc/paper-26.2-129.jar',
+    });
+    expect(after.spec.replicas).toBe(1);
   });
 
   it('should stop server by scaling deployment to 0', async () => {

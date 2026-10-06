@@ -88,3 +88,11 @@ export class ModpackCatalogConfig {
     public readonly requestTimeoutMs: number = 8000,
   ) {}
 }
+
+export class ServerJarSourcesConfig {
+  constructor(
+    public readonly mojangManifestUrl: string,
+    public readonly paperApiUrl: string,
+    public readonly purpurApiUrl: string,
+  ) {}
+}

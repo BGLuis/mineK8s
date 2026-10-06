@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { startRcon, startSlp } from './fakes/minecraft';
+import { startMojangMeta } from './fakes/mojang';
 import { startCloudApi, startLocalApi } from './fakes/tailscale';
 import {
   BOOTSTRAP_TOKEN,
@@ -12,6 +13,7 @@ import {
   CONTROL_PLANE_PORT,
   CONTROL_PLANE_URL,
   GRPC_PORT,
+  MOJANG_META_PORT,
   POSTGRES_PORT,
   RCON_PORT,
   SLP_PORT,
@@ -59,7 +61,7 @@ async function waitForHealth(child: ChildProcess, timeoutMs: number): Promise<vo
 /**
  * Brings up the real control plane (built from services/control-plane) on Postgres, with the mock
  * Kubernetes driver and fakes for everything outside this machine: tailscaled, the Tailscale Cloud
- * API and the game server's RCON/SLP ports. The returned function is the global teardown.
+ * API, Mojang's version metadata and the game server's RCON/SLP ports. The returned function is the global teardown.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   for (const port of [
@@ -67,6 +69,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     GRPC_PORT,
     POSTGRES_PORT,
     CLOUD_API_PORT,
+    MOJANG_META_PORT,
     RCON_PORT,
     SLP_PORT,
   ]) {
@@ -78,6 +81,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const fakes = await Promise.all([
     startLocalApi(socketPath),
     startCloudApi(CLOUD_API_PORT),
+    startMojangMeta(MOJANG_META_PORT),
     startRcon(RCON_PORT),
     startSlp(SLP_PORT),
   ]);
@@ -117,6 +121,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       TAILSCALE_SOCKET_PATH: socketPath,
       TAILSCALE_API_URL: `http://127.0.0.1:${CLOUD_API_PORT}`,
       TAILSCALE_API_KEY: 'tskey-api-e2e',
+      MOJANG_VERSION_MANIFEST_URL: `http://127.0.0.1:${MOJANG_META_PORT}/mc/game/version_manifest_v2.json`,
       SERVERS_DATA_ROOT: path.join(workDir, 'servers'),
       BACKUPS_PATH: path.join(workDir, 'backups'),
       SHARED_CACHE_PATH: path.join(workDir, 'cache'),

@@ -54,6 +54,23 @@ export class Server {
   @Column({ type: 'varchar', length: 100, nullable: true })
   modpack_id: string | null;
 
+  /** Java major of the runner image, chosen when the version was resolved; null on servers created before that. */
+  @Column({ type: 'int', nullable: true })
+  java_version: number | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  server_jar_url: string | null;
+
+  /** `<algorithm>:<hex digest>` of server_jar_url, e.g. `sha256:5ffe...`. */
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  server_jar_checksum: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  server_build: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  server_build_channel: string | null;
+
   @Column({ type: 'int', default: 4096 })
   allocated_memory_mb: number;
 

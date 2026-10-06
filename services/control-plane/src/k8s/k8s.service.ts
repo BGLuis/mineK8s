@@ -71,8 +71,17 @@ export class KubernetesService {
     );
   }
 
+  /**
+   * Rewrites the Deployment from the record before scaling, so a server picks up the jar, Java version and manifest
+   * changes made since it last ran. Callers start only a server whose pod is down, so nothing running is restarted.
+   */
   async startServer(server: Server): Promise<void> {
-    this.logger.log(`Starting server [${server.subdomain}]: scaling deployment to 1...`);
+    this.logger.log(
+      `Starting server [${server.subdomain}]: applying deployment and scaling to 1...`,
+    );
+    await this.driver.replaceDeployment(
+      ManifestBuilder.buildDeployment(server, server.minecraft_settings, this.configService),
+    );
     await this.driver.scaleDeployment(
       `mc-${server.subdomain}`,
       1,

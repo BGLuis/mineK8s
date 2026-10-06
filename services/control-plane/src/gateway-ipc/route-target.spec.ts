@@ -62,6 +62,7 @@ describe('target_ip_port igual em todas as origens de rota (#137)', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       undefined,
       gatewayIpc,
     );
