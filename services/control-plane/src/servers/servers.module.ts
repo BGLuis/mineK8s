@@ -13,6 +13,7 @@ import { LoggingModule } from '@logging/logging.module';
 import { ProbesModule } from '../probes/probes.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
 import { DnsModule } from '../dns/dns.module';
+import { NodeModule } from '../node/node.module';
 
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
@@ -38,6 +39,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     ProbesModule,
     GatewayIpcModule,
     DnsModule,
+    NodeModule,
   ],
   controllers: [ServersController],
   providers: [
