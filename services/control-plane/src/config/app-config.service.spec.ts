@@ -62,6 +62,7 @@ describe('AppConfigModule & Schema Validation', () => {
       TAILSCALE_SOCKET_PATH: '/run/tailscale.sock',
       TAILSCALE_AUTH_ENABLED: true,
       TRUSTED_PROXY_IPS: '127.0.0.1,100.64.0.1',
+      TAILNET_DEVICE_LIMIT: 100,
       KUBERNETES_NAMESPACE: 'minekubernetes',
     });
 
@@ -74,6 +75,7 @@ describe('AppConfigModule & Schema Validation', () => {
     expect(appConfig.jwt.secret).toBe('this_is_a_valid_jwt_secret_with_at_least_32_characters');
     expect(appConfig.jwt.expiration).toBe('2d');
     expect(appConfig.tailscale.trustedProxyIps).toEqual(['127.0.0.1', '100.64.0.1']);
+    expect(appConfig.tailscale.deviceLimit).toBe(100);
     expect(appConfig.kubernetes.namespace).toBe('minekubernetes');
   });
 

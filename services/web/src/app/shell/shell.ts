@@ -3,7 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterOutlet } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 
-import { MockApi } from '../core/api/mock-api';
+import { NodeApi } from '../core/api/node.api';
 import { AuthSession } from '../core/auth/auth-session';
 import { McLegalFooter, McSidebar } from '../ui';
 
@@ -16,7 +16,6 @@ import { McLegalFooter, McSidebar } from '../ui';
     <mc-sidebar
       [user]="sidebarUser()"
       [tailnet]="tailnet()"
-      [tailnetIsMock]="true"
       (logout)="logout()"
     />
     <div class="flex min-h-dvh flex-col pt-14 pb-16 md:pt-0 md:pb-0 md:pl-64">
@@ -30,15 +29,15 @@ import { McLegalFooter, McSidebar } from '../ui';
 export class ShellComponent {
   private readonly session = inject(AuthSession);
   private readonly router = inject(Router);
-  private readonly mock = inject(MockApi);
+  private readonly nodeApi = inject(NodeApi);
 
   protected readonly sidebarUser = computed(() => {
     const user = this.session.user();
     return user ? { nick: user.minecraft_nick, role: user.role } : null;
   });
   protected readonly tailnet = toSignal(
-    this.mock.nodeMetrics().pipe(
-      map((metrics) => metrics.tailnetDevices),
+    this.nodeApi.metrics().pipe(
+      map(({ tailnet }) => ({ used: tailnet.active, limit: tailnet.limit })),
       catchError(() => of(null)),
     ),
     { initialValue: null },

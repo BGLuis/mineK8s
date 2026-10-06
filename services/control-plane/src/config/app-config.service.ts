@@ -113,6 +113,7 @@ export class AppConfigService {
       this.config.get<string>('TAILSCALE_API_KEY'),
       this.config.get<string>('TAILNET_NAME'),
       this.parseCsv(this.config.get<string>('TRUSTED_PROXY_IPS')),
+      this.config.get<number>('TAILNET_DEVICE_LIMIT', 50),
     );
   }
 

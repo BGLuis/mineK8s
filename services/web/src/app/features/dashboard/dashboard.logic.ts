@@ -1,8 +1,5 @@
-import { ServerSummary, TailscaleDevice } from '../../core/api/models';
+import { NodeMetrics, ServerSummary } from '../../core/api/models';
 import { ServerPlayerCount } from '../../ui';
-
-/** Free Tailscale plan limit shown in the sidebar and on the dashboard (SRS tailnet quota). */
-export const TAILSCALE_DEVICE_LIMIT = 50;
 
 export interface DashboardSummary {
   total: number;
@@ -10,10 +7,16 @@ export interface DashboardSummary {
   players: number;
 }
 
-export interface TailscaleQuota {
-  used: number;
-  limit: number;
+export interface ResourceTile {
   percent: number;
+  detail: string;
+}
+
+export interface NodeTiles {
+  cpu: ResourceTile;
+  ram: ResourceTile;
+  nvme: ResourceTile;
+  tailnet: ResourceTile & { used: number; limit: number };
 }
 
 /** "Online" means READY; only those servers contribute players. */
@@ -46,11 +49,33 @@ export function compactSummaryText(summary: DashboardSummary): string {
   return [`${summary.online} online`, plural(summary.players, 'jogador', 'jogadores')].join(' · ');
 }
 
-/** Only ACTIVE devices count against the quota; PENDING and REVOKED ones do not. */
-export function tailscaleQuota(
-  devices: readonly Pick<TailscaleDevice, 'status'>[],
-  limit: number = TAILSCALE_DEVICE_LIMIT,
-): TailscaleQuota {
-  const used = devices.filter((device) => device.status === 'ACTIVE').length;
-  return { used, limit, percent: Math.round((used / limit) * 100) };
+const BYTES_PER_GIB = 1024 ** 3;
+
+function gib(bytes: number): string {
+  return (bytes / BYTES_PER_GIB).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+}
+
+function percentOf(part: number, whole: number): number {
+  return whole > 0 ? Math.round((part / whole) * 100) : 0;
+}
+
+export function nodeTiles(metrics: NodeMetrics): NodeTiles {
+  const { cpu, memory, disk, tailnet } = metrics;
+  return {
+    cpu: { percent: cpu.usedPercent, detail: plural(cpu.cores, 'núcleo', 'núcleos') },
+    ram: {
+      percent: percentOf(memory.allocated, memory.total),
+      detail: `${gib(memory.allocated)} de ${gib(memory.total)} GiB alocados`,
+    },
+    nvme: {
+      percent: Math.round(disk.usedPercent),
+      detail: `${gib(disk.total - disk.free)} de ${gib(disk.total)} GiB usados`,
+    },
+    tailnet: {
+      percent: percentOf(tailnet.active, tailnet.limit),
+      detail: `${tailnet.active}/${tailnet.limit} dispositivos ativos na cota`,
+      used: tailnet.active,
+      limit: tailnet.limit,
+    },
+  };
 }

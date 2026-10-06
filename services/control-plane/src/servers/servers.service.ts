@@ -29,6 +29,7 @@ import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
+import { NodeMetricsService } from '../node/node-metrics.service';
 
 import { CreateServerDto, ServerType } from './dto/create-server.dto';
 import { ServerDetailDto, ServerSummaryDto, toServerSettingsDto } from './dto/server-summary.dto';
@@ -65,6 +66,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly dnsDriver?: CloudflareDnsDriver,
     @Optional()
     private readonly playerSessions?: PlayerSessionsService,
+    @Optional()
+    private readonly nodeMetrics?: NodeMetricsService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -94,6 +97,8 @@ export class ServersService implements OnApplicationBootstrap {
   async create(
     dto: CreateServerDto,
   ): Promise<{ id: string; name: string; subdomain: string; status: ServerState }> {
+    await this.nodeMetrics?.assertDiskAllowsCreation();
+
     const existing = await this.serverRepo.findOne({
       where: { subdomain: dto.subdomain },
     });

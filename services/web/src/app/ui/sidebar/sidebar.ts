@@ -6,7 +6,6 @@ import { filter, map } from 'rxjs';
 import { UserRole } from '../../core/api/models';
 import { McIcon } from '../icon/icon';
 import { IconName } from '../icon/icon-registry';
-import { McNoApiTag } from '../no-api-tag/no-api-tag';
 
 export interface SidebarUser {
   nick: string;
@@ -69,7 +68,7 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
 @Component({
   selector: 'mc-sidebar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McIcon, McNoApiTag, RouterLink],
+  imports: [McIcon, RouterLink],
   host: { class: 'contents' },
   template: `
     <aside
@@ -115,9 +114,6 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
           <div class="bevel-sunken flex flex-col gap-1 bg-bg-sunken p-3">
             <p class="t-caption text-text-muted">Rede Tailscale</p>
             <p class="t-body-strong">{{ quota.used }} de {{ quota.limit }} dispositivos</p>
-            @if (tailnetIsMock()) {
-              <mc-no-api-tag detail="limite do plano" />
-            }
           </div>
         }
         @if (user(); as current) {
@@ -198,8 +194,6 @@ export class McSidebar {
 
   readonly user = input<SidebarUser | null>(null);
   readonly tailnet = input<SidebarTailnet | null>(null);
-  /** True while the device limit comes from MockApi. */
-  readonly tailnetIsMock = input(false);
   readonly logout = output<void>();
 
   protected readonly entries = NAV_ENTRIES;

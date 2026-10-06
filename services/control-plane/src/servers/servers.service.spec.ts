@@ -1,5 +1,10 @@
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServersService } from './servers.service';
@@ -16,6 +21,7 @@ describe('ServersService', () => {
   let mockSlpProbeService: any;
   let mockRuntimeResolver: any;
   let playerSessions: PlayerSessionsService;
+  let mockNodeMetrics: { assertDiskAllowsCreation: jest.Mock };
 
   const runtimeFor = (version: string) => ({
     java_version: version.startsWith('26.') ? 25 : 21,
@@ -149,6 +155,7 @@ describe('ServersService', () => {
     };
 
     playerSessions = new PlayerSessionsService();
+    mockNodeMetrics = { assertDiskAllowsCreation: jest.fn().mockResolvedValue(undefined) };
 
     service = new ServersService(
       mockServerRepo as any,
@@ -163,6 +170,7 @@ describe('ServersService', () => {
       mockSlpProbeService as any,
       mockDnsDriver as any,
       playerSessions,
+      mockNodeMetrics as any,
     );
   });
 
@@ -183,6 +191,18 @@ describe('ServersService', () => {
       expect(mockK8sService.provisionServer).toHaveBeenCalled();
       expect(serversDb.size).toBe(1);
       expect(settingsDb.size).toBe(1);
+    });
+
+    it('refuses to create when the disk is full, before saving anything or touching k8s', async () => {
+      const diskFull = new HttpException({ code: 'DISK_USAGE_BLOCKED', message: 'full' }, 507);
+      mockNodeMetrics.assertDiskAllowsCreation.mockRejectedValue(diskFull);
+
+      await expect(
+        service.create({ name: 'Hub', subdomain: 'hub', allocated_memory_mb: 4096 }),
+      ).rejects.toBe(diskFull);
+
+      expect(mockServerRepo.save).not.toHaveBeenCalled();
+      expect(mockK8sService.provisionServer).not.toHaveBeenCalled();
     });
 
     it('should store the runtime resolved for the type and version, so the Deployment never needs the network', async () => {

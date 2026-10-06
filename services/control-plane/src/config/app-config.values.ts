@@ -34,6 +34,7 @@ export class TailscaleConfig {
     public readonly apiKey?: string,
     public readonly tailnetName?: string,
     public readonly trustedProxyIps: string[] = [],
+    public readonly deviceLimit: number = 50,
   ) {}
 }
 

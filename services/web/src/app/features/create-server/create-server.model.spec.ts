@@ -211,6 +211,18 @@ describe('createServerErrorMessage', () => {
     expect(createServerErrorMessage(error)).toContain('endereço já está em uso');
   });
 
+  it('explains a full disk by its code, not as a duplicated subdomain', () => {
+    const error = new HttpErrorResponse({
+      status: 507,
+      error: { statusCode: 507, code: 'DISK_USAGE_BLOCKED', message: 'Host disk is 86% full' },
+    });
+
+    const message = createServerErrorMessage(error);
+
+    expect(message).toContain('disco');
+    expect(message).not.toContain('endereço');
+  });
+
   it('shows the validation message of a 400', () => {
     const error = new HttpErrorResponse({
       status: 400,

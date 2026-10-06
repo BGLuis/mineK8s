@@ -301,6 +301,9 @@ export function apiMessage(error: unknown): string | null {
 
 export function createServerErrorMessage(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
+    if ((error.error as { code?: string } | null)?.code === 'DISK_USAGE_BLOCKED') {
+      return 'O disco do servidor está quase cheio (85 % ou mais). Apague backups ou mundos antigos antes de criar outro servidor.';
+    }
     if (error.status === 409) {
       return 'Esse endereço já está em uso. Volte à etapa Rede e escolha outro.';
     }

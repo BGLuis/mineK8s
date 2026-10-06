@@ -21,6 +21,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { ModpacksModule } from './modpacks/modpacks.module';
 import { DnsModule } from './dns/dns.module';
 import { ServerEventsModule } from './server-events/server-events.module';
+import { NodeModule } from './node/node.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ServerEventsModule } from './server-events/server-events.module';
     ModpacksModule,
     DnsModule,
     ServerEventsModule,
+    NodeModule,
   ],
   controllers: [AppController],
   providers: [

@@ -7,5 +7,6 @@ export * from './modpacks.api';
 export * from './tailscale.api';
 export * from './admin.api';
 export * from './health.api';
+export * from './node.api';
 export * from './auth.api';
 export * from './mock-api';

@@ -106,7 +106,6 @@ const MODPACK_VERSION: ModpackVersion = {
     <mc-sidebar
       [user]="{ nick: 'Luis', role: 'ADMIN' }"
       [tailnet]="{ used: 12, limit: 50 }"
-      [tailnetIsMock]="true"
     />
 
     <div class="flex min-h-dvh flex-col pt-14 pb-16 md:pt-0 md:pb-0 md:pl-64">
