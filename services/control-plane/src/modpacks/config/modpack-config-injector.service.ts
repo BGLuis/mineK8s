@@ -1,11 +1,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { Server } from '@database/entities/server.entity';
+import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
+import { writeServerProperties } from '../../k8s/server-properties';
 import { SkinsProvisionerService } from '../skins/skins-provisioner.service';
 
 export interface ConfigInjectionOptions {
-  rconPassword?: string;
+  settings?: MinecraftServerSettings;
   isModpack?: boolean;
   serverType?: string;
 }
@@ -61,45 +62,10 @@ export class ModpackConfigInjectorService {
     serverDataDir: string,
     options: ConfigInjectionOptions,
   ): Promise<void> {
-    const propsPath = path.join(serverDataDir, 'server.properties');
-    const existingProps = new Map<string, string>();
-
-    if (fs.existsSync(propsPath)) {
-      const content = await fs.promises.readFile(propsPath, 'utf-8');
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
-          const idx = trimmed.indexOf('=');
-          const key = trimmed.slice(0, idx).trim();
-          const val = trimmed.slice(idx + 1).trim();
-          existingProps.set(key, val);
-        }
-      }
-    }
-
-    // Regras Mandatórias da Matriz RF-STO-14
-    existingProps.set('server-port', '25565');
-    existingProps.set('enable-rcon', 'true');
-    existingProps.set('rcon.port', '25575');
-    if (options.rconPassword) {
-      existingProps.set('rcon.password', options.rconPassword);
-    } else if (!existingProps.has('rcon.password')) {
-      existingProps.set('rcon.password', 'minek8s-rcon-secret');
-    }
-    existingProps.set('online-mode', 'false');
-    existingProps.set('enforce-secure-chat', 'false');
-
-    // Resolução C-08: max-tick-time=-1 para modpacks, 60000 para vanilla
-    const isModpack = options.isModpack !== false;
-    existingProps.set('max-tick-time', isModpack ? '-1' : '60000');
-
-    // Serializa de volta preservando chave=valor
-    const lines = ['# Minecraft server properties - Managed by MineKubernetes'];
-    for (const [key, value] of existingProps.entries()) {
-      lines.push(`${key}=${value}`);
-    }
-
-    await fs.promises.writeFile(propsPath, `${lines.join('\n')}\n`);
+    await writeServerProperties(serverDataDir, {
+      settings: options.settings,
+      isModpack: options.isModpack !== false,
+    });
   }
 
   private async injectPaperGlobal(serverDataDir: string): Promise<void> {

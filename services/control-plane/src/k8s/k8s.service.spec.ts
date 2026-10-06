@@ -48,6 +48,17 @@ describe('KubernetesService', () => {
     settings = {
       motd: 'Lobby server',
       max_players: 50,
+      difficulty: 'hard',
+      gamemode: 'survival',
+      hardcore: false,
+      pvp: true,
+      spawn_protection: 16,
+      view_distance: 10,
+      simulation_distance: 10,
+      rcon_port: 25575,
+      rcon_password: 'lobby-rcon-secret',
+      enforce_secure_chat: false,
+      online_mode: false,
     } as MinecraftServerSettings;
   });
 
@@ -67,6 +78,61 @@ describe('KubernetesService', () => {
     await service.provisionServer(server, settings);
 
     expect(existedWhenPvcWasCreated).toBe(true);
+  });
+
+  // Sem enable-rcon=true o console, o stop gracioso e o backup a quente falham (#153).
+  describe('server.properties (#153)', () => {
+    const readProps = (srv: Server) =>
+      fs.readFileSync(
+        path.join(serversDataRoot, serverDataDirectory(srv.subdomain), 'server.properties'),
+        'utf-8',
+      );
+
+    it('grava RCON e os minecraft_settings antes do PVC existir', async () => {
+      let propsWhenPvcWasCreated = '';
+      const createPvc = driver.createPersistentVolumeClaim.bind(driver);
+      driver.createPersistentVolumeClaim = async (manifest) => {
+        propsWhenPvcWasCreated = readProps(server);
+        return createPvc(manifest);
+      };
+
+      await service.provisionServer(server, settings);
+
+      expect(propsWhenPvcWasCreated).toContain('enable-rcon=true');
+      expect(propsWhenPvcWasCreated).toContain('rcon.password=lobby-rcon-secret');
+      expect(propsWhenPvcWasCreated).toContain('motd=Lobby server');
+      expect(propsWhenPvcWasCreated).toContain('max-players=50');
+    });
+
+    it('regrava ao iniciar para que um servidor criado sem o arquivo ganhe RCON', async () => {
+      await service.provisionServer(server, settings);
+      const propsPath = path.join(
+        serversDataRoot,
+        serverDataDirectory(server.subdomain),
+        'server.properties',
+      );
+      fs.writeFileSync(propsPath, 'enable-rcon=false\nlevel-seed=abc\n');
+
+      server.minecraft_settings = { ...settings, motd: 'Novo motd' } as MinecraftServerSettings;
+      await service.startServer(server);
+
+      const props = readProps(server);
+      expect(props).toContain('enable-rcon=true');
+      expect(props).toContain('motd=Novo motd');
+      expect(props).toContain('level-seed=abc');
+    });
+
+    it('não grava server.properties para jogos que não são Minecraft', async () => {
+      server.game_type = 'terraria';
+
+      await service.provisionServer(server);
+
+      expect(
+        fs.existsSync(
+          path.join(serversDataRoot, serverDataDirectory(server.subdomain), 'server.properties'),
+        ),
+      ).toBe(false);
+    });
   });
 
   it('should provision PVC, Service, and Deployment', async () => {

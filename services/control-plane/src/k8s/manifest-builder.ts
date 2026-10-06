@@ -3,6 +3,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { Server } from '@database/entities/server.entity';
 
 import { serverDataVolumeName } from './server-data-volume';
+import { isModpackServerType } from './server-properties';
 
 // Servers created before the Java version was resolved per server all ran on Java 21.
 const LEGACY_RUNNER_JAVA = 21;
@@ -114,7 +115,7 @@ export class ManifestBuilder {
     const namespace = configService.kubernetes.namespace;
     const heapMb = server.allocated_memory_mb;
     const containerMemoryLimitMb = heapMb > 8192 ? heapMb + 2048 : heapMb + 1536; // Heap + 1.5/2 GiB (C-17, RF-ARQ-09)
-    const isModpack = ['FORGE', 'NEOFORGE', 'FABRIC'].includes(server.server_type.toUpperCase());
+    const isModpack = isModpackServerType(server.server_type);
 
     const initContainers =
       server.server_jar_url && server.server_jar_checksum
