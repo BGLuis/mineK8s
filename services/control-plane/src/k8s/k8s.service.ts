@@ -14,6 +14,7 @@ import {
 } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
 import { serverDataDirectory } from './server-data-volume';
+import { isModpackServerType, writeServerProperties } from './server-properties';
 
 @Injectable()
 export class KubernetesService {
@@ -34,13 +35,8 @@ export class KubernetesService {
 
     // 1. Own the server's directory before its PVC exists: local-path chmods the PVC directory to 700
     // when it provisions the volume, which would lock the control plane out unless it owns it.
-    await fs.promises.mkdir(
-      path.resolve(
-        this.configService.storage.serversDataRoot,
-        serverDataDirectory(server.subdomain),
-      ),
-      { recursive: true },
-    );
+    await fs.promises.mkdir(this.serverDataDir(server), { recursive: true });
+    await this.writeServerProperties(server, settings);
 
     // 2. Create Persistent Volume Claim
     const pvcManifest = ManifestBuilder.buildPVC(server, this.configService);
@@ -79,6 +75,7 @@ export class KubernetesService {
     this.logger.log(
       `Starting server [${server.subdomain}]: applying deployment and scaling to 1...`,
     );
+    await this.writeServerProperties(server, server.minecraft_settings);
     await this.driver.replaceDeployment(
       ManifestBuilder.buildDeployment(server, server.minecraft_settings, this.configService),
     );
@@ -87,6 +84,27 @@ export class KubernetesService {
       1,
       this.configService.kubernetes.namespace,
     );
+  }
+
+  private serverDataDir(server: Server): string {
+    return path.resolve(
+      this.configService.storage.serversDataRoot,
+      serverDataDirectory(server.subdomain),
+    );
+  }
+
+  /** The server reads RCON and the Minecraft settings from server.properties, so it has to be written before every boot. */
+  private async writeServerProperties(
+    server: Server,
+    settings?: MinecraftServerSettings,
+  ): Promise<void> {
+    if (server.game_type && server.game_type.toUpperCase() !== 'MINECRAFT') {
+      return;
+    }
+    await writeServerProperties(this.serverDataDir(server), {
+      settings,
+      isModpack: isModpackServerType(server.server_type),
+    });
   }
 
   async stopServer(server: Server): Promise<void> {

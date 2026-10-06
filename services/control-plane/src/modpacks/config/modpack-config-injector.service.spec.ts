@@ -1,11 +1,27 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ModpackConfigInjectorService } from './modpack-config-injector.service';
 
 describe('ModpackConfigInjectorService (RF-STO-14, C-08, C-15)', () => {
   let service: ModpackConfigInjectorService;
   let tempServerDir: string;
+  const settings = {
+    motd: 'Modpack',
+    max_players: 10,
+    difficulty: 'normal',
+    gamemode: 'survival',
+    hardcore: false,
+    pvp: true,
+    spawn_protection: 16,
+    view_distance: 10,
+    simulation_distance: 10,
+    rcon_port: 25575,
+    rcon_password: 'secret-rcon-pass',
+    enforce_secure_chat: false,
+    online_mode: false,
+  } as MinecraftServerSettings;
 
   beforeEach(async () => {
     service = new ModpackConfigInjectorService();
@@ -18,7 +34,7 @@ describe('ModpackConfigInjectorService (RF-STO-14, C-08, C-15)', () => {
 
   it('deve injetar eula=true e server.properties com max-tick-time=-1 para modpacks (C-08, C-15)', async () => {
     await service.injectConfigurationMatrix(tempServerDir, {
-      rconPassword: 'secret-rcon-pass',
+      settings,
       isModpack: true,
       serverType: 'FABRIC',
     });

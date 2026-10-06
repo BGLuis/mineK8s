@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import { Server } from '../../database/entities/server.entity';
+import { resolveRconCredentials } from '../../k8s/server-properties';
 import { RconClient } from '../client/rcon-client';
 
 @Injectable()
@@ -36,8 +37,7 @@ export class RconConnectionPool implements OnModuleDestroy {
     const isMock = this.configService.kubernetes.useMockDriver;
     const host = isMock ? '127.0.0.1' : `${serviceName}.${namespace}.svc.cluster.local`;
 
-    const port = server.minecraft_settings?.rcon_port || 25575;
-    const password = server.minecraft_settings?.rcon_password || 'minek8s-rcon-default';
+    const { port, password } = resolveRconCredentials(server.minecraft_settings);
 
     this.logger.log(`Criando nova conexão RCON no pool para [${server.id}] ${host}:${port}`);
 

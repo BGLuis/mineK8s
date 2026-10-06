@@ -224,7 +224,7 @@ export class ModpackInstallerService {
 
       // Fase 4: Matriz de Configuração e Finalização (95 -> 100%)
       await this.configInjector.injectConfigurationMatrix(serverDir, {
-        rconPassword: server.minecraft_settings?.rcon_password,
+        settings: server.minecraft_settings,
         isModpack: true,
         serverType: server.server_type,
       });
