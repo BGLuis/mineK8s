@@ -3,29 +3,15 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, catchError, exhaustMap, forkJoin, map, merge, of, switchMap } from 'rxjs';
 
-import { MockApi } from '../../core/api/mock-api';
 import { ServersSocket } from '../../core/realtime/servers-socket';
 import { ServerSummary } from '../../core/api/models';
-import { TailscaleApi } from '../../core/api/tailscale.api';
+import { NodeApi } from '../../core/api/node.api';
 import { ServersApi } from '../../core/api/servers.api';
-import {
-  McBanner,
-  McButton,
-  McIcon,
-  McNoApiTag,
-  McServerCard,
-  McStatTile,
-  ServerPlayerCount,
-} from '../../ui';
-import {
-  TAILSCALE_DEVICE_LIMIT,
-  compactSummaryText,
-  summarizeServers,
-  summaryText,
-  tailscaleQuota,
-} from './dashboard.logic';
+import { McBanner, McButton, McIcon, McServerCard, McStatTile, ServerPlayerCount } from '../../ui';
+import { compactSummaryText, nodeTiles, summarizeServers, summaryText } from './dashboard.logic';
 import { ServerLifecycle } from './server-lifecycle';
 import { liveRefresh } from './live-refresh';
+import { visiblePoll } from './visible-poll';
 
 const POLL_MS = 10_000;
 const SKELETON_CARDS = [0, 1, 2];
@@ -38,7 +24,7 @@ interface Snapshot {
 @Component({
   selector: 'mc-dashboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McBanner, McButton, McIcon, McNoApiTag, McServerCard, McStatTile, RouterLink],
+  imports: [McBanner, McButton, McIcon, McServerCard, McStatTile, RouterLink],
   styles: `
     @media (prefers-reduced-motion: no-preference) {
       .skeleton {
@@ -65,29 +51,25 @@ interface Snapshot {
     @if (diskAlert(); as alert) {
       <mc-banner class="mb-6" [tone]="alert.level" [title]="'Disco em ' + alert.percent + ' %'">
         {{ alert.level === 'danger' ? 'Acima de 90 % do volume.' : 'Acima de 75 % do volume.' }}
+        @if (alert.blocksCreation) {
+          A criação de servidores está bloqueada até liberar espaço.
+        }
         Apague backups antigos ou aumente o disco.
-        <mc-no-api-tag class="ml-1 align-middle" detail="alertas de disco" />
       </mc-banner>
     }
 
     <section class="mb-8 hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4" aria-label="Recursos">
-      @if (metrics(); as m) {
-        <mc-stat-tile label="CPU" [value]="m.cpuPercent" [detail]="m.cpuLabel" [noApi]="true" />
-        <mc-stat-tile label="RAM" [value]="m.ramPercent" [detail]="m.ramLabel" [noApi]="true" />
-        <mc-stat-tile label="NVMe" [value]="m.nvmePercent" [detail]="m.nvmeLabel" [noApi]="true" />
+      @if (tiles(); as t) {
+        <mc-stat-tile label="CPU" [value]="t.cpu.percent" [detail]="t.cpu.detail" />
+        <mc-stat-tile label="RAM" [value]="t.ram.percent" [detail]="t.ram.detail" />
+        <mc-stat-tile label="NVMe" [value]="t.nvme.percent" [detail]="t.nvme.detail" />
+        <mc-stat-tile label="Tailscale" [value]="t.tailnet.percent" [detail]="t.tailnet.detail" />
       } @else {
         @for (n of skeletonTiles; track n) {
           <div class="skeleton has-drop h-full">
             <div class="bevel-panel h-32 bg-surface-default"></div>
           </div>
         }
-      }
-      @if (quota(); as q) {
-        <mc-stat-tile
-          label="Tailscale"
-          [value]="q.percent"
-          [detail]="q.used + '/' + q.limit + ' dispositivos ativos na cota'"
-        />
       }
     </section>
 
@@ -167,14 +149,13 @@ interface Snapshot {
 })
 export class DashboardPage {
   private readonly serversApi = inject(ServersApi);
-  private readonly tailscale = inject(TailscaleApi);
-  private readonly mock = inject(MockApi);
+  private readonly nodeApi = inject(NodeApi);
   private readonly serversSocket = inject(ServersSocket);
   private readonly router = inject(Router);
   protected readonly lifecycle = inject(ServerLifecycle);
 
   protected readonly skeletonCards = SKELETON_CARDS;
-  protected readonly skeletonTiles = [0, 1, 2];
+  protected readonly skeletonTiles = [0, 1, 2, 3];
   protected readonly fullSummary = summaryText;
   protected readonly compactSummary = compactSummaryText;
 
@@ -187,23 +168,27 @@ export class DashboardPage {
     return servers ? summarizeServers(servers, this.players()) : null;
   });
 
-  protected readonly metrics = toSignal(this.mock.nodeMetrics().pipe(catchError(() => of(null))), {
-    initialValue: null,
-  });
-  private readonly alerts = toSignal(this.mock.diskAlerts().pipe(catchError(() => of([]))), {
-    initialValue: [],
-  });
-  protected readonly diskAlert = computed(
-    () => this.alerts().find((alert) => alert.level === 'danger') ?? this.alerts()[0] ?? null,
-  );
-  /** Null while loading or when the caller may not list devices (admin-only endpoint). */
-  protected readonly quota = toSignal(
-    this.tailscale.listDevices().pipe(
-      map((devices) => tailscaleQuota(devices, TAILSCALE_DEVICE_LIMIT)),
-      catchError(() => of(null)),
+  /** Null while loading or when the caller is not an admin; keeps the last reading if a refresh fails. */
+  private readonly metrics = toSignal(
+    visiblePoll(POLL_MS).pipe(
+      exhaustMap(() => this.nodeApi.metrics().pipe(catchError(() => EMPTY))),
     ),
     { initialValue: null },
   );
+  protected readonly tiles = computed(() => {
+    const metrics = this.metrics();
+    return metrics ? nodeTiles(metrics) : null;
+  });
+  protected readonly diskAlert = computed(() => {
+    const disk = this.metrics()?.disk;
+    return disk?.alert
+      ? {
+          level: disk.alert,
+          percent: Math.round(disk.usedPercent),
+          blocksCreation: disk.blocksCreation,
+        }
+      : null;
+  });
 
   private readonly refresh$ = new Subject<void>();
 

@@ -2,10 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { NEVER, of } from 'rxjs';
 
-import { MockApi } from '../../core/api/mock-api';
-import { ServerState, ServerSummary } from '../../core/api/models';
+import { NodeMetrics, ServerState, ServerSummary } from '../../core/api/models';
+import { NodeApi } from '../../core/api/node.api';
 import { ServersApi } from '../../core/api/servers.api';
-import { TailscaleApi } from '../../core/api/tailscale.api';
 import { ServersSocket } from '../../core/realtime/servers-socket';
 import { DashboardPage } from './dashboard.page';
 
@@ -28,12 +27,22 @@ const server = (id: string, name: string, state: ServerState): ServerSummary => 
   updated_at: '2026-10-01T00:00:00Z',
 });
 
+const GIB = 1024 ** 3;
+
+const nodeMetrics = (overrides: Partial<NodeMetrics> = {}): NodeMetrics => ({
+  cpu: { usedPercent: 42, cores: 8 },
+  memory: { total: 32 * GIB, allocated: 8 * GIB },
+  disk: { total: 500 * GIB, free: 185 * GIB, usedPercent: 63, alert: null, blocksCreation: false },
+  tailnet: { active: 2, limit: 50 },
+  ...overrides,
+});
+
 describe('DashboardPage', () => {
   const started: string[] = [];
   const stopped: string[] = [];
   const restarted: string[] = [];
 
-  async function render(servers: ServerSummary[], devices: { status: string }[] = []) {
+  async function render(servers: ServerSummary[], metrics: NodeMetrics = nodeMetrics()) {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -47,24 +56,8 @@ describe('DashboardPage', () => {
             restart: (id: string) => (restarted.push(id), of({ message: 'ok' })),
           },
         },
-        { provide: TailscaleApi, useValue: { listDevices: () => of(devices) } },
         { provide: ServersSocket, useValue: { signals: () => NEVER } },
-        {
-          provide: MockApi,
-          useValue: {
-            nodeMetrics: () =>
-              of({
-                cpuPercent: 42,
-                cpuLabel: 'cpu',
-                ramPercent: 50,
-                ramLabel: 'ram',
-                nvmePercent: 63,
-                nvmeLabel: 'nvme',
-                tailnetDevices: { used: 0, limit: 50 },
-              }),
-            diskAlerts: () => of([{ level: 'warning', percent: 78 }]),
-          },
-        },
+        { provide: NodeApi, useValue: { metrics: () => of(metrics) } },
       ],
     });
     const fixture = TestBed.createComponent(DashboardPage);
@@ -88,27 +81,64 @@ describe('DashboardPage', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('derives the summary line and the Tailscale quota from the API data', async () => {
-    const { el } = await render(
-      [
-        server('a', 'Sobrevivência', 'READY'),
-        server('b', 'Criativo', 'STOPPED'),
-        server('c', 'ATM', 'STARTING'),
-        server('d', 'Pixelmon', 'CRASHED'),
-      ],
-      [{ status: 'ACTIVE' }, { status: 'ACTIVE' }, { status: 'REVOKED' }],
-    );
+  it('derives the summary line from the servers and the quota from the node metrics', async () => {
+    const { el } = await render([
+      server('a', 'Sobrevivência', 'READY'),
+      server('b', 'Criativo', 'STOPPED'),
+      server('c', 'ATM', 'STARTING'),
+      server('d', 'Pixelmon', 'CRASHED'),
+    ]);
 
     expect(el.textContent).toContain('4 servidores · 1 online · 3 jogadores conectados');
     expect(el.textContent).toContain('2/50 dispositivos ativos na cota');
     expect(el.querySelector('[aria-label="Tailscale"]')?.getAttribute('aria-valuenow')).toBe('4');
   });
 
-  it('shows the disk banner with the percentage from the disk alerts', async () => {
+  it('shows CPU, RAM and NVMe from the API with no "sem API" tag', async () => {
     const { el } = await render([server('a', 'A', 'READY')]);
 
-    expect(el.querySelector('mc-banner')?.textContent).toContain('Disco em 78 %');
-    expect(el.querySelector('mc-banner')?.textContent).toContain('Acima de 75 %');
+    expect(el.querySelector('[aria-label="CPU"]')?.getAttribute('aria-valuenow')).toBe('42');
+    expect(el.querySelector('[aria-label="RAM"]')?.getAttribute('aria-valuenow')).toBe('25');
+    expect(el.querySelector('[aria-label="NVMe"]')?.getAttribute('aria-valuenow')).toBe('63');
+    expect(el.querySelector('mc-no-api-tag')).toBeNull();
+  });
+
+  it('shows no disk banner while the disk is below the warning threshold', async () => {
+    const { el } = await render([server('a', 'A', 'READY')]);
+
+    expect(el.querySelector('mc-banner')).toBeNull();
+  });
+
+  it('shows the warning banner with the percentage the API reported', async () => {
+    const disk = { total: 500 * GIB, free: 110 * GIB, usedPercent: 78, alert: 'warning' as const };
+    const { el } = await render(
+      [server('a', 'A', 'READY')],
+      nodeMetrics({ disk: { ...disk, blocksCreation: false } }),
+    );
+
+    const banner = el.querySelector('mc-banner')?.textContent;
+    expect(banner).toContain('Disco em 78 %');
+    expect(banner).toContain('Acima de 75 %');
+    expect(banner).not.toContain('bloqueada');
+  });
+
+  it('says that creating servers is blocked once the API reports it', async () => {
+    const { el } = await render(
+      [server('a', 'A', 'READY')],
+      nodeMetrics({
+        disk: {
+          total: 500 * GIB,
+          free: 50 * GIB,
+          usedPercent: 90,
+          alert: 'danger',
+          blocksCreation: true,
+        },
+      }),
+    );
+
+    const banner = el.querySelector('mc-banner')?.textContent;
+    expect(banner).toContain('Acima de 90 %');
+    expect(banner).toContain('criação de servidores está bloqueada');
   });
 
   it('maps each lifecycle state to its card action (Parar, Ligar, disabled, Reiniciar)', async () => {

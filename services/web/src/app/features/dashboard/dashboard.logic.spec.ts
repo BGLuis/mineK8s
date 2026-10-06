@@ -1,11 +1,5 @@
-import { ServerState } from '../../core/api/models';
-import {
-  TAILSCALE_DEVICE_LIMIT,
-  compactSummaryText,
-  summarizeServers,
-  summaryText,
-  tailscaleQuota,
-} from './dashboard.logic';
+import { NodeMetrics, ServerState } from '../../core/api/models';
+import { compactSummaryText, nodeTiles, summarizeServers, summaryText } from './dashboard.logic';
 
 const server = (id: string, state: ServerState) => ({ id, state });
 
@@ -51,25 +45,49 @@ describe('summary text', () => {
   });
 });
 
-describe('tailscaleQuota', () => {
-  const devices = [
-    { status: 'ACTIVE' as const },
-    { status: 'ACTIVE' as const },
-    { status: 'PENDING' as const },
-    { status: 'REVOKED' as const },
-    { status: 'ACTIVE' as const },
-  ];
+describe('nodeTiles', () => {
+  const GIB = 1024 ** 3;
+  const metrics: NodeMetrics = {
+    cpu: { usedPercent: 42, cores: 8 },
+    memory: { total: 32 * GIB, allocated: 8 * GIB },
+    disk: {
+      total: 500 * GIB,
+      free: 185 * GIB,
+      usedPercent: 63,
+      alert: null,
+      blocksCreation: false,
+    },
+    tailnet: { active: 12, limit: 50 },
+  };
 
-  it('counts only ACTIVE devices against the quota', () => {
-    expect(tailscaleQuota(devices).used).toBe(3);
+  it('shows RAM as the share promised to servers, not what the host is using', () => {
+    expect(nodeTiles(metrics).ram).toEqual({ percent: 25, detail: '8 de 32 GiB alocados' });
   });
 
-  it('uses the 50 device limit and rounds the percentage', () => {
-    expect(TAILSCALE_DEVICE_LIMIT).toBe(50);
-    expect(tailscaleQuota(devices)).toEqual({ used: 3, limit: 50, percent: 6 });
-    expect(tailscaleQuota(Array(12).fill({ status: 'ACTIVE' }))).toMatchObject({
+  it('shows the disk as used space and the CPU as the measured percentage', () => {
+    const { cpu, nvme } = nodeTiles(metrics);
+
+    expect(nvme).toEqual({ percent: 63, detail: '315 de 500 GiB usados' });
+    expect(cpu).toEqual({ percent: 42, detail: '8 núcleos' });
+  });
+
+  it('takes the quota limit from the server instead of assuming the free plan', () => {
+    expect(nodeTiles({ ...metrics, tailnet: { active: 12, limit: 100 } }).tailnet).toEqual({
+      percent: 12,
+      detail: '12/100 dispositivos ativos na cota',
       used: 12,
-      percent: 24,
+      limit: 100,
     });
+  });
+
+  it('does not divide by zero when the host reports no memory or limit', () => {
+    const empty = nodeTiles({
+      ...metrics,
+      memory: { total: 0, allocated: 0 },
+      tailnet: { active: 0, limit: 0 },
+    });
+
+    expect(empty.ram.percent).toBe(0);
+    expect(empty.tailnet.percent).toBe(0);
   });
 });

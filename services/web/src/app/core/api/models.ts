@@ -540,16 +540,6 @@ export interface BootstrapResponse extends TokenResponse {
 
 /* ------------------------------------------------- mock-only (no endpoint) */
 
-export interface NodeMetrics {
-  cpuPercent: number;
-  cpuLabel: string;
-  ramPercent: number;
-  ramLabel: string;
-  nvmePercent: number;
-  nvmeLabel: string;
-  tailnetDevices: { used: number; limit: number };
-}
-
 export interface ServerRuntimeStats {
   tps: number;
   jvmUsedMb: number;
@@ -570,9 +560,18 @@ export interface ServerPlayers {
   players: OnlinePlayer[];
 }
 
-export interface DiskAlert {
-  level: 'warning' | 'danger';
-  percent: number;
+/** GET /api/node/metrics (admin). Sizes are in bytes; the disk thresholds are decided by the server. */
+export interface NodeMetrics {
+  cpu: { usedPercent: number; cores: number };
+  memory: { total: number; allocated: number };
+  disk: {
+    total: number;
+    free: number;
+    usedPercent: number;
+    alert: 'warning' | 'danger' | null;
+    blocksCreation: boolean;
+  };
+  tailnet: { active: number; limit: number };
 }
 
 /** PATCH /api/servers/:id. INTERNET is not accepted here: publishing goes through /publish. */
