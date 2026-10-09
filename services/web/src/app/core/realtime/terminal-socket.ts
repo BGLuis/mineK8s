@@ -18,6 +18,7 @@ export interface CommandOutput {
   output: string;
   durationMs: number;
   error: boolean;
+  source?: 'rcon';
 }
 
 /**
@@ -28,7 +29,7 @@ export interface CommandOutput {
 export class TerminalSocket implements OnDestroy {
   private readonly tokens = inject(TokenStore);
   private readonly factory = inject(SOCKET_FACTORY);
-  private readonly limiter = new RateLimiter(MAX_COMMANDS_PER_SECOND, 1000);
+  readonly limiter = new RateLimiter(MAX_COMMANDS_PER_SECOND, 1000);
   private readonly stopWatching = watchVisibility(
     () => this.pause(),
     () => this.resume(),

@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as readline from 'readline';
 import { Readable } from 'stream';
 import { AppConfigService } from '../config/app-config.service';
-import { CircularLogBuffer, LogEntry } from './circular-log-buffer';
+import { CircularLogBuffer, LogEntry, LogSource } from './circular-log-buffer';
 import { LogNoiseFilter } from './log-noise-filter';
 
 type LogDeltaListener = (entry: LogEntry) => void;
@@ -55,12 +55,16 @@ export class K8sLogStreamerService implements OnModuleDestroy {
   /**
    * Processa uma linha bruta de log (filtrando ruído RCON e sanitizando ANSI).
    */
-  public ingestRawLine(serverId: string, rawLine: string): LogEntry | null {
+  public ingestRawLine(
+    serverId: string,
+    rawLine: string,
+    source: LogSource = 'stdout',
+  ): LogEntry | null {
     if (LogNoiseFilter.isNoise(rawLine)) {
       return null;
     }
 
-    const entry = LogNoiseFilter.parseLogEntry(rawLine);
+    const entry = LogNoiseFilter.parseLogEntry(rawLine, undefined, source);
     const buffer = this.getBuffer(serverId);
     buffer.push(entry);
 

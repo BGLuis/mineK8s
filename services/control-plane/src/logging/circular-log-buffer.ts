@@ -1,8 +1,11 @@
+export type LogSource = 'stdout' | 'stderr' | 'rcon';
+
 export interface LogEntry {
   id: string;
   timestamp: string;
   level: 'INFO' | 'WARN' | 'ERROR';
   message: string;
+  source?: LogSource;
 }
 
 /**

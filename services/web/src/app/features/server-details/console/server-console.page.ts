@@ -22,15 +22,7 @@ import {
 } from '../../../core/realtime';
 import { McBanner, McButton, McConsole, ToastService, statusChipConfig } from '../../../ui';
 import { ServerDetailStore } from '../server-detail.store';
-import {
-  LocalLine,
-  QUICK_COMMANDS,
-  SendWindow,
-  mergeConsoleLines,
-  normalizeCommand,
-} from './console.logic';
-
-const WINDOW_MS = 1000;
+import { LocalLine, QUICK_COMMANDS, mergeConsoleLines, normalizeCommand } from './console.logic';
 
 const CONNECTION: Record<TerminalStatus, { label: string; dot: string }> = {
   idle: { label: 'Aguardando', dot: 'bg-status-neutral' },
@@ -74,6 +66,7 @@ const CONNECTION: Record<TerminalStatus, { label: string; dot: string }> = {
         #consoleRef
         [lines]="lines()"
         [(filters)]="filters"
+        [splitMissing]="false"
         [disabled]="inputDisabled()"
         [placeholder]="limited() ? 'Aguarde um instante…' : 'Digite um comando (↑/↓ histórico)'"
         (command)="send($event)"
@@ -108,7 +101,6 @@ export class ServerConsolePage {
   protected readonly limited = signal(false);
 
   private readonly local = signal<LocalLine[]>([]);
-  private readonly sends = new SendWindow(MAX_COMMANDS_PER_SECOND, WINDOW_MS);
   private releaseTimer: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly lines = computed(() => mergeConsoleLines(this.terminal.lines(), this.local()));
@@ -167,8 +159,7 @@ export class ServerConsolePage {
       return;
     }
     this.pushLocal({ level: 'INFO', message: `> ${command}` });
-    this.sends.record(now);
-    if (this.sends.isFull(now)) {
+    if (this.terminal.limiter.isFull(now)) {
       this.limit(now);
     }
   }
@@ -192,7 +183,7 @@ export class ServerConsolePage {
           });
         }
       },
-      Math.max(this.sends.msUntilFree(now), 100),
+      Math.max(this.terminal.limiter.msUntilFree(now), 100),
     );
   }
 

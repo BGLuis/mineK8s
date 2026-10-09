@@ -173,4 +173,9 @@ describe('ServerConsolePage rate limit', () => {
     expect(el.textContent).toContain('Credenciais ausentes ou inválidas');
     expect(enviar().disabled).toBe(true);
   });
+
+  it('does not display the no-api-tag for stdout x RCON', async () => {
+    await render();
+    expect(el.textContent).not.toContain('stdout × RCON');
+  });
 });
