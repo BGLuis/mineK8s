@@ -126,9 +126,12 @@ export interface PublishResponse {
   id: string;
   subdomain: string;
   access_policy: ServerAccessPolicy;
+  online_mode?: boolean;
+  srv_record?: string;
 }
 
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR';
+export type LogSource = 'stdout' | 'stderr' | 'rcon';
 
 /** circular-log-buffer.ts. */
 export interface LogEntry {
@@ -136,6 +139,7 @@ export interface LogEntry {
   timestamp: string;
   level: LogLevel;
   message: string;
+  source?: LogSource;
 }
 
 export interface ServerLogsResponse {
@@ -279,6 +283,7 @@ export interface TaskProgress {
   totalFiles: number;
   currentStep: string;
   speedBytesPerSec?: number;
+  freezeDurationMs?: number;
 }
 
 /* ------------------------------------------------------------- tailscale */
@@ -545,6 +550,8 @@ export interface ServerRuntimeStats {
   jvmUsedMb: number;
   jvmMaxMb: number;
   uptimeSeconds: number;
+  mspt?: number;
+  history?: Array<{ timestamp: string; tps: number; mspt?: number }>;
 }
 
 /** GET /api/servers/:id/players. */

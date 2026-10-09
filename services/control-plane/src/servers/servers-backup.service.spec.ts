@@ -792,5 +792,40 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         /STOPPED state/,
       );
     });
+
+    it('createBackupForServer deve registrar tarefa e atualizar progresso assíncrono', async () => {
+      const mockTaskExecutionService = {
+        register: jest.fn(),
+        update: jest.fn(),
+        getTask: jest.fn(),
+      };
+
+      const customService = new ServersBackupService(
+        mockConfigService,
+        mockK8sService,
+        mockConsoleDriver,
+        undefined,
+        mockBackupRepo,
+        mockServerRepo,
+        mockTaskExecutionService as any,
+      );
+
+      const result = await customService.createBackupForServer(readyServer.id, 'HOT');
+      expect(result.taskId).toMatch(/^backup-task-/);
+      expect(mockTaskExecutionService.register).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: result.taskId,
+          serverId: readyServer.id,
+          status: 'IN_PROGRESS',
+        }),
+      );
+      expect(mockTaskExecutionService.update).toHaveBeenCalledWith(
+        result.taskId,
+        expect.objectContaining({
+          status: 'COMPLETED',
+          progressPercent: 100,
+        }),
+      );
+    });
   });
 });

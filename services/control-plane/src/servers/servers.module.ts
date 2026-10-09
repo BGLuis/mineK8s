@@ -14,6 +14,7 @@ import { ProbesModule } from '../probes/probes.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
 import { DnsModule } from '../dns/dns.module';
 import { NodeModule } from '../node/node.module';
+import { TasksModule } from '../tasks/tasks.module';
 
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
@@ -40,6 +41,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     GatewayIpcModule,
     DnsModule,
     NodeModule,
+    TasksModule,
   ],
   controllers: [ServersController],
   providers: [

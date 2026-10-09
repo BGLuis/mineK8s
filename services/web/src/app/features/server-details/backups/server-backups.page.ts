@@ -12,16 +12,15 @@ import {
 import { Subscription } from 'rxjs';
 
 import { BackupsApi } from '../../../core/api/backups.api';
-import { MockApi } from '../../../core/api/mock-api';
 import { BackupMode, ServerBackup, ServerState, TaskProgress } from '../../../core/api/models';
 import { ServersApi } from '../../../core/api/servers.api';
+import { TasksSocket } from '../../../core/realtime/tasks-socket';
 import { AuthSession } from '../../../core/auth/auth-session';
 import {
   McBanner,
   McButton,
   McDialog,
   McIcon,
-  McNoApiTag,
   McProgress,
   McTable,
   ToastService,
@@ -77,7 +76,7 @@ const STATE_LABELS: Partial<Record<ServerState, string>> = {
 @Component({
   selector: 'mc-server-backups-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McBanner, McButton, McDialog, McIcon, McNoApiTag, McProgress, McTable],
+  imports: [McBanner, McButton, McDialog, McIcon, McProgress, McTable],
   template: `
     <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
       <div class="min-w-72 flex-1">
@@ -117,7 +116,6 @@ const STATE_LABELS: Partial<Record<ServerState, string>> = {
                 <span class="t-title-sm ml-2 text-status-success">{{ freeze() }}</span>
               </p>
             }
-            <mc-no-api-tag detail="progresso em tempo real" />
             @if (op.phase !== 'running') {
               <mc-button size="sm" variant="neutral" (click)="operation.set(null)">
                 Ocultar
@@ -286,7 +284,7 @@ const STATE_LABELS: Partial<Record<ServerState, string>> = {
 export class ServerBackupsPage {
   private readonly backupsApi = inject(BackupsApi);
   private readonly servers = inject(ServersApi);
-  private readonly mock = inject(MockApi);
+  private readonly tasksSocket = inject(TasksSocket);
   private readonly session = inject(AuthSession);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
@@ -301,8 +299,8 @@ export class ServerBackupsPage {
 
   protected readonly operation = signal<Operation | null>(null);
   protected readonly operationError = signal('');
-  private readonly simulated = signal<TaskProgress | null>(null);
-  private simulation: Subscription | null = null;
+  protected readonly taskProgress = signal<TaskProgress | null>(null);
+  private taskSub: Subscription | null = null;
 
   protected readonly restoringId = signal<string | null>(null);
   protected readonly downloadingId = signal<string | null>(null);
@@ -315,7 +313,7 @@ export class ServerBackupsPage {
   protected readonly running = computed(() => this.operation()?.phase === 'running');
   protected readonly percent = computed(() =>
     backupDisplayPercent(
-      this.simulated()?.progressPercent ?? 0,
+      this.taskProgress()?.progressPercent ?? 0,
       this.operation()?.phase === 'done',
     ),
   );
@@ -327,10 +325,12 @@ export class ServerBackupsPage {
     if (op?.phase === 'failed') {
       return 'Falhou';
     }
-    const step = this.simulated()?.currentStep ?? 'Iniciando…';
-    return this.percent() >= 90 ? 'Finalizando…' : step;
+    const step = this.taskProgress()?.currentStep ?? 'Iniciando…';
+    return this.percent() >= 90 && !step.includes('sucesso') ? 'Finalizando…' : step;
   });
-  protected readonly freeze = computed(() => formatFreeze(this.operation()?.freezeMs));
+  protected readonly freeze = computed(() =>
+    formatFreeze(this.operation()?.freezeMs ?? this.taskProgress()?.freezeDurationMs),
+  );
   protected readonly notStoppedLabel = computed(() => {
     const state = this.serverState();
     return state && state !== 'STOPPED' ? (STATE_LABELS[state] ?? state) : '';
@@ -372,7 +372,7 @@ export class ServerBackupsPage {
         this.reload();
       });
     });
-    this.destroyRef.onDestroy(() => this.simulation?.unsubscribe());
+    this.destroyRef.onDestroy(() => this.taskSub?.unsubscribe());
   }
 
   protected reload(): void {
@@ -394,17 +394,35 @@ export class ServerBackupsPage {
     if (this.running()) {
       return;
     }
+    const taskId = `backup-task-${Date.now()}`;
     this.operationError.set('');
     this.operation.set({ mode, phase: 'running' });
-    this.simulated.set(null);
-    this.simulation?.unsubscribe();
-    this.simulation = this.mock
-      .backupProgress('pending', this.id())
-      .subscribe((progress) => this.simulated.set(progress));
+    this.taskProgress.set({
+      taskId,
+      serverId: this.id(),
+      status: 'IN_PROGRESS',
+      progressPercent: 10,
+      downloadedFiles: 0,
+      totalFiles: 0,
+      currentStep: 'Iniciando criação de backup...',
+    });
+    this.taskSub?.unsubscribe();
+    this.taskSub = this.tasksSocket.progress(taskId).subscribe({
+      next: (progress) => {
+        this.taskProgress.set(progress);
+        if (progress.freezeDurationMs && !this.operation()?.freezeMs) {
+          const current = this.operation();
+          if (current) {
+            this.operation.set({ ...current, freezeMs: progress.freezeDurationMs });
+          }
+        }
+      },
+      error: () => {},
+    });
 
-    this.backupsApi.create(this.id(), mode).subscribe({
+    this.backupsApi.create(this.id(), mode, taskId).subscribe({
       next: ({ result }) => {
-        this.simulation?.unsubscribe();
+        this.taskSub?.unsubscribe();
         this.operation.set({
           mode,
           phase: 'done',
@@ -417,7 +435,7 @@ export class ServerBackupsPage {
         this.reload();
       },
       error: (error) => {
-        this.simulation?.unsubscribe();
+        this.taskSub?.unsubscribe();
         this.operation.set({ mode, phase: 'failed' });
         this.operationError.set(backupErrorMessage('create', error, mode));
       },
@@ -511,14 +529,27 @@ export class ServerBackupsPage {
 
   private restore(backup: ServerBackup): void {
     this.restoringId.set(backup.id);
-    this.backupsApi.restore(this.id(), backup.id).subscribe({
+    const taskId = `restore-task-${Date.now()}`;
+    this.taskSub?.unsubscribe();
+    this.taskSub = this.tasksSocket.progress(taskId).subscribe({
+      next: (progress) => {
+        if (progress.status === 'COMPLETED') {
+          this.toast.success('Restauração concluída com sucesso!');
+        }
+      },
+      error: () => {},
+    });
+
+    this.backupsApi.restore(this.id(), backup.id, taskId).subscribe({
       next: () => {
         this.restoringId.set(null);
-        this.toast.success('Restauração iniciada. O backup Pré-restauração aparece no histórico.');
+        this.taskSub?.unsubscribe();
+        this.toast.success('Restauração concluída. O backup Pré-restauração aparece no histórico.');
         this.reload();
       },
       error: (error) => {
         this.restoringId.set(null);
+        this.taskSub?.unsubscribe();
         this.toast.error(backupErrorMessage('restore', error));
       },
     });

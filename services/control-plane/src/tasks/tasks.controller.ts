@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Optional, Param } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
@@ -7,12 +7,9 @@ import { Roles } from '@auth/roles.decorator';
 import { UUID_PATTERN } from '@common/uuid';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
 import { TaskProgressPayload } from './tasks.gateway';
+import { TaskExecutionService, TaskStateDto } from './task-execution.service';
 
-export interface TaskStateDto extends TaskProgressPayload {
-  errorMessage: string | null;
-  startedAt: Date;
-  updatedAt: Date;
-}
+export { TaskStateDto };
 
 @ApiTags('Tasks')
 @ApiBearerAuth()
@@ -22,6 +19,7 @@ export class TasksController {
   constructor(
     @InjectRepository(ModpackTaskEntity)
     private readonly taskRepo: Repository<ModpackTaskEntity>,
+    @Optional() private readonly taskExecutionService?: TaskExecutionService,
   ) {}
 
   @Get(':id')
@@ -32,6 +30,11 @@ export class TasksController {
   @ApiResponse({ status: 200, description: 'Mesmo formato do evento taskProgress de /ws/tasks' })
   @ApiResponse({ status: 404, description: 'Tarefa não encontrada' })
   async getTask(@Param('id') id: string): Promise<TaskStateDto> {
+    const inMemory = this.taskExecutionService?.getTask(id);
+    if (inMemory) {
+      return inMemory;
+    }
+
     // Evita que o Postgres rejeite um id fora do formato uuid com erro 500.
     const task = UUID_PATTERN.test(id) ? await this.taskRepo.findOne({ where: { id } }) : null;
     if (!task) {

@@ -1,5 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
-
+import { asHttpError } from '../../../core/api/api-error';
 import { BackupMode, BackupStatus, BackupType, ServerBackup } from '../../../core/api/models';
 
 export const BACKUP_TYPE_LABELS: Record<BackupType, string> = {
@@ -70,10 +69,11 @@ export function backupErrorMessage(
   error: unknown,
   mode: BackupMode = 'HOT',
 ): string {
-  if (!(error instanceof HttpErrorResponse)) {
+  const http = asHttpError(error);
+  if (!http) {
     return 'Algo deu errado. Tente novamente.';
   }
-  switch (error.status) {
+  switch (http.status) {
     case 0:
       return 'Não foi possível falar com o painel. Verifique sua conexão.';
     case 403:
@@ -104,7 +104,8 @@ export function backupErrorMessage(
 
 /** Only these refusals can be overridden with `force=true`. */
 export function isForceableDeleteError(error: unknown): boolean {
-  return error instanceof HttpErrorResponse && (error.status === 403 || error.status === 400);
+  const http = asHttpError(error);
+  return http !== null && (http.status === 403 || http.status === 400);
 }
 
 /** The simulated progress never reaches 100 % until the real request answers, so it cannot lie about completion. */
