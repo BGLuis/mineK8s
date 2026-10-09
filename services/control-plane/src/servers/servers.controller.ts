@@ -32,8 +32,11 @@ import { UpdateDomainDto } from './dto/update-domain.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
+import { CreateDirectoryDto } from './dto/create-directory.dto';
+import { RenameFileDto } from './dto/rename-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { CreateBackupDto } from './dto/create-backup.dto';
+import { RestoreBackupDto } from './dto/restore-backup.dto';
 
 @ApiTags('Servers & Kubernetes Orchestration')
 @ApiBearerAuth()
@@ -227,6 +230,43 @@ export class ServersController {
     return this.filesService.uploadWorld(id, file);
   }
 
+  @Post(':id/files/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload a single file into server /data storage' })
+  @ApiResponse({ status: 201, description: 'File uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid file name or no file provided' })
+  @ApiResponse({ status: 403, description: 'Path traversal attempt' })
+  @ApiResponse({ status: 409, description: 'Conflict: modifying world while server is running' })
+  async uploadFile(
+    @Param('id') id: string,
+    @Query('path') relPath: string = '',
+    @UploadedFile() file?: any,
+  ) {
+    return this.filesService.uploadFile(id, relPath, file);
+  }
+
+  @Post(':id/files/directory')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new directory in server /data storage' })
+  @ApiResponse({ status: 201, description: 'Directory created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid directory name' })
+  @ApiResponse({ status: 403, description: 'Path traversal attempt' })
+  @ApiResponse({ status: 409, description: 'Directory already exists or server is running' })
+  async createDirectory(@Param('id') id: string, @Body() dto: CreateDirectoryDto) {
+    return this.filesService.createDirectory(id, dto.path || '', dto.name);
+  }
+
+  @Post(':id/files/rename')
+  @ApiOperation({ summary: 'Rename a file or directory in server /data storage' })
+  @ApiResponse({ status: 200, description: 'File or directory renamed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid paths or session.lock modification' })
+  @ApiResponse({ status: 403, description: 'Path traversal attempt' })
+  @ApiResponse({ status: 404, description: 'Source path not found' })
+  @ApiResponse({ status: 409, description: 'Target already exists or server is running' })
+  async renameFile(@Param('id') id: string, @Body() dto: RenameFileDto) {
+    return this.filesService.renamePath(id, dto.oldPath, dto.newPath);
+  }
+
   @Post(':id/backups')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Criar backup do servidor (HOT ou COLD) (RF-STO-17)' })
@@ -234,6 +274,9 @@ export class ServersController {
   @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Conflito de estado ou tarefa em andamento' })
   async createBackup(@Param('id') id: string, @Body() dto?: CreateBackupDto) {
+    if (dto?.taskId) {
+      return this.backupService.createBackupForServer(id, dto.type || 'HOT', dto.taskId);
+    }
     return this.backupService.createBackupForServer(id, dto?.type || 'HOT');
   }
 
@@ -269,7 +312,14 @@ export class ServersController {
   @ApiResponse({ status: 202, description: 'Restauração transacional executada' })
   @ApiResponse({ status: 404, description: 'Servidor ou backup não encontrado' })
   @ApiResponse({ status: 409, description: 'Instância não está STOPPED' })
-  async restoreBackup(@Param('id') id: string, @Param('backupId') backupId: string) {
+  async restoreBackup(
+    @Param('id') id: string,
+    @Param('backupId') backupId: string,
+    @Body() dto?: RestoreBackupDto,
+  ) {
+    if (dto?.taskId) {
+      return this.backupService.restoreBackupById(id, backupId, dto.taskId);
+    }
     return this.backupService.restoreBackupById(id, backupId);
   }
 

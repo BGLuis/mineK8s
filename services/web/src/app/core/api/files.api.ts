@@ -31,4 +31,18 @@ export class FilesApi {
     form.append('file', file, file.name);
     return this.api.postForm(`/api/servers/${serverId}/world/upload`, form);
   }
+
+  uploadFile(serverId: string, path: string, file: File): Observable<MessageResponse> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.api.postForm(`/api/servers/${serverId}/files/upload`, form, { params: { path } });
+  }
+
+  createFolder(serverId: string, path: string, name: string): Observable<MessageResponse> {
+    return this.api.post(`/api/servers/${serverId}/files/directory`, { path, name });
+  }
+
+  rename(serverId: string, oldPath: string, newPath: string): Observable<MessageResponse> {
+    return this.api.post(`/api/servers/${serverId}/files/rename`, { oldPath, newPath });
+  }
 }

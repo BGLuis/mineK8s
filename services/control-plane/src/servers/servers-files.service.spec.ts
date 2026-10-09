@@ -265,4 +265,111 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
       );
     });
   });
+
+  describe('uploadFile', () => {
+    it('should successfully upload a file to the specified directory', async () => {
+      const res = await service.uploadFile(sampleServer.id, 'config', {
+        originalname: 'custom.txt',
+        buffer: Buffer.from('custom-content'),
+      });
+
+      expect(res.message).toBe('File uploaded successfully');
+      const read = await service.readFile(sampleServer.id, 'config/custom.txt');
+      expect(read.content).toBe('custom-content');
+    });
+
+    it('should reject session.lock upload', async () => {
+      await expect(
+        service.uploadFile(sampleServer.id, 'world', {
+          originalname: 'session.lock',
+          buffer: Buffer.from('lock'),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject uploading to world while server is READY', async () => {
+      sampleServer.state = 'READY';
+      await expect(
+        service.uploadFile(sampleServer.id, 'world', {
+          originalname: 'data.txt',
+          buffer: Buffer.from('data'),
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should reject path traversal filename in uploadFile', async () => {
+      await expect(
+        service.uploadFile(sampleServer.id, '..', {
+          originalname: 'evil.txt',
+          buffer: Buffer.from('evil'),
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('createDirectory', () => {
+    it('should create a directory successfully', async () => {
+      const res = await service.createDirectory(sampleServer.id, '', 'plugins');
+      expect(res.message).toBe('Directory created successfully');
+
+      const list = await service.listFiles(sampleServer.id, '');
+      expect(list.files.some((f) => f.name === 'plugins' && f.isDirectory)).toBe(true);
+    });
+
+    it('should reject invalid directory names', async () => {
+      await expect(service.createDirectory(sampleServer.id, '', '..')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createDirectory(sampleServer.id, '', 'a/b')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject duplicate directory creation with ConflictException', async () => {
+      await service.createDirectory(sampleServer.id, '', 'logs');
+      await expect(service.createDirectory(sampleServer.id, '', 'logs')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('should reject directory creation in world while server is READY', async () => {
+      sampleServer.state = 'READY';
+      await expect(service.createDirectory(sampleServer.id, 'world', 'dimensions')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('renamePath', () => {
+    it('should rename a file successfully', async () => {
+      await service.writeFile(sampleServer.id, 'old.txt', 'hello');
+      const res = await service.renamePath(sampleServer.id, 'old.txt', 'new.txt');
+      expect(res.message).toBe('Renamed successfully');
+
+      const read = await service.readFile(sampleServer.id, 'new.txt');
+      expect(read.content).toBe('hello');
+      await expect(service.readFile(sampleServer.id, 'old.txt')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject renaming session.lock', async () => {
+      await expect(
+        service.renamePath(sampleServer.id, 'world/session.lock', 'world/lock.bak'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject renaming when destination already exists', async () => {
+      await service.writeFile(sampleServer.id, 'file1.txt', 'one');
+      await service.writeFile(sampleServer.id, 'file2.txt', 'two');
+      await expect(service.renamePath(sampleServer.id, 'file1.txt', 'file2.txt')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('should reject renaming world files when server is READY', async () => {
+      sampleServer.state = 'READY';
+      await expect(service.renamePath(sampleServer.id, 'world/old', 'world/new')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
 });
