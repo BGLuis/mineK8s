@@ -10,7 +10,7 @@ import { McNoApiTag } from '../no-api-tag/no-api-tag';
   host: { class: 'block h-full has-drop box-border' },
   template: `
     <div class="bevel-panel box-border flex h-full flex-col gap-2 bg-surface-default p-4">
-      <mc-meter [label]="label()" [value]="value()" />
+      <mc-meter [label]="label()" [value]="value()" [valueText]="valueText()" />
       @if (detail()) {
         <p class="t-body-md text-text-muted">{{ detail() }}</p>
       }
@@ -23,6 +23,7 @@ import { McNoApiTag } from '../no-api-tag/no-api-tag';
 export class McStatTile {
   readonly label = input.required<string>();
   readonly value = input.required<number>();
+  readonly valueText = input<string | null>(null);
   readonly detail = input('');
   /** Set when the value comes from MockApi. */
   readonly noApi = input(false);

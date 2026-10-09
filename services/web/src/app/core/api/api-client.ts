@@ -37,8 +37,8 @@ export class ApiClient {
     return this.http.get(path, { params: toParams(options?.params), responseType: 'blob' });
   }
 
-  postForm<T>(path: string, form: FormData): Observable<T> {
-    return this.http.post<T>(path, form);
+  postForm<T>(path: string, form: FormData, options?: RequestOptions): Observable<T> {
+    return this.http.post<T>(path, form, { params: toParams(options?.params) });
   }
 }
 

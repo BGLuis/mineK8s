@@ -1,5 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
-
+import { asHttpError, extractErrorMessage } from '../../core/api/api-error';
 import {
   CreateServerRequest,
   Modpack,
@@ -289,28 +288,22 @@ export function progressStepText(progress: TaskProgress | null): string {
 
 /** Extracts the readable message from a NestJS error body, which may be a string or a list. */
 export function apiMessage(error: unknown): string | null {
-  if (!(error instanceof HttpErrorResponse)) {
-    return null;
-  }
-  const message = (error.error as { message?: string | string[] } | null)?.message;
-  if (Array.isArray(message)) {
-    return message.join(' ');
-  }
-  return typeof message === 'string' ? message : null;
+  return extractErrorMessage(error);
 }
 
 export function createServerErrorMessage(error: unknown): string {
-  if (error instanceof HttpErrorResponse) {
-    if ((error.error as { code?: string } | null)?.code === 'DISK_USAGE_BLOCKED') {
+  const http = asHttpError(error);
+  if (http) {
+    if ((http.error as { code?: string } | null)?.code === 'DISK_USAGE_BLOCKED') {
       return 'O disco do servidor está quase cheio (85 % ou mais). Apague backups ou mundos antigos antes de criar outro servidor.';
     }
-    if (error.status === 409) {
+    if (http.status === 409) {
       return 'Esse endereço já está em uso. Volte à etapa Rede e escolha outro.';
     }
-    if (error.status === 400) {
-      return apiMessage(error) ?? 'Os dados informados foram recusados pelo servidor.';
+    if (http.status === 400) {
+      return extractErrorMessage(http) ?? 'Os dados informados foram recusados pelo servidor.';
     }
-    if (error.status === 0) {
+    if (http.status === 0) {
       return 'Não foi possível falar com o painel. Verifique sua conexão e tente de novo.';
     }
   }
@@ -318,7 +311,8 @@ export function createServerErrorMessage(error: unknown): string {
 }
 
 export function installErrorMessage(error: unknown): string {
-  if (error instanceof HttpErrorResponse && error.status === 409) {
+  const http = asHttpError(error);
+  if (http && http.status === 409) {
     return 'O servidor precisa estar parado para instalar o modpack.';
   }
   return 'Não foi possível iniciar a instalação do modpack. Tente novamente.';

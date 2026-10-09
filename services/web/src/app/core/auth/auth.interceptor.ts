@@ -38,7 +38,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         !isPublic
       ) {
         session.logout();
-        void router.navigate(['/login']);
+        const currentUrl = router.url;
+        const redirect = currentUrl.startsWith('/login')
+          ? router.parseUrl(currentUrl).queryParams['redirect']
+          : currentUrl && currentUrl !== '/'
+            ? currentUrl
+            : undefined;
+        if (redirect) {
+          void router.navigate(['/login'], { queryParams: { redirect } });
+        } else {
+          void router.navigate(['/login']);
+        }
       }
       return throwError(() => error);
     }),

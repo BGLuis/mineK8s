@@ -3,6 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ServersApi } from '../../core/api/servers.api';
+import { errorReason } from '../../core/api/api-error';
 import { ToastService } from '../../ui';
 
 export type LifecycleAction = 'start' | 'stop' | 'restart';
@@ -13,23 +14,7 @@ const MESSAGES: Record<LifecycleAction, { progress: string; failure: string }> =
   restart: { progress: 'Reiniciando', failure: 'reiniciar' },
 };
 
-/** Readable reason from an HTTP error, falling back to a generic sentence. */
-export function errorReason(error: unknown): string {
-  if (error instanceof HttpErrorResponse) {
-    const body = error.error as { message?: string | string[] } | null;
-    const message = Array.isArray(body?.message) ? body.message.join(' ') : body?.message;
-    if (message) {
-      return message;
-    }
-    if (error.status === 0) {
-      return 'Sem conexão com o servidor de controle.';
-    }
-    if (error.status === 403) {
-      return 'Você não tem permissão para esta ação.';
-    }
-  }
-  return 'Tente novamente em instantes.';
-}
+export { errorReason };
 
 /**
  * Start, stop and restart with a per-server busy flag and toast feedback.
