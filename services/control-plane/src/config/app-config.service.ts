@@ -162,6 +162,10 @@ export class AppConfigService {
     );
   }
 
+  get serverStatsIntervalMs(): number {
+    return this.config.get<number>('SERVER_STATS_INTERVAL_MS', 60000);
+  }
+
   get modpackCatalog(): ModpackCatalogConfig {
     return new ModpackCatalogConfig(
       this.config.get<number>('MODPACK_CATALOG_CACHE_TTL_MS', 60000),

@@ -543,15 +543,25 @@ export interface BootstrapResponse extends TokenResponse {
   message: string;
 }
 
-/* ------------------------------------------------- mock-only (no endpoint) */
+/* ---------------------------------------------------------------- runtime stats */
 
+export interface ServerStatSample {
+  timestamp: string;
+  tps: number | null;
+  mspt: number | null;
+  memoryUsedMb: number | null;
+}
+
+/** GET /api/servers/:id/stats. The series is empty unless the server is READY. */
 export interface ServerRuntimeStats {
-  tps: number;
-  jvmUsedMb: number;
-  jvmMaxMb: number;
-  uptimeSeconds: number;
-  mspt?: number;
-  history?: Array<{ timestamp: string; tps: number; mspt?: number }>;
+  window: string;
+  tps: number | null;
+  mspt: number | null;
+  /** Working set of the container, which is more than the JVM heap. */
+  memoryUsedMb: number | null;
+  memoryLimitMb: number | null;
+  uptimeSeconds: number | null;
+  history: ServerStatSample[];
 }
 
 /** GET /api/servers/:id/players. */

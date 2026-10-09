@@ -32,6 +32,13 @@ export interface K8sJobInfo {
   status: K8sJobStatus;
 }
 
+export interface K8sPodStats {
+  startedAt: Date | null;
+  /** Working set of the pod's containers; null when the Metrics API is unavailable. */
+  memoryUsedBytes: number | null;
+  memoryLimitBytes: number | null;
+}
+
 export interface IKubernetesDriver {
   createPersistentVolumeClaim(manifest: any): Promise<void>;
   createDeployment(manifest: any): Promise<void>;
@@ -43,6 +50,8 @@ export interface IKubernetesDriver {
   deletePersistentVolumeClaim(name: string, namespace?: string): Promise<void>;
   getDeployment(name: string, namespace?: string): Promise<K8sDeploymentInfo | null>;
   listDeployments(namespace?: string): Promise<K8sDeploymentInfo[]>;
+  /** Stats of the running pod of a deployment; null when it has none. */
+  getPodStats(deploymentName: string, namespace?: string): Promise<K8sPodStats | null>;
   createJob(manifest: any): Promise<void>;
   getJob(name: string, namespace?: string): Promise<K8sJobInfo | null>;
   deleteJob(name: string, namespace?: string): Promise<void>;

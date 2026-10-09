@@ -1,8 +1,8 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
-import { ServerDetail } from '../../core/api/models';
+import { ServerDetail, ServerRuntimeStats } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { ServersSocket } from '../../core/realtime/servers-socket';
 import { ServerLifecycle } from '../dashboard/server-lifecycle';
@@ -31,11 +31,21 @@ describe('ServerDetailStore', () => {
     updated_at: '',
   });
 
-  function create(server: ServerDetail) {
+  const stats: ServerRuntimeStats = {
+    window: '60m',
+    tps: 19.5,
+    mspt: 25,
+    memoryUsedMb: 3072,
+    memoryLimitMb: 5632,
+    uptimeSeconds: 90,
+    history: [{ timestamp: '2026-10-09T10:00:00Z', tps: 19.5, mspt: 25, memoryUsedMb: 3072 }],
+  };
+
+  function create(server: ServerDetail, statsCall = vi.fn(() => of(stats))) {
     TestBed.configureTestingModule({
       providers: [
         ServerDetailStore,
-        { provide: ServersApi, useValue: { get: () => of(server) } },
+        { provide: ServersApi, useValue: { get: () => of(server), stats: statsCall } },
         { provide: ServersSocket, useValue: { signals: () => of({ type: 'connected' }) } },
         { provide: ServerLifecycle, useValue: { busy: signal(new Set<string>()) } },
       ],
@@ -59,5 +69,44 @@ describe('ServerDetailStore', () => {
     TestBed.tick();
 
     expect(store.accessPolicy()).toBe('GROUP');
+  });
+
+  describe('runtime stats', () => {
+    const ready = { ...detail('GROUP'), state: 'READY' as const };
+
+    it('loads the stats of a running server from the API', () => {
+      const statsCall = vi.fn(() => of(stats));
+      const store = create(ready, statsCall);
+
+      store.watch('srv-1');
+      TestBed.tick();
+
+      expect(statsCall).toHaveBeenCalledWith('srv-1');
+      expect(store.stats()).toEqual(stats);
+    });
+
+    it('does not ask for stats of a server that is not running', () => {
+      const statsCall = vi.fn(() => of(stats));
+      const store = create(detail('GROUP'), statsCall);
+
+      store.watch('srv-1');
+      TestBed.tick();
+
+      expect(statsCall).not.toHaveBeenCalled();
+      expect(store.stats()).toBeNull();
+    });
+
+    it('keeps the page working when the stats request fails', () => {
+      const store = create(
+        ready,
+        vi.fn(() => throwError(() => new Error('boom'))),
+      );
+
+      store.watch('srv-1');
+      TestBed.tick();
+
+      expect(store.server()?.id).toBe('srv-1');
+      expect(store.stats()).toBeNull();
+    });
   });
 });

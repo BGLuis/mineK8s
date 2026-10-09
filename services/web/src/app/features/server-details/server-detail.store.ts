@@ -3,7 +3,6 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, exhaustMap, filter, merge, switchMap, tap } from 'rxjs';
 
-import { MockApi } from '../../core/api/mock-api';
 import { ServerAccessPolicy, ServerDetail, ServerRuntimeStats } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { ServersSocket } from '../../core/realtime/servers-socket';
@@ -11,6 +10,7 @@ import { LifecycleAction, ServerLifecycle } from '../dashboard/server-lifecycle'
 import { liveRefresh } from '../dashboard/live-refresh';
 
 const POLL_MS = 5_000;
+const STATS_REFRESH_MS = 30_000;
 
 export type DetailLoadState = 'loading' | 'ready' | 'error' | 'not-found';
 
@@ -21,12 +21,12 @@ export type DetailLoadState = 'loading' | 'ready' | 'error' | 'not-found';
 @Injectable()
 export class ServerDetailStore {
   private readonly api = inject(ServersApi);
-  private readonly mock = inject(MockApi);
   private readonly lifecycle = inject(ServerLifecycle);
   private readonly socket = inject(ServersSocket);
 
   private readonly id = signal<string | null>(null);
   private readonly refresh$ = new Subject<void>();
+  private statsFetchedAt = 0;
 
   readonly serverId = this.id.asReadonly();
   readonly server = signal<ServerDetail | null>(null);
@@ -62,6 +62,7 @@ export class ServerDetailStore {
     }
     this.server.set(null);
     this.stats.set(null);
+    this.statsFetchedAt = 0;
     this.accessPolicy.set(null);
     this.stale.set(false);
     this.loadState.set('loading');
@@ -102,15 +103,20 @@ export class ServerDetailStore {
     );
   }
 
-  /** Runtime stats are mocked and only meaningful while the server is running. */
+  /** The agent samples once a minute, so asking on every 5 s refresh would only repeat the answer. */
   private syncStats(id: string, server: ServerDetail): void {
     if (server.state !== 'READY') {
       this.stats.set(null);
-    } else if (this.stats() === null) {
-      this.mock.serverRuntimeStats(id).subscribe({
-        next: (stats) => this.id() === id && this.stats.set(stats),
-        error: () => undefined,
-      });
+      this.statsFetchedAt = 0;
+      return;
     }
+    if (Date.now() - this.statsFetchedAt < STATS_REFRESH_MS) {
+      return;
+    }
+    this.statsFetchedAt = Date.now();
+    this.api.stats(id).subscribe({
+      next: (stats) => this.id() === id && this.stats.set(stats),
+      error: () => undefined,
+    });
   }
 }

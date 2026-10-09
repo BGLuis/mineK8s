@@ -1,4 +1,4 @@
-import { placeholderMspt, placeholderTpsHistory, tpsLevel } from './performance';
+import { formatMemory, tpsLevel, tpsSeries } from './performance';
 
 describe('tpsLevel', () => {
   it('is healthy from 18 TPS, degraded from 15 and critical below', () => {
@@ -10,26 +10,26 @@ describe('tpsLevel', () => {
   });
 });
 
-describe('placeholderTpsHistory', () => {
-  it('has 60 bars within 0-20 and ends at the current TPS', () => {
-    const series = placeholderTpsHistory(19.8, 'srv-1');
+describe('tpsSeries', () => {
+  it('keeps the order of the readings and skips samples without TPS instead of drawing them as zero', () => {
+    const sample = (tps: number | null) => ({
+      timestamp: '',
+      tps,
+      mspt: null,
+      memoryUsedMb: null,
+    });
 
-    expect(series).toHaveLength(60);
-    expect(series.at(-1)).toBe(19.8);
-    expect(Math.min(...series)).toBeGreaterThanOrEqual(0);
-    expect(Math.max(...series)).toBeLessThanOrEqual(20);
-  });
-
-  it('is stable for the same server so the chart does not flicker between renders', () => {
-    expect(placeholderTpsHistory(19.8, 'srv-1')).toEqual(placeholderTpsHistory(19.8, 'srv-1'));
-    expect(placeholderTpsHistory(19.8, 'srv-1')).not.toEqual(placeholderTpsHistory(19.8, 'srv-2'));
+    expect(tpsSeries([sample(20), sample(null), sample(14.5)])).toEqual([20, 14.5]);
   });
 });
 
-describe('placeholderMspt', () => {
-  it('grows as TPS drops and never divides by zero', () => {
-    expect(placeholderMspt(20)).toBe(30);
-    expect(placeholderMspt(10)).toBeGreaterThan(placeholderMspt(20));
-    expect(Number.isFinite(placeholderMspt(0))).toBe(true);
+describe('formatMemory', () => {
+  it('shows used against the container limit in GiB', () => {
+    expect(formatMemory(3072, 5632)).toBe('3 / 5,5 GiB');
+  });
+
+  it('shows only the used value when the limit is unknown, and a dash when nothing is known', () => {
+    expect(formatMemory(2048, null)).toBe('2 GiB');
+    expect(formatMemory(null, 5632)).toBe('—');
   });
 });

@@ -11,6 +11,7 @@ import {
   ServerDetail,
   ServerLogsResponse,
   ServerPlayers,
+  ServerRuntimeStats,
   ServerSummary,
   UpdateServerRequest,
   UpdateVersionRequest,
@@ -28,6 +29,10 @@ export class ServersApi {
 
   get(id: string): Observable<ServerDetail> {
     return this.api.get(`/api/servers/${id}`);
+  }
+
+  stats(id: string, window = '60m'): Observable<ServerRuntimeStats> {
+    return this.api.get(`/api/servers/${id}/stats`, { params: { window } });
   }
 
   create(dto: CreateServerRequest): Observable<CreateServerResponse> {

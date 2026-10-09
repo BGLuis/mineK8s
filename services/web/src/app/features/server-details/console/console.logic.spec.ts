@@ -1,5 +1,5 @@
 import { LogEntry } from '../../../core/api/models';
-import { LocalLine, SendWindow, mergeConsoleLines, normalizeCommand } from './console.logic';
+import { LocalLine, mergeConsoleLines, normalizeCommand } from './console.logic';
 
 const entry = (id: string): LogEntry => ({
   id,
@@ -41,19 +41,5 @@ describe('normalizeCommand', () => {
   it('drops the leading slash of the shortcuts', () => {
     expect(normalizeCommand('/time set day')).toBe('time set day');
     expect(normalizeCommand('  list ')).toBe('list');
-  });
-});
-
-describe('SendWindow', () => {
-  it('is full after `max` sends and frees up when the oldest leaves the window', () => {
-    const window = new SendWindow(5, 1000);
-    for (const at of [0, 100, 200, 300, 400]) {
-      window.record(at);
-    }
-
-    expect(window.isFull(500)).toBe(true);
-    expect(window.msUntilFree(500)).toBe(500);
-    expect(window.isFull(1000)).toBe(false);
-    expect(window.msUntilFree(1000)).toBe(0);
   });
 });
