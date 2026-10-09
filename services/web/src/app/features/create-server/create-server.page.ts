@@ -27,6 +27,7 @@ import {
   McModpackCard,
   McProgress,
   McRamSlider,
+  McSelect,
   McStatusChip,
   McStepper,
   McTextField,
@@ -75,6 +76,7 @@ const SEARCH_LIMIT = 10;
     McModpackCard,
     McProgress,
     McRamSlider,
+    McSelect,
     McStatusChip,
     McStepper,
     McTextField,
@@ -275,36 +277,15 @@ const SEARCH_LIMIT = 10;
 
                   @if (state().modpack) {
                     <div>
-                      <label class="t-label-md mb-1 block" for="modpack-version">
-                        Versão do modpack
-                      </label>
-                      <div class="relative">
-                        <select
-                          id="modpack-version"
-                          class="bevel-sunken t-body-lg h-12 w-full appearance-none bg-surface-input px-3 pr-12 text-text-primary"
-                          [disabled]="versionsLoading() || versions().length === 0"
-                          [attr.aria-invalid]="errors()['modpackVersion'] ? 'true' : null"
-                          [attr.aria-describedby]="'modpack-version-help'"
-                          (change)="chooseVersion($any($event.target).value)"
-                        >
-                          @if (versionsLoading()) {
-                            <option value="">Carregando versões…</option>
-                          }
-                          @for (version of versions(); track version.id) {
-                            <option
-                              [value]="version.id"
-                              [selected]="state().modpackVersion?.id === version.id"
-                            >
-                              {{ versionLabel(version) }}
-                            </option>
-                          }
-                        </select>
-                        <mc-icon
-                          class="pointer-events-none absolute top-3 right-3"
-                          name="chevron-down"
-                          [size]="24"
-                        />
-                      </div>
+                      <mc-select
+                        label="Versão do modpack"
+                        [options]="versionOptions()"
+                        [placeholder]="versionsLoading() ? 'Carregando versões…' : 'Selecione uma versão'"
+                        [disabled]="versionsLoading() || versions().length === 0"
+                        [invalid]="!!errors()['modpackVersion']"
+                        [value]="state().modpackVersion?.id ?? ''"
+                        (valueChange)="chooseVersion($event)"
+                      />
                       @if (errors()['modpackVersion']) {
                         <p class="t-caption mt-1 text-status-danger" role="alert">
                           {{ errors()['modpackVersion'] }}
@@ -504,6 +485,12 @@ export class CreateServerPage {
   protected readonly searchError = signal(false);
   protected readonly versions = signal<ModpackVersion[]>([]);
   protected readonly versionsLoading = signal(false);
+  protected readonly versionOptions = computed(() =>
+    this.versions().map((v) => ({
+      value: v.id,
+      label: this.versionLabel(v),
+    })),
+  );
 
   protected readonly provisioning = computed(() => this.phase() !== 'editing');
   protected readonly isModpack = computed(() => this.state().profile === 'MODPACK');

@@ -1,4 +1,4 @@
-import { LogEntry } from './circular-log-buffer';
+import { LogEntry, LogSource } from './circular-log-buffer';
 
 const ESC = '\u001b';
 const CSI = '\u009b';
@@ -53,7 +53,11 @@ export class LogNoiseFilter {
   /**
    * Converte uma linha bruta de log em um objeto LogEntry tipado.
    */
-  public static parseLogEntry(rawLine: string, lineId?: string): LogEntry {
+  public static parseLogEntry(
+    rawLine: string,
+    lineId?: string,
+    source: LogSource = 'stdout',
+  ): LogEntry {
     const cleanLine = this.sanitizeAnsi(rawLine).trim();
     let level: 'INFO' | 'WARN' | 'ERROR' = 'INFO';
 
@@ -62,6 +66,9 @@ export class LogNoiseFilter {
     } else if (/\b(ERROR|FATAL|SEVERE|Exception)\b/i.test(cleanLine)) {
       level = 'ERROR';
     }
+
+    const resolvedSource: LogSource =
+      source === 'rcon' ? 'rcon' : level === 'ERROR' ? 'stderr' : source;
 
     // Tenta extrair timestamp no formato [HH:mm:ss] ou similar
     const timestampMatch = cleanLine.match(/^\[?(\d{2}:\d{2}:\d{2})\]?/);
@@ -72,6 +79,7 @@ export class LogNoiseFilter {
       timestamp,
       level,
       message: cleanLine,
+      source: resolvedSource,
     };
   }
 }

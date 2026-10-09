@@ -15,8 +15,12 @@ import {
 export class BackupsApi {
   private readonly api = inject(ApiClient);
 
-  create(serverId: string, type: BackupMode = 'HOT'): Observable<CreateBackupResponse> {
-    return this.api.post(`/api/servers/${serverId}/backups`, { type });
+  create(
+    serverId: string,
+    type: BackupMode = 'HOT',
+    taskId?: string,
+  ): Observable<CreateBackupResponse> {
+    return this.api.post(`/api/servers/${serverId}/backups`, { type, taskId });
   }
 
   list(serverId: string): Observable<ServerBackup[]> {
@@ -29,8 +33,8 @@ export class BackupsApi {
     });
   }
 
-  restore(serverId: string, backupId: string): Observable<RestoreBackupResponse> {
-    return this.api.post(`/api/servers/${serverId}/backups/${backupId}/restore`);
+  restore(serverId: string, backupId: string, taskId?: string): Observable<RestoreBackupResponse> {
+    return this.api.post(`/api/servers/${serverId}/backups/${backupId}/restore`, { taskId });
   }
 
   /** Blob download: a plain link would not carry the Authorization header. */

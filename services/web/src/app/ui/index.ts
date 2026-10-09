@@ -25,3 +25,5 @@ export * from './modpack-card/modpack-card';
 export * from './stat-tile/stat-tile';
 export * from './choice-tile/choice-tile';
 export * from './legal-footer/legal-footer';
+export * from './switch/switch';
+export * from './select/select';

@@ -36,34 +36,7 @@ export function normalizeCommand(text: string): string {
   return text.trim().replace(/^\/+/, '');
 }
 
-/** Sliding window of accepted sends, used to disable Enviar before the server-side limit hits. */
-export class SendWindow {
-  private stamps: number[] = [];
-
-  constructor(
-    private readonly max: number,
-    private readonly windowMs: number,
-  ) {}
-
-  record(now: number): void {
-    this.prune(now);
-    this.stamps.push(now);
-  }
-
-  isFull(now: number): boolean {
-    this.prune(now);
-    return this.stamps.length >= this.max;
-  }
-
-  /** Milliseconds until a slot frees up; 0 when not full. */
-  msUntilFree(now: number): number {
-    return this.isFull(now) ? this.stamps[0] + this.windowMs - now : 0;
-  }
-
-  private prune(now: number): void {
-    this.stamps = this.stamps.filter((stamp) => now - stamp < this.windowMs);
-  }
-}
+export { RateLimiter as SendWindow } from '../../../core/realtime/rate-limiter';
 
 export const QUICK_COMMANDS = [
   '/save-all',

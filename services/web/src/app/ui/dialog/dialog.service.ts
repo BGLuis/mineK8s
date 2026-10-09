@@ -8,6 +8,7 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   confirmVariant?: ButtonVariant;
+  hideCancel?: boolean;
 }
 
 export interface PendingConfirm extends ConfirmOptions {

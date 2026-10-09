@@ -55,4 +55,16 @@ describe('McMeter', () => {
     expect(blocks.filter((b) => b.classList.contains('bg-status-danger'))).toHaveLength(9);
     expect(blocks.filter((b) => b.classList.contains('bg-bg-sunken'))).toHaveLength(1);
   });
+
+  it('displays custom valueText when provided', async () => {
+    const fixture = TestBed.createComponent(McMeter);
+    fixture.componentRef.setInput('label', 'Jogadores');
+    fixture.componentRef.setInput('value', 24);
+    fixture.componentRef.setInput('valueText', '12/50');
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.textContent).toContain('Jogadores');
+    expect(el.textContent).toContain('12/50');
+  });
 });

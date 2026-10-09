@@ -67,10 +67,12 @@ export class McMeter {
   readonly label = input.required<string>();
   /** Percentage, 0-100. */
   readonly value = input.required<number>();
+  /** Free custom value text (e.g. '12/50', '19.8 TPS'). Defaults to '${rounded} %'. */
+  readonly customValueText = input<string | null>(null, { alias: 'valueText' });
 
   protected readonly rounded = computed(() => Math.round(clamp(this.value())));
   protected readonly level = computed(() => meterLevel(this.value()));
-  protected readonly valueText = computed(() => `${this.rounded()} %`);
+  protected readonly valueText = computed(() => this.customValueText() ?? `${this.rounded()} %`);
   protected readonly fillClass = computed(() => FILL_CLASSES[this.level()]);
   protected readonly textClass = computed(() => TEXT_CLASSES[this.level()]);
   protected readonly blocks = computed(() => {

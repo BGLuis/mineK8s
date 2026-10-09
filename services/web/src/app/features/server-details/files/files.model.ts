@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { asHttpError, extractErrorMessage } from '../../../core/api/api-error';
 
 import { FileItem } from '../../../core/api/models';
 
@@ -34,19 +34,19 @@ export function isWorldArchive(name: string): boolean {
   return WORLD_ARCHIVE.test(name);
 }
 
-export type FileAction = 'list' | 'read' | 'write' | 'delete' | 'upload';
+export type FileAction = 'list' | 'read' | 'write' | 'delete' | 'upload' | 'mkdir' | 'rename';
 
 const FORBIDDEN =
   'Caminho recusado pela API: fora de /data ou link simbólico. Isso não pode ser acessado pelo painel.';
 
 export function fileErrorMessage(action: FileAction, error: unknown): string {
-  if (!(error instanceof HttpErrorResponse)) {
+  const http = asHttpError(error);
+  if (!http) {
     return 'Algo deu errado. Tente novamente.';
   }
-  const body = (error.error as { message?: string | string[] } | null)?.message;
-  const detail = Array.isArray(body) ? body.join(' ') : (body ?? '');
+  const detail = extractErrorMessage(http) ?? '';
 
-  switch (error.status) {
+  switch (http.status) {
     case 0:
       return 'Não foi possível falar com o painel. Verifique sua conexão.';
     case 403:
@@ -56,6 +56,9 @@ export function fileErrorMessage(action: FileAction, error: unknown): string {
         ? 'Essa pasta não existe mais.'
         : 'Esse arquivo não existe mais. Atualize a lista.';
     case 409:
+      if (detail && /already exists/i.test(detail)) {
+        return 'Já existe um arquivo ou pasta com esse nome.';
+      }
       return action === 'upload'
         ? 'Pare o servidor antes de enviar um mundo: o envio é recusado enquanto ele está ligado.'
         : 'Arquivos do mundo só podem ser alterados com o servidor parado. Pare o servidor e tente de novo.';

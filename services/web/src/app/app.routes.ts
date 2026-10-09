@@ -1,17 +1,7 @@
-import { isDevMode } from '@angular/core';
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
-
-const devRoutes: Routes = isDevMode()
-  ? [
-      {
-        path: 'dev/ui',
-        title: 'Galeria de UI',
-        loadComponent: () => import('./dev/ui-gallery').then((m) => m.UiGallery),
-      },
-    ]
-  : [];
+import { devRoutes } from './dev/dev-routes';
 
 export const routes: Routes = [
   {

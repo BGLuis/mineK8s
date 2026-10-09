@@ -67,6 +67,22 @@ describe('authInterceptor', () => {
     expect(navigate).toHaveBeenCalledWith(['/login']);
   });
 
+  it('preserves the redirect query param when 401 occurs on an inner page', () => {
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/servers/test-server/files');
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    tokens.set('expired');
+    http.get('/api/servers/test-server/files').subscribe({ error: () => undefined });
+
+    controller
+      .expectOne('/api/servers/test-server/files')
+      .flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    expect(navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { redirect: '/servers/test-server/files' },
+    });
+  });
+
   it('keeps the session when a failed login attempt returns 401', () => {
     tokens.set('still-valid');
     http.post('/api/auth/session', {}).subscribe({ error: () => undefined });

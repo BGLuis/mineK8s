@@ -101,6 +101,18 @@ describe('Log Pipeline Components (RF-RCON-08, RF-RCON-09, RF-RCON-15)', () => {
       expect(entry.level).toBe('WARN');
       expect(entry.timestamp).toBe('14:05:30');
       expect(entry.message).toContain("Can't keep up!");
+      expect(entry.source).toBe('stdout');
+    });
+
+    it('should assign stderr for ERROR level lines and keep rcon source when explicit', () => {
+      const errLine = '[14:05:31] [Server thread/ERROR]: Exception in server tick loop';
+      const errEntry = LogNoiseFilter.parseLogEntry(errLine);
+      expect(errEntry.level).toBe('ERROR');
+      expect(errEntry.source).toBe('stderr');
+
+      const rconLine = 'Seed: 123456789';
+      const rconEntry = LogNoiseFilter.parseLogEntry(rconLine, undefined, 'rcon');
+      expect(rconEntry.source).toBe('rcon');
     });
   });
 });

@@ -41,6 +41,7 @@ describe('K8sLogStreamerService (RF-RCON-07, RF-RCON-08, RF-RCON-09, Guarda C-11
     expect(entry1).not.toBeNull();
     expect(deltas.length).toBe(1);
     expect(deltas[0].message).toContain('Preparing spawn area: 100%');
+    expect(entry1?.source).toBe('stdout');
 
     // 2. Ingest RCON noise line -> must be filtered, no delta emitted
     const noiseEntry = streamer.ingestRawLine(

@@ -190,6 +190,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       output,
       durationMs,
       error: isError,
+      source: 'rcon' as const,
     };
 
     client.emit('command_output', responseData);

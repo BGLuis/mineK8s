@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit, Optional } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -19,6 +19,7 @@ import { UUID_PATTERN } from '../common/uuid';
 import { ModpackTaskEntity } from '../database/entities/modpack-task.entity';
 import { User } from '../database/entities/user.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
+import { TaskExecutionService } from './task-execution.service';
 
 export interface TaskProgressPayload {
   taskId: string;
@@ -29,6 +30,9 @@ export interface TaskProgressPayload {
   totalFiles: number;
   currentStep: string;
   speedBytesPerSec?: number;
+  freezeDurationMs?: number;
+  errorMessage?: string | null;
+  error?: string | null;
 }
 
 export interface SubscribeToTaskDto {
@@ -38,7 +42,7 @@ export interface SubscribeToTaskDto {
 @WebSocketGateway({
   namespace: '/ws/tasks',
 })
-export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   private readonly logger = new Logger(TasksGateway.name);
 
   @WebSocketServer()
@@ -52,7 +56,12 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
     private readonly trustedProxies: TrustedProxyService,
+    @Optional() private readonly taskExecutionService?: TaskExecutionService,
   ) {}
+
+  onModuleInit() {
+    this.taskExecutionService?.onProgress((task) => this.emitTaskProgress(task));
+  }
 
   async handleConnection(client: any) {
     try {
@@ -95,11 +104,23 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'error', message: 'taskId is required' };
     }
 
+    const inMemory = this.taskExecutionService?.getTask(dto.taskId);
+    const user: User | undefined = client.data?.user;
+    if (inMemory) {
+      if (!(await canAccessServer(user, inMemory.serverId, this.accessRepo))) {
+        return { status: 'error', message: `Task "${dto.taskId}" not found` };
+      }
+      const room = `task:${dto.taskId}`;
+      client.join?.(room);
+      this.logger.debug(`Cliente ${client.id} inscrito na sala da tarefa [${room}]`);
+      client.emit?.('taskProgress', inMemory);
+      return { status: 'subscribed', taskId: dto.taskId };
+    }
+
     // Same answer for a missing task and for one the user may not see, so ids cannot be probed.
     const task = UUID_PATTERN.test(dto.taskId)
       ? await this.taskRepo.findOne({ where: { id: dto.taskId } })
       : null;
-    const user: User | undefined = client.data?.user;
     if (!task || !(await canAccessServer(user, task.serverId, this.accessRepo))) {
       return { status: 'error', message: `Task "${dto.taskId}" not found` };
     }

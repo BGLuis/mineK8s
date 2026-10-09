@@ -26,6 +26,7 @@ import { KubernetesService } from '@k8s/k8s.service';
 import { ManifestBuilder } from '@k8s/manifest-builder';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
+import { TaskExecutionService } from '../tasks/task-execution.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +65,7 @@ export class ServersBackupService {
     @Optional()
     @InjectRepository(Server)
     private readonly serverRepo?: Repository<Server>,
+    @Optional() private readonly taskExecutionService?: TaskExecutionService,
   ) {}
 
   public isServerBusy(serverId: string): boolean {
@@ -129,6 +131,7 @@ export class ServersBackupService {
       watchdogTimeoutMs?: number;
       isPreUpdate?: boolean;
       modpackVersion?: string | null;
+      taskId?: string;
     },
   ): Promise<BackupResult> {
     // 1. Verificação de Concorrência (RF-STO-19)
@@ -178,12 +181,25 @@ export class ServersBackupService {
         this.configService,
       );
 
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          progressPercent: 15,
+          currentStep: 'Iniciando preparação do job de backup...',
+        });
+      }
+
       // Despacha Job em Kubernetes (RF-STO-01)
       if (this.k8sService) {
         await this.k8sService.createJob(manifest);
       }
 
       if (type === 'HOT') {
+        if (options?.taskId) {
+          this.taskExecutionService?.update(options.taskId, {
+            progressPercent: 25,
+            currentStep: 'Pré-aquecendo pod e desabilitando autosave...',
+          });
+        }
         // Pré-aquecimento do Pod do Job antes do freeze (D-04)
         if (this.k8sService) {
           this.logger.log(`[D-04] Pré-aquecendo Pod do Job [${jobName}] no cluster K8s...`);
@@ -236,6 +252,14 @@ export class ServersBackupService {
           `[RF-STO-03] Hot backup snapshot criado com sucesso em ${freezeDurationMs}ms (< 2000ms). Autosave reativado.`,
         );
 
+        if (options?.taskId) {
+          this.taskExecutionService?.update(options.taskId, {
+            progressPercent: 50,
+            currentStep: 'Compactando dados do snapshot...',
+            freezeDurationMs,
+          });
+        }
+
         // Espera término do Job assíncrono ou gera arquivo compactado a partir de .snapshot_tmp
         if (this.k8sService) {
           await this.k8sService.waitForJobCompletion(jobName);
@@ -246,6 +270,12 @@ export class ServersBackupService {
         // Limpeza da pasta temporária do snapshot
         await fs.promises.rm(snapshotDir, { recursive: true, force: true });
       } else {
+        if (options?.taskId) {
+          this.taskExecutionService?.update(options.taskId, {
+            progressPercent: 40,
+            currentStep: 'Compactando dados do servidor...',
+          });
+        }
         // Cold backup direto de /data
         if (this.k8sService) {
           await this.k8sService.waitForJobCompletion(jobName);
@@ -260,6 +290,13 @@ export class ServersBackupService {
         });
       }
 
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          progressPercent: 80,
+          currentStep: 'Calculando integridade criptográfica SHA-256...',
+        });
+      }
+
       // Cálculo de integridade criptográfica SHA-256 e estatísticas
       const stat = await fs.promises.stat(targetArchive);
       const sha256Checksum = await this.calculateSha256(targetArchive);
@@ -268,6 +305,13 @@ export class ServersBackupService {
       this.logger.log(
         `Backup [${filename}] gerado com sucesso. Tamanho: ${stat.size} bytes, SHA-256: ${sha256Checksum}`,
       );
+
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          progressPercent: 90,
+          currentStep: 'Persistindo registro e aplicando política de retenção...',
+        });
+      }
 
       let backupId = `${server.id}-${timestamp}`;
       if (this.backupRepo) {
@@ -304,6 +348,15 @@ export class ServersBackupService {
         await this.applyRetentionPolicy(server.id);
       }
 
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          status: 'COMPLETED',
+          progressPercent: 100,
+          currentStep: 'Backup concluído com sucesso!',
+          freezeDurationMs,
+        });
+      }
+
       return {
         backupId,
         serverId: server.id,
@@ -314,6 +367,15 @@ export class ServersBackupService {
         sha256Checksum,
         freezeDurationMs,
       };
+    } catch (err: any) {
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          status: 'FAILED',
+          currentStep: 'Falha na criação do backup',
+          errorMessage: err.message,
+        });
+      }
+      throw err;
     } finally {
       if (watchdogTimer) {
         clearTimeout(watchdogTimer);
@@ -389,7 +451,7 @@ export class ServersBackupService {
   async restoreBackup(
     server: Server,
     backupIdentifier: string,
-    options?: { expectedSha256?: string; skipPreRestore?: boolean },
+    options?: { expectedSha256?: string; skipPreRestore?: boolean; taskId?: string },
   ): Promise<RestoreResult> {
     const startTime = Date.now();
 
@@ -428,6 +490,12 @@ export class ServersBackupService {
     try {
       // 4. Criação do backup preventivo PRE_RESTORE formal com retenção de 48h (D-05)
       if (!options?.skipPreRestore) {
+        if (options?.taskId) {
+          this.taskExecutionService?.update(options.taskId, {
+            progressPercent: 20,
+            currentStep: 'Criando backup preventivo PRE_RESTORE...',
+          });
+        }
         this.logger.log(
           `[D-05] Gerando backup preventivo PRE_RESTORE antes de modificar /data para [${server.subdomain}]...`,
         );
@@ -443,6 +511,13 @@ export class ServersBackupService {
           const content = await fs.promises.readFile(adjacentShaFile, 'utf-8');
           expectedSha = content.trim().split(/\s+/)[0];
         }
+      }
+
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          progressPercent: 45,
+          currentStep: 'Validando integridade e despachando job de restore...',
+        });
       }
 
       // 6. Despacho do Job K8s se k8sService estiver ativo
@@ -472,6 +547,13 @@ export class ServersBackupService {
         }
       }
 
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          progressPercent: 70,
+          currentStep: 'Extraindo arquivos e aplicando restauração transacional...',
+        });
+      }
+
       // 7. Execução do algoritmo transacional em 5 fases (fiel no host / testbed / homelab)
       await this.executeTransactionalRestore(server, serverDir, backupPath, expectedSha);
 
@@ -480,6 +562,14 @@ export class ServersBackupService {
         `Transactional restore completed successfully para [${server.subdomain}] em ${durationMs}ms.`,
       );
 
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          status: 'COMPLETED',
+          progressPercent: 100,
+          currentStep: 'Restauração concluída com sucesso!',
+        });
+      }
+
       return {
         serverId: server.id,
         backupFile: backupPath,
@@ -487,6 +577,15 @@ export class ServersBackupService {
         restoredAt: new Date(),
         durationMs,
       };
+    } catch (err: any) {
+      if (options?.taskId) {
+        this.taskExecutionService?.update(options.taskId, {
+          status: 'FAILED',
+          currentStep: 'Falha na restauração do backup',
+          errorMessage: err.message,
+        });
+      }
+      throw err;
     } finally {
       this.activeBackupLocks.delete(server.id);
     }
@@ -992,6 +1091,7 @@ export class ServersBackupService {
   async restoreBackupById(
     serverId: string,
     backupId: string,
+    customTaskId?: string,
   ): Promise<{ taskId: string; message: string }> {
     if (!this.serverRepo) {
       throw new Error('Server repository not configured');
@@ -1008,10 +1108,17 @@ export class ServersBackupService {
     }
 
     const backup = await this.getBackup(serverId, backupId);
-    const taskId = `restore-task-${Date.now()}`;
+    const taskId = customTaskId || `restore-task-${Date.now()}`;
+    this.taskExecutionService?.register({
+      taskId,
+      serverId: server.id,
+      status: 'IN_PROGRESS',
+      progressPercent: 10,
+      currentStep: 'Iniciando restauração do backup...',
+    });
 
     // Executa a restauração transacional em 5 fases (RF-STO-04)
-    await this.restoreBackup(server, backup.storagePath);
+    await this.restoreBackup(server, backup.storagePath, { taskId });
 
     return {
       taskId,
@@ -1025,6 +1132,7 @@ export class ServersBackupService {
   async createBackupForServer(
     serverId: string,
     type: 'HOT' | 'COLD' = 'HOT',
+    customTaskId?: string,
   ): Promise<{ taskId: string; backupId: string; result: BackupResult }> {
     if (!this.serverRepo) {
       throw new Error('Server repository not configured');
@@ -1034,8 +1142,16 @@ export class ServersBackupService {
       throw new NotFoundException(`Server with ID "${serverId}" not found.`);
     }
 
-    const taskId = `backup-task-${Date.now()}`;
-    const result = await this.createBackup(server, type);
+    const taskId = customTaskId || `backup-task-${Date.now()}`;
+    this.taskExecutionService?.register({
+      taskId,
+      serverId: server.id,
+      status: 'IN_PROGRESS',
+      progressPercent: 10,
+      currentStep: 'Iniciando criação de backup...',
+    });
+
+    const result = await this.createBackup(server, type, { taskId });
 
     return {
       taskId,

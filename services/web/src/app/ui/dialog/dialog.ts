@@ -41,7 +41,9 @@ let nextId = 0;
           <h2 class="t-title-sm mb-4" [id]="titleId">{{ title() }}</h2>
           <div class="t-body-md mb-6 text-text-muted"><ng-content /></div>
           <div class="flex flex-wrap justify-end gap-4">
-            <mc-button (click)="cancel()">{{ cancelLabel() }}</mc-button>
+            @if (!hideCancel()) {
+              <mc-button (click)="cancel()">{{ cancelLabel() }}</mc-button>
+            }
             <mc-button
               [variant]="confirmVariant()"
               [disabled]="confirmDisabled()"
@@ -64,6 +66,8 @@ export class McDialog {
   readonly cancelLabel = input('Cancelar');
   readonly confirmVariant = input<ButtonVariant>('danger');
   readonly confirmDisabled = input(false);
+  readonly hideCancel = input(false);
+  readonly closeOnConfirm = input(true);
 
   readonly confirmed = output<void>();
   readonly cancelled = output<void>();
@@ -92,7 +96,9 @@ export class McDialog {
 
   protected confirm(): void {
     this.confirmed.emit();
-    this.open.set(false);
+    if (this.closeOnConfirm()) {
+      this.open.set(false);
+    }
   }
 
   protected cancel(): void {

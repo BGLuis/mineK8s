@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { canDeactivateFiles } from './files/files-unsaved.guard';
 
 export const SERVER_DETAILS_ROUTES: Routes = [
   {
@@ -21,6 +22,7 @@ export const SERVER_DETAILS_ROUTES: Routes = [
       {
         path: 'files',
         title: 'Arquivos · mineK8s',
+        canDeactivate: [canDeactivateFiles],
         loadComponent: () => import('./files/server-files.page').then((m) => m.ServerFilesPage),
       },
       {

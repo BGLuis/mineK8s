@@ -11,10 +11,20 @@ import {
   viewChild,
 } from '@angular/core';
 
+import { FormsModule } from '@angular/forms';
+
 import { FileItem, ServerState } from '../../../core/api/models';
 import { FilesApi } from '../../../core/api/files.api';
 import { ServersApi } from '../../../core/api/servers.api';
-import { DialogService, McBanner, McButton, McIcon, McNoApiTag, ToastService } from '../../../ui';
+import {
+  DialogService,
+  McBanner,
+  McButton,
+  McDialog,
+  McIcon,
+  McTextField,
+  ToastService,
+} from '../../../ui';
 import { McCodeEditor } from './code-editor';
 import { checkEditable, formatBytes, languageFor, looksBinary } from './file-types';
 import {
@@ -30,7 +40,7 @@ const RUNNING_STATES: readonly ServerState[] = ['READY', 'STARTING'];
 @Component({
   selector: 'mc-server-files-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McBanner, McButton, McCodeEditor, McIcon, McNoApiTag],
+  imports: [FormsModule, McBanner, McButton, McCodeEditor, McDialog, McIcon, McTextField],
   host: { '(window:beforeunload)': 'warnBeforeUnload($event)' },
   template: `
     <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -56,7 +66,20 @@ const RUNNING_STATES: readonly ServerState[] = ['READY', 'STARTING'];
       </nav>
 
       <div class="flex flex-wrap items-center gap-3">
-        <mc-no-api-tag detail="upload avulso, nova pasta, renomear" />
+        <mc-button variant="neutral" icon="folder" [disabled]="busy()" (click)="openNewFolderDialog()">
+          Nova pasta
+        </mc-button>
+        <mc-button variant="neutral" icon="upload" [disabled]="singleUploading()" (click)="pickSingleFile()">
+          {{ singleUploading() ? 'Enviando…' : 'Enviar arquivo' }}
+        </mc-button>
+        <input
+          #singleFile
+          type="file"
+          class="sr-only"
+          tabindex="-1"
+          aria-hidden="true"
+          (change)="onSingleFileChosen($event)"
+        />
         <mc-button variant="info" icon="upload" [disabled]="uploading()" (click)="pickArchive()">
           {{ uploading() ? 'Enviando…' : 'Enviar mundo (.zip / .tar.gz)' }}
         </mc-button>
@@ -160,6 +183,9 @@ const RUNNING_STATES: readonly ServerState[] = ['READY', 'STARTING'];
               @if (dirty()) {
                 <span class="t-caption text-status-warning" role="status">Não salvo</span>
               }
+              <mc-button size="sm" variant="neutral" [disabled]="busy()" (click)="openRenameDialog(file)">
+                Renomear
+              </mc-button>
               <mc-button size="sm" variant="danger" [disabled]="busy()" (click)="deleteSelected()">
                 Excluir
               </mc-button>
@@ -217,6 +243,43 @@ const RUNNING_STATES: readonly ServerState[] = ['READY', 'STARTING'];
       Editor leve com destaque de sintaxe para .properties, .yml, .json e .toml. Caminhos fora de
       /data e links simbólicos são recusados pela API.
     </p>
+
+    <mc-dialog
+      [(open)]="newFolderOpen"
+      title="Nova pasta"
+      confirmLabel="Criar pasta"
+      confirmVariant="primary"
+      [confirmDisabled]="!folderName().trim()"
+      (confirmed)="createFolder()"
+    >
+      <div class="flex flex-col gap-3">
+        <mc-text-field
+          label="Nome da pasta"
+          placeholder="Ex: plugins"
+          [ngModel]="folderName()"
+          (ngModelChange)="folderName.set($event)"
+          [ngModelOptions]="{ standalone: true }"
+        />
+      </div>
+    </mc-dialog>
+
+    <mc-dialog
+      [(open)]="renameOpen"
+      [title]="'Renomear ' + (renamingTarget()?.name ?? '')"
+      confirmLabel="Renomear"
+      confirmVariant="primary"
+      [confirmDisabled]="!renameValue().trim() || renameValue().trim() === renamingTarget()?.name"
+      (confirmed)="confirmRename()"
+    >
+      <div class="flex flex-col gap-3">
+        <mc-text-field
+          label="Novo nome"
+          [ngModel]="renameValue()"
+          (ngModelChange)="renameValue.set($event)"
+          [ngModelOptions]="{ standalone: true }"
+        />
+      </div>
+    </mc-dialog>
   `,
   styles: `
     .entry {
@@ -247,6 +310,7 @@ export class ServerFilesPage {
   readonly id = input.required<string>();
 
   private readonly archive = viewChild<ElementRef<HTMLInputElement>>('archive');
+  private readonly singleFile = viewChild<ElementRef<HTMLInputElement>>('singleFile');
 
   protected readonly currentPath = signal('');
   protected readonly listing = signal<FileItem[]>([]);
@@ -262,7 +326,13 @@ export class ServerFilesPage {
   protected readonly saving = signal(false);
 
   protected readonly uploading = signal(false);
+  protected readonly singleUploading = signal(false);
   protected readonly uploadError = signal('');
+  protected readonly newFolderOpen = signal(false);
+  protected readonly folderName = signal('');
+  protected readonly renameOpen = signal(false);
+  protected readonly renamingTarget = signal<FileItem | null>(null);
+  protected readonly renameValue = signal('');
   private readonly serverState = signal<ServerState | null>(null);
 
   protected readonly crumbs = computed(() => breadcrumbs(this.currentPath()));
@@ -435,6 +505,78 @@ export class ServerFilesPage {
     });
   }
 
+  protected pickSingleFile(): void {
+    this.singleFile()?.nativeElement.click();
+  }
+
+  protected onSingleFileChosen(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+    this.singleUploading.set(true);
+    this.files.uploadFile(this.id(), this.currentPath(), file).subscribe({
+      next: () => {
+        this.singleUploading.set(false);
+        this.toast.success(`${file.name} enviado.`);
+        this.reload();
+      },
+      error: (error) => {
+        this.singleUploading.set(false);
+        this.toast.error(fileErrorMessage('upload', error));
+      },
+    });
+  }
+
+  protected openNewFolderDialog(): void {
+    this.folderName.set('');
+    this.newFolderOpen.set(true);
+  }
+
+  protected createFolder(): void {
+    const name = this.folderName().trim();
+    if (!name) {
+      return;
+    }
+    this.files.createFolder(this.id(), this.currentPath(), name).subscribe({
+      next: () => {
+        this.newFolderOpen.set(false);
+        this.toast.success(`Pasta ${name} criada.`);
+        this.reload();
+      },
+      error: (error) => this.toast.error(fileErrorMessage('mkdir', error)),
+    });
+  }
+
+  protected openRenameDialog(file: FileItem): void {
+    this.renamingTarget.set(file);
+    this.renameValue.set(file.name);
+    this.renameOpen.set(true);
+  }
+
+  protected confirmRename(): void {
+    const target = this.renamingTarget();
+    const newName = this.renameValue().trim();
+    if (!target || !newName || newName === target.name) {
+      return;
+    }
+    const parent = parentPath(target.path);
+    const newPath = parent ? `${parent}/${newName}` : newName;
+    this.files.rename(this.id(), target.path, newPath).subscribe({
+      next: () => {
+        this.renameOpen.set(false);
+        this.toast.success(`${target.name} renomeado para ${newName}.`);
+        if (this.selected()?.path === target.path) {
+          this.selected.set({ ...target, name: newName, path: newPath });
+        }
+        this.reload();
+      },
+      error: (error) => this.toast.error(fileErrorMessage('rename', error)),
+    });
+  }
+
   protected warnBeforeUnload(event: BeforeUnloadEvent): void {
     if (this.dirty()) {
       event.preventDefault();
@@ -464,6 +606,10 @@ export class ServerFilesPage {
     this.notice.set('');
     this.fileError.set('');
     this.fileLoading.set(false);
+  }
+
+  canDeactivate(): Promise<boolean> {
+    return this.confirmDiscard();
   }
 
   private async confirmDiscard(): Promise<boolean> {

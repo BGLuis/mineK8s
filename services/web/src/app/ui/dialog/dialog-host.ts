@@ -15,6 +15,7 @@ import { DialogService } from './dialog.service';
         [confirmLabel]="request.confirmLabel ?? 'Confirmar'"
         [cancelLabel]="request.cancelLabel ?? 'Cancelar'"
         [confirmVariant]="request.confirmVariant ?? 'danger'"
+        [hideCancel]="request.hideCancel ?? false"
         (confirmed)="service.settle(true)"
         (cancelled)="service.settle(false)"
       >

@@ -216,4 +216,161 @@ export class ServersFilesService {
       extractedCount: extracted.length,
     };
   }
+
+  async uploadFile(
+    id: string,
+    relPath: string = '',
+    file?: { originalname: string; buffer: Buffer },
+  ): Promise<{ message: string }> {
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('No file provided or file is empty');
+    }
+
+    if (!file.originalname || file.originalname.trim() === '') {
+      throw new BadRequestException('File name cannot be empty');
+    }
+
+    const filename = path.basename(file.originalname.trim());
+    if (
+      !filename ||
+      filename === '.' ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('\0')
+    ) {
+      throw new BadRequestException('Invalid file name');
+    }
+
+    const fullRelPath = relPath ? path.join(relPath, filename).replace(/\\/g, '/') : filename;
+    const normalizedRelPath = fullRelPath.toLowerCase();
+
+    if (normalizedRelPath.endsWith('session.lock')) {
+      throw new BadRequestException(
+        'Security restriction: the session.lock file cannot be uploaded manually (RF-STO-09 / RF-ARQ-16)',
+      );
+    }
+
+    const server = await this.getServer(id);
+    const isWorldPath =
+      normalizedRelPath.startsWith('world/') ||
+      normalizedRelPath === 'world' ||
+      normalizedRelPath.includes('/world/');
+    if (isWorldPath && (server.state === 'READY' || server.state === 'STARTING')) {
+      throw new ConflictException(
+        `Cannot upload files to world directory while server is running (state: ${server.state}). Server must be in STOPPED state (RF-ARQ-16).`,
+      );
+    }
+
+    const baseDir = this.getServerDataDir(server);
+    const safePath = resolveSafePath(baseDir, fullRelPath);
+
+    const parentDir = path.dirname(safePath);
+    await fs.promises.mkdir(parentDir, { recursive: true });
+
+    const tempPath = `${safePath}.tmp.${Date.now()}`;
+    await fs.promises.writeFile(tempPath, file.buffer);
+    await fs.promises.rename(tempPath, safePath);
+
+    return { message: 'File uploaded successfully' };
+  }
+
+  async createDirectory(
+    id: string,
+    relPath: string = '',
+    dirName: string,
+  ): Promise<{ message: string }> {
+    if (!dirName || dirName.trim() === '') {
+      throw new BadRequestException('Directory name is required');
+    }
+
+    const trimmedName = dirName.trim();
+    if (
+      trimmedName === '.' ||
+      trimmedName === '..' ||
+      trimmedName.includes('/') ||
+      trimmedName.includes('\\') ||
+      trimmedName.includes('\0')
+    ) {
+      throw new BadRequestException('Invalid directory name');
+    }
+
+    const fullRelPath = relPath ? path.join(relPath, trimmedName).replace(/\\/g, '/') : trimmedName;
+    const normalizedRelPath = fullRelPath.toLowerCase();
+
+    const server = await this.getServer(id);
+    const isWorldPath =
+      normalizedRelPath.startsWith('world/') ||
+      normalizedRelPath === 'world' ||
+      normalizedRelPath.includes('/world/');
+    if (isWorldPath && (server.state === 'READY' || server.state === 'STARTING')) {
+      throw new ConflictException(
+        `Cannot create directories inside world while server is running (state: ${server.state}). Server must be in STOPPED state (RF-ARQ-16).`,
+      );
+    }
+
+    const baseDir = this.getServerDataDir(server);
+    const safePath = resolveSafePath(baseDir, fullRelPath);
+
+    if (fs.existsSync(safePath)) {
+      throw new ConflictException(`Directory or file "${trimmedName}" already exists`);
+    }
+
+    await fs.promises.mkdir(safePath, { recursive: true });
+    return { message: 'Directory created successfully' };
+  }
+
+  async renamePath(
+    id: string,
+    oldRelPath: string,
+    newRelPath: string,
+  ): Promise<{ message: string }> {
+    if (!oldRelPath || oldRelPath.trim() === '' || !newRelPath || newRelPath.trim() === '') {
+      throw new BadRequestException('Both old and new paths are required');
+    }
+
+    const normOld = oldRelPath.replace(/\\/g, '/').toLowerCase();
+    const normNew = newRelPath.replace(/\\/g, '/').toLowerCase();
+
+    if (normOld.endsWith('session.lock') || normNew.endsWith('session.lock')) {
+      throw new BadRequestException(
+        'Security restriction: session.lock cannot be renamed (RF-STO-09 / RF-ARQ-16)',
+      );
+    }
+
+    const server = await this.getServer(id);
+    const touchesWorld =
+      normOld.startsWith('world/') ||
+      normOld === 'world' ||
+      normOld.includes('/world/') ||
+      normNew.startsWith('world/') ||
+      normNew === 'world' ||
+      normNew.includes('/world/');
+
+    if (touchesWorld && (server.state === 'READY' || server.state === 'STARTING')) {
+      throw new ConflictException(
+        `Cannot rename world files while server is running (state: ${server.state}). Server must be in STOPPED state (RF-ARQ-16).`,
+      );
+    }
+
+    const baseDir = this.getServerDataDir(server);
+    const oldSafePath = resolveSafePath(baseDir, oldRelPath);
+    const newSafePath = resolveSafePath(baseDir, newRelPath);
+
+    if (oldSafePath === baseDir) {
+      throw new BadRequestException('Cannot rename root data directory');
+    }
+
+    if (!fs.existsSync(oldSafePath)) {
+      throw new NotFoundException(`Path "${oldRelPath}" does not exist`);
+    }
+
+    if (fs.existsSync(newSafePath)) {
+      throw new ConflictException(`Target "${newRelPath}" already exists`);
+    }
+
+    await fs.promises.mkdir(path.dirname(newSafePath), { recursive: true });
+    await fs.promises.rename(oldSafePath, newSafePath);
+
+    return { message: 'Renamed successfully' };
+  }
 }

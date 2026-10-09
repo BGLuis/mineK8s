@@ -17,10 +17,10 @@ import { McNoApiTag } from '../no-api-tag/no-api-tag';
 
 export type ConsoleMode = 'logs' | 'rcon';
 
-/** A log line plus its origin, when known. The backend does not separate stdout from RCON yet. */
+/** A log line plus its origin, when known. */
 export interface ConsoleLine extends Pick<LogEntry, 'timestamp' | 'level' | 'message'> {
   id?: string;
-  source?: 'stdout' | 'rcon';
+  source?: 'stdout' | 'stderr' | 'rcon';
 }
 
 export const ALL_LEVELS: readonly LogLevel[] = ['INFO', 'WARN', 'ERROR'];
@@ -60,9 +60,13 @@ export function filterConsoleLines(
   levels: readonly LogLevel[],
   mode: ConsoleMode,
 ): ConsoleLine[] {
-  return lines.filter(
-    (line) => levels.includes(line.level) && (mode === 'logs' || line.source === 'rcon'),
-  );
+  return lines.filter((line) => {
+    if (!levels.includes(line.level)) return false;
+    if (mode === 'logs') {
+      return line.source !== 'rcon';
+    }
+    return line.source === 'rcon';
+  });
 }
 
 @Component({
@@ -169,7 +173,7 @@ export class McConsole {
   readonly disabled = input(false);
   readonly placeholder = input('Digite um comando (/? para ajuda)');
   /** Shows the "no API" tag next to the Logs/RCON switch while the backend cannot split them. */
-  readonly splitMissing = input(true);
+  readonly splitMissing = input(false);
   readonly command = output<string>();
 
   protected readonly levels = ALL_LEVELS;
