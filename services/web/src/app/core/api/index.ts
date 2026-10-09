@@ -10,5 +10,4 @@ export * from './health.api';
 export * from './node.api';
 export * from './auth.api';
 export * from './tasks.api';
-export * from './mock-api';
 export * from './api-error';

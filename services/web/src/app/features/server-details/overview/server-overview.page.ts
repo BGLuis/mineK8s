@@ -19,22 +19,16 @@ import { ServersApi } from '../../../core/api/servers.api';
 import {
   DialogService,
   McButton,
-  McNoApiTag,
   McPanel,
   McRamSlider,
+  McSwitch,
   McTextField,
   ToastService,
 } from '../../../ui';
 import { errorReason } from '../../dashboard/server-lifecycle';
 import { formatDuration } from '../format';
 import { ServerDetailStore } from '../server-detail.store';
-import {
-  formatHeap,
-  placeholderMspt,
-  placeholderTpsHistory,
-  TPS_TARGET,
-  tpsLevel,
-} from './performance';
+import { formatMemory, TPS_TARGET, tpsLevel, tpsSeries } from './performance';
 import {
   QuickSettings,
   diffSettings,
@@ -43,7 +37,6 @@ import {
   validateSleepMinutes,
   validateSubdomain,
 } from './quick-settings';
-import { McSettingSwitch } from './setting-switch';
 
 const AVATAR_COLORS = [
   'bg-scene-sky',
@@ -80,42 +73,55 @@ function avatarColor(nick: string): string {
 @Component({
   selector: 'mc-server-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McButton, McNoApiTag, McPanel, McRamSlider, McSettingSwitch, McTextField],
+  imports: [FormsModule, McButton, McPanel, McRamSlider, McSwitch, McTextField],
   template: `
     @if (store.server(); as server) {
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="flex min-w-0 flex-col gap-6">
           <mc-panel title="Desempenho">
-            <mc-no-api-tag panelActions detail="TPS / JVM" />
             @if (store.stats(); as stats) {
-              <dl class="mb-4 flex flex-wrap gap-x-8 gap-y-2">
-                <div>
-                  <dt class="t-caption text-text-muted">TPS</dt>
-                  <dd class="t-title-sm" [class]="tpsTextClass()">{{ tpsText() }}</dd>
-                </div>
-                <div>
-                  <dt class="t-caption text-text-muted">MSPT</dt>
-                  <dd class="t-title-sm">{{ mspt() }} ms</dd>
-                </div>
-                <div>
-                  <dt class="t-caption text-text-muted">Heap JVM</dt>
-                  <dd class="t-title-sm">{{ heap(stats.jvmUsedMb, stats.jvmMaxMb) }}</dd>
-                </div>
-              </dl>
-              <div
-                class="bevel-sunken flex h-28 items-end gap-0.5 bg-bg-sunken p-2"
-                role="img"
-                [attr.aria-label]="chartLabel()"
-              >
-                @for (value of tpsSeries(); track $index) {
-                  <span
-                    class="min-h-1 flex-1"
-                    [class]="barClass(value)"
-                    [style.height.%]="(value / tpsTarget) * 100"
-                  ></span>
+              @if (stats.history.length > 0) {
+                <dl class="mb-4 flex flex-wrap gap-x-8 gap-y-2">
+                  <div>
+                    <dt class="t-caption text-text-muted">TPS</dt>
+                    <dd class="t-title-sm" [class]="tpsTextClass()">{{ tpsText() }}</dd>
+                  </div>
+                  <div>
+                    <dt class="t-caption text-text-muted">MSPT</dt>
+                    <dd class="t-title-sm">{{ msptText() }}</dd>
+                  </div>
+                  <div>
+                    <dt class="t-caption text-text-muted">Memória do container</dt>
+                    <dd class="t-title-sm">{{ formatMemory(stats.memoryUsedMb, stats.memoryLimitMb) }}</dd>
+                  </div>
+                </dl>
+                @if (tpsBars().length > 0) {
+                  <div
+                    class="bevel-sunken flex h-28 items-end gap-0.5 bg-bg-sunken p-2"
+                    role="img"
+                    [attr.aria-label]="chartLabel()"
+                  >
+                    @for (value of tpsBars(); track $index) {
+                      <span
+                        class="min-h-1 flex-1"
+                        [class]="barClass(value)"
+                        [style.height.%]="(value / tpsTarget) * 100"
+                      ></span>
+                    }
+                  </div>
+                  <p class="t-caption mt-2 text-text-muted">
+                    TPS nos últimos {{ tpsBars().length }} min (uma amostra por minuto)
+                  </p>
+                } @else {
+                  <p class="t-body-md text-text-muted">
+                    Este servidor não informa TPS; só a memória está disponível.
+                  </p>
                 }
-              </div>
-              <p class="t-caption mt-2 text-text-muted">TPS nos últimos 60 segundos</p>
+              } @else {
+                <p class="t-body-md text-text-muted" role="status">
+                  Coletando as primeiras amostras; elas chegam a cada minuto.
+                </p>
+              }
             } @else if (server.state === 'READY') {
               <p class="t-body-md text-text-muted" role="status">Carregando métricas…</p>
             } @else {
@@ -184,12 +190,12 @@ function avatarColor(nick: string): string {
               />
 
               <div class="flex flex-col gap-4">
-                <mc-setting-switch label="Modo manutenção" [(checked)]="maintenance">
+                <mc-switch label="Modo manutenção" [(checked)]="maintenance">
                   Só admins entram; jogadores recebem aviso.
-                </mc-setting-switch>
-                <mc-setting-switch label="Acordar ao conectar (auto-wake)" [(checked)]="autoWake">
+                </mc-switch>
+                <mc-switch label="Acordar ao conectar (auto-wake)" [(checked)]="autoWake">
                   O gateway segura a conexão enquanto o mundo liga.
-                </mc-setting-switch>
+                </mc-switch>
               </div>
 
               <mc-button variant="primary" [block]="true" [disabled]="!canSave()" (click)="save()">
@@ -231,27 +237,29 @@ export class ServerOverviewPage {
   private readonly router = inject(Router);
 
   protected readonly tpsTarget = TPS_TARGET;
-  protected readonly heap = formatHeap;
+  protected readonly formatMemory = formatMemory;
 
-  protected readonly tpsText = computed(() =>
-    (this.store.stats()?.tps ?? 0).toLocaleString('pt-BR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }),
-  );
-  protected readonly tpsTextClass = computed(
-    () => TEXT_CLASSES[tpsLevel(this.store.stats()?.tps ?? 0)],
-  );
-  protected readonly mspt = computed(() => placeholderMspt(this.store.stats()?.tps ?? TPS_TARGET));
-  protected readonly tpsSeries = computed(() =>
-    placeholderTpsHistory(this.store.stats()?.tps ?? TPS_TARGET, this.store.serverId() ?? ''),
-  );
+  protected readonly tpsText = computed(() => {
+    const tps = this.store.stats()?.tps;
+    return tps == null
+      ? '—'
+      : tps.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  });
+  protected readonly tpsTextClass = computed(() => {
+    const tps = this.store.stats()?.tps;
+    return tps == null ? 'text-text-muted' : TEXT_CLASSES[tpsLevel(tps)];
+  });
+  protected readonly msptText = computed(() => {
+    const mspt = this.store.stats()?.mspt;
+    return mspt == null ? '—' : `${mspt.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ms`;
+  });
+  protected readonly tpsBars = computed(() => tpsSeries(this.store.stats()?.history ?? []));
   protected readonly chartLabel = computed(() => {
-    const series = this.tpsSeries();
+    const series = this.tpsBars();
     const average = series.reduce((sum, value) => sum + value, 0) / series.length;
     const minimum = Math.min(...series);
     const format = (value: number) => value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-    return `Gráfico de TPS dos últimos 60 segundos: média ${format(average)}, mínimo ${format(minimum)}.`;
+    return `Gráfico de TPS dos últimos ${series.length} minutos: média ${format(average)}, mínimo ${format(minimum)}.`;
   });
 
   private readonly fetchedPlayers = toSignal(

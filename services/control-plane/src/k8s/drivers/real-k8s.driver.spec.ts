@@ -17,10 +17,12 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
   let server: http.Server;
   let tempDir: string;
   let requests: CapturedRequest[];
+  let responses: Record<string, { status?: number; body: unknown }>;
   let driver: RealKubernetesDriver;
 
   beforeEach(async () => {
     requests = [];
+    responses = {};
     server = http.createServer((req, res) => {
       let body = '';
       req.on('data', (chunk) => (body += chunk));
@@ -31,8 +33,12 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
           contentType: req.headers['content-type'],
           body,
         });
+        const custom = responses[(req.url ?? '').split('?')[0]];
+        res.statusCode = custom?.status ?? 200;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ apiVersion: 'autoscaling/v1', kind: 'Scale', spec: {} }));
+        res.end(
+          JSON.stringify(custom?.body ?? { apiVersion: 'autoscaling/v1', kind: 'Scale', spec: {} }),
+        );
       });
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -75,5 +81,57 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
         body: JSON.stringify({ spec: { replicas: 1 } }),
       },
     ]);
+  });
+
+  describe('getPodStats', () => {
+    const podsPath = '/api/v1/namespaces/minekubernetes/pods';
+    const metricsPath = '/apis/metrics.k8s.io/v1beta1/namespaces/minekubernetes/pods';
+    const runningPod = {
+      metadata: { name: 'mc-lobby-abc' },
+      status: { phase: 'Running', startTime: '2026-10-09T10:00:00Z' },
+      spec: { containers: [{ resources: { limits: { memory: '5632Mi' } } }] },
+    };
+
+    it('combines the running pod with its memory from the Metrics API', async () => {
+      responses[podsPath] = { body: { items: [runningPod] } };
+      responses[metricsPath] = {
+        body: {
+          items: [
+            { metadata: { name: 'other-pod' }, containers: [{ usage: { memory: '1Gi' } }] },
+            {
+              metadata: { name: 'mc-lobby-abc' },
+              containers: [{ usage: { memory: '3145728Ki' } }],
+            },
+          ],
+        },
+      };
+
+      const stats = await driver.getPodStats('mc-lobby');
+
+      expect(stats).toEqual({
+        startedAt: new Date('2026-10-09T10:00:00Z'),
+        memoryUsedBytes: 3 * 1024 ** 3,
+        memoryLimitBytes: 5632 * 1024 ** 2,
+      });
+      expect(requests[0].url).toContain('labelSelector=app.kubernetes.io%2Fname%3Dmc-lobby');
+    });
+
+    it('still reports the pod when the cluster has no metrics server', async () => {
+      responses[podsPath] = { body: { items: [runningPod] } };
+      responses[metricsPath] = { status: 404, body: { message: 'not found' } };
+
+      const stats = await driver.getPodStats('mc-lobby');
+
+      expect(stats?.memoryUsedBytes).toBeNull();
+      expect(stats?.memoryLimitBytes).toBe(5632 * 1024 ** 2);
+    });
+
+    it('returns null while the pod is not running', async () => {
+      responses[podsPath] = {
+        body: { items: [{ ...runningPod, status: { phase: 'Pending' } }] },
+      };
+
+      expect(await driver.getPodStats('mc-lobby')).toBeNull();
+    });
   });
 });

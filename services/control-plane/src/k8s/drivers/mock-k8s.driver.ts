@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo } from '../k8s.interface';
+import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, K8sPodStats } from '../k8s.interface';
 
 @Injectable()
 export class MockKubernetesDriver implements IKubernetesDriver {
@@ -112,6 +112,10 @@ export class MockKubernetesDriver implements IKubernetesDriver {
       }
     }
     return list;
+  }
+
+  async getPodStats(): Promise<K8sPodStats | null> {
+    return null;
   }
 
   async createJob(manifest: any): Promise<void> {

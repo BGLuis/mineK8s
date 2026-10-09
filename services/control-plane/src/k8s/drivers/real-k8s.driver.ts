@@ -6,7 +6,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { AppConfigService } from '@config/app-config.service';
 
-import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo } from '../k8s.interface';
+import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, K8sPodStats } from '../k8s.interface';
+import { memoryQuantityToBytes } from '../memory-quantity';
 
 @Injectable()
 export class RealKubernetesDriver implements IKubernetesDriver {
@@ -15,6 +16,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
   private readonly coreV1Api: k8s.CoreV1Api;
   private readonly appsV1Api: k8s.AppsV1Api;
   private readonly batchV1Api: k8s.BatchV1Api;
+  private readonly metricsApi: k8s.Metrics;
 
   constructor(private readonly configService: AppConfigService) {
     this.kc = new k8s.KubeConfig();
@@ -39,6 +41,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
     this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
     this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
     this.batchV1Api = this.kc.makeApiClient(k8s.BatchV1Api);
+    this.metricsApi = new k8s.Metrics(this.kc);
   }
 
   async createPersistentVolumeClaim(manifest: any): Promise<void> {
@@ -169,6 +172,45 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         unavailableReplicas: item.status?.unavailableReplicas,
       },
     }));
+  }
+
+  async getPodStats(
+    deploymentName: string,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<K8sPodStats | null> {
+    const pods = await this.coreV1Api.listNamespacedPod({
+      namespace,
+      labelSelector: `app.kubernetes.io/name=${deploymentName}`,
+    });
+    const pod = pods.items.find((p) => p.status?.phase === 'Running' && p.metadata?.name);
+    if (!pod?.metadata?.name) {
+      return null;
+    }
+
+    const limits = (pod.spec?.containers ?? []).map((c) => c.resources?.limits?.memory);
+    const memoryLimitBytes = limits.every((l) => l)
+      ? limits.reduce((sum, l) => sum + memoryQuantityToBytes(l as string), 0)
+      : null;
+
+    let memoryUsedBytes: number | null = null;
+    try {
+      const metrics = await this.metricsApi.getPodMetrics(namespace);
+      const podMetric = metrics.items.find((m) => m.metadata.name === pod.metadata?.name);
+      if (podMetric) {
+        memoryUsedBytes = podMetric.containers.reduce(
+          (sum, c) => sum + memoryQuantityToBytes(c.usage.memory),
+          0,
+        );
+      }
+    } catch (err: any) {
+      this.logger.debug(`Metrics API unavailable for ${deploymentName}: ${err?.message}`);
+    }
+
+    return {
+      startedAt: pod.status?.startTime ? new Date(pod.status.startTime) : null,
+      memoryUsedBytes,
+      memoryLimitBytes,
+    };
   }
 
   async createJob(manifest: any): Promise<void> {

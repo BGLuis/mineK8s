@@ -10,6 +10,7 @@ import {
   IKubernetesDriver,
   K8sDeploymentInfo,
   K8sJobInfo,
+  K8sPodStats,
   KUBERNETES_DRIVER,
 } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
@@ -156,6 +157,13 @@ export class KubernetesService {
 
   async getServerDeployment(server: Server): Promise<K8sDeploymentInfo | null> {
     return this.driver.getDeployment(
+      `mc-${server.subdomain}`,
+      this.configService.kubernetes.namespace,
+    );
+  }
+
+  async getServerPodStats(server: Server): Promise<K8sPodStats | null> {
+    return this.driver.getPodStats(
       `mc-${server.subdomain}`,
       this.configService.kubernetes.namespace,
     );

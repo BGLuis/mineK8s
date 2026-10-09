@@ -36,8 +36,6 @@ export function normalizeCommand(text: string): string {
   return text.trim().replace(/^\/+/, '');
 }
 
-export { RateLimiter as SendWindow } from '../../../core/realtime/rate-limiter';
-
 export const QUICK_COMMANDS = [
   '/save-all',
   '/time set day',

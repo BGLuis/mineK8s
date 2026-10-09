@@ -22,6 +22,7 @@ import { ModpacksModule } from './modpacks/modpacks.module';
 import { DnsModule } from './dns/dns.module';
 import { ServerEventsModule } from './server-events/server-events.module';
 import { NodeModule } from './node/node.module';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { NodeModule } from './node/node.module';
     DnsModule,
     ServerEventsModule,
     NodeModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [

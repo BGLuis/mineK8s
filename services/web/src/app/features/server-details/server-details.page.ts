@@ -13,7 +13,6 @@ import {
   McBanner,
   McButton,
   McIcon,
-  McNoApiTag,
   McStatusChip,
   McTabItem,
   McTabs,
@@ -35,7 +34,6 @@ import { ServerDetailStore } from './server-detail.store';
     McBanner,
     McButton,
     McIcon,
-    McNoApiTag,
     McPublishDialog,
     McStatusChip,
     McTabs,
@@ -88,7 +86,6 @@ import { ServerDetailStore } from './server-detail.store';
               @if (uptime(); as up) {
                 <span aria-hidden="true">·</span>
                 <span>online há {{ up }}</span>
-                <mc-no-api-tag detail="uptime" />
               }
               @if (store.accessPolicy() === 'INTERNET') {
                 <span aria-hidden="true">·</span>
@@ -181,8 +178,8 @@ export class ServerDetailsPage {
     serverTypeLabel(this.store.server()?.server_type ?? ''),
   );
   protected readonly uptime = computed(() => {
-    const stats = this.store.stats();
-    return stats ? formatDuration(stats.uptimeSeconds) : null;
+    const seconds = this.store.stats()?.uptimeSeconds;
+    return seconds == null ? null : formatDuration(seconds);
   });
   protected readonly announcement = computed(() => {
     const server = this.store.server();

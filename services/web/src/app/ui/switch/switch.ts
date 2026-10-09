@@ -4,7 +4,7 @@ let nextId = 0;
 
 /** On/off row with a pixel switch. Switch semantics, 56 x 40 px touch target. */
 @Component({
-  selector: 'mc-switch, mc-setting-switch',
+  selector: 'mc-switch',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block' },
   template: `

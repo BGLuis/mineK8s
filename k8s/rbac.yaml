@@ -40,6 +40,10 @@ rules:
       - jobs
       - jobs/status
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+    verbs: ["get", "list"]
   - apiGroups: ["coordination.k8s.io"]
     resources:
       - leases

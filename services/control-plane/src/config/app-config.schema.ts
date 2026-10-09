@@ -73,6 +73,9 @@ export const appConfigSchema = Joi.object({
   HEALTH_BOT_INTERVAL_MS: Joi.number().min(1000).default(300000),
   HEALTH_BOT_TIMEOUT_MS: Joi.number().min(1000).default(5000),
 
+  // Runtime stats sampling (TPS, MSPT, memory)
+  SERVER_STATS_INTERVAL_MS: Joi.number().min(5000).default(60000),
+
   // Modpack catalog (Modrinth v2 / CurseForge v1)
   MODPACK_CATALOG_CACHE_TTL_MS: Joi.number().min(0).default(60000),
   MODPACK_CATALOG_TIMEOUT_MS: Joi.number().min(1000).default(8000),
