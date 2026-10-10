@@ -7,6 +7,14 @@ use crate::routing::{AccessPolicy, CachedServerRoute, ServerInstanceStatus};
 /// Gera a resposta de Status (JSON) sintetizada pelo Gateway de acordo com o estado do servidor (RF-GW-09).
 /// Se o servidor estiver Stopped, Starting, Provisioning, Stopping, Updating, Crashed, Failed ou sob Manutenção, responde instantaneamente sem I/O upstream.
 pub fn build_synthetic_status(route: Option<&CachedServerRoute>) -> ServerStatusResponse {
+    let mut status = status_for(route);
+    if let Some(route) = route {
+        status.favicon = route.favicon.clone();
+    }
+    status
+}
+
+fn status_for(route: Option<&CachedServerRoute>) -> ServerStatusResponse {
     match route {
         None => ServerStatusResponse {
             version: ServerVersionInfo {

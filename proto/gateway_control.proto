@@ -40,6 +40,7 @@ message RouteUpdateEvent {
   string routing_model = 11; // VirtualHost, DedicatedPort (RF-MG-04)
   int32 listen_port = 12; // 25565, 7777, etc. (RF-MG-04)
   bool auto_wake = 13;
+  string favicon = 14; // data:image/png;base64,... shown in the server list while the JVM is not answering; empty when none
 }
 
 message SessionLifecycleEvent {

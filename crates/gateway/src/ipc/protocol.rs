@@ -32,6 +32,8 @@ pub struct RouteUpdateEvent {
     pub listen_port: i32,
     #[prost(bool, tag = "13")]
     pub auto_wake: bool,
+    #[prost(string, tag = "14")]
+    pub favicon: String,
 }
 
 impl RouteUpdateEvent {
@@ -74,6 +76,7 @@ impl RouteUpdateEvent {
             allowed_user_ids: self.allowed_user_ids.clone(),
             game_type: self.game_type.clone(),
             auto_wake: self.auto_wake,
+            favicon: Some(self.favicon.clone()).filter(|favicon| !favicon.is_empty()),
         }
     }
 }
