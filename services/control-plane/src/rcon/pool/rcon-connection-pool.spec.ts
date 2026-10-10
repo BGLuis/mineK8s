@@ -1,5 +1,6 @@
 import { AppConfigService } from '../../config/app-config.service';
 import { Server } from '../../database/entities/server.entity';
+import { RconClient } from '../client/rcon-client';
 import { RconConnectionPool } from './rcon-connection-pool';
 
 describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
@@ -20,6 +21,7 @@ describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
     mockServer = {
       id: 'srv-pool-1',
       subdomain: 'survival-test',
+      resource_name: 'survival-test',
       state: 'READY',
       minecraft_settings: {
         rcon_port: 25575,
@@ -30,6 +32,7 @@ describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
 
   afterEach(() => {
     pool.shutdownAll();
+    jest.restoreAllMocks();
   });
 
   it('should create and store RconClient on getOrCreateConnection', async () => {
@@ -38,6 +41,18 @@ describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
 
     const retrieved = pool.getConnection(mockServer.id);
     expect(retrieved).toBe(client);
+  });
+
+  it('conecta no Service pelo resource_name, que não muda quando o subdomínio muda', async () => {
+    Object.assign(mockConfigService.kubernetes, { useMockDriver: false });
+    jest.spyOn(RconClient.prototype, 'connect').mockResolvedValue(undefined);
+
+    const client = await pool.getOrCreateConnection({
+      ...mockServer,
+      subdomain: 'endereco-novo',
+    } as Server);
+
+    expect(client['options'].host).toBe('mc-survival-test.minekubernetes.svc.cluster.local');
   });
 
   it('should remove and destroy connection on onServerStopped', async () => {
@@ -56,6 +71,7 @@ describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
       ...mockServer,
       id: 'srv-pool-2',
       subdomain: 'creative-test',
+      resource_name: 'creative-test',
     };
     const client2 = await pool.getOrCreateConnection(server2);
 

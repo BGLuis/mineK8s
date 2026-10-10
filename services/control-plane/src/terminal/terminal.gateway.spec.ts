@@ -38,7 +38,8 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
   const testServer: Server = {
     id: 'server-uuid-1',
     name: 'Survival World',
-    subdomain: 'survival',
+    subdomain: 'endereco-novo',
+    resource_name: 'survival',
     state: 'READY',
   } as any;
 
@@ -208,6 +209,14 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       // A returned { event, data } would be re-emitted by Nest and reach the SPA twice.
       expect(result).toBeUndefined();
       expect(mockClient.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('segue os logs do pod pelo resource_name, não pelo subdomínio', async () => {
+      const mockClient: any = { data: { user: testAdminUser }, join: jest.fn(), emit: jest.fn() };
+
+      await gateway.handleJoinTerminal(mockClient, { serverId: testServer.id });
+
+      expect(mockLogStreamer.attachServerStream).toHaveBeenCalledWith(testServer.id, 'survival');
     });
 
     it('should deny PLAYER without server access from joining terminal', async () => {

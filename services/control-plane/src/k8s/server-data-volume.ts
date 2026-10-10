@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
-export function serverDataVolumeName(subdomain: string): string {
-  return `data-${subdomain}`;
+export function serverDataVolumeName(resourceName: string): string {
+  return `data-${resourceName}`;
 }
 
 /**
@@ -9,6 +9,6 @@ export function serverDataVolumeName(subdomain: string): string {
  * PVC at <storage>/<namespace>/ + its pathPattern (k8s/storageclass.yaml), and the control plane
  * mounts <storage>/<namespace> as SERVERS_DATA_ROOT, so both see the same files.
  */
-export function serverDataDirectory(subdomain: string): string {
-  return path.join(serverDataVolumeName(subdomain), 'volume');
+export function serverDataDirectory(resourceName: string): string {
+  return path.join(serverDataVolumeName(resourceName), 'volume');
 }

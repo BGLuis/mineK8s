@@ -3,6 +3,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { Server } from '@database/entities/server.entity';
 
 import { serverDataVolumeName } from './server-data-volume';
+import { serverWorkloadName } from './resource-names';
 import { isModpackServerType } from './server-properties';
 
 // Servers created before the Java version was resolved per server all ran on Java 21.
@@ -38,10 +39,10 @@ export class ManifestBuilder {
       apiVersion: 'v1',
       kind: 'PersistentVolumeClaim',
       metadata: {
-        name: serverDataVolumeName(server.subdomain),
+        name: serverDataVolumeName(server.resource_name),
         namespace,
         labels: {
-          'app.kubernetes.io/name': `mc-${server.subdomain}`,
+          'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
           'app.kubernetes.io/part-of': 'minekubernetes',
           'app.kubernetes.io/component': 'game-server-storage',
           'minekubernetes.io/server-id': server.id,
@@ -62,7 +63,7 @@ export class ManifestBuilder {
   /** Where the gateway reaches the server: the game port of the Service that buildService creates. */
   public static routeTarget(server: Server, configService: AppConfigService): string {
     const namespace = configService.kubernetes.namespace;
-    return `mc-${server.subdomain}.${namespace}.svc.cluster.local:${ManifestBuilder.serviceGamePort(server)}`;
+    return `${serverWorkloadName(server.resource_name)}.${namespace}.svc.cluster.local:${ManifestBuilder.serviceGamePort(server)}`;
   }
 
   private static serviceGamePort(server: Server): number {
@@ -76,10 +77,10 @@ export class ManifestBuilder {
       apiVersion: 'v1',
       kind: 'Service',
       metadata: {
-        name: `mc-${server.subdomain}`,
+        name: serverWorkloadName(server.resource_name),
         namespace,
         labels: {
-          'app.kubernetes.io/name': `mc-${server.subdomain}`,
+          'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
           'app.kubernetes.io/part-of': 'minekubernetes',
           'minekubernetes.io/server-id': server.id,
         },
@@ -87,7 +88,7 @@ export class ManifestBuilder {
       spec: {
         type: 'ClusterIP',
         selector: {
-          'app.kubernetes.io/name': `mc-${server.subdomain}`,
+          'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
         },
         ports: [
           {
@@ -179,10 +180,10 @@ export class ManifestBuilder {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
       metadata: {
-        name: `mc-${server.subdomain}`,
+        name: serverWorkloadName(server.resource_name),
         namespace,
         labels: {
-          'app.kubernetes.io/name': `mc-${server.subdomain}`,
+          'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
           'app.kubernetes.io/part-of': 'minekubernetes',
           'minekubernetes.io/server-id': server.id,
         },
@@ -193,13 +194,13 @@ export class ManifestBuilder {
         strategy: { type: 'Recreate' },
         selector: {
           matchLabels: {
-            'app.kubernetes.io/name': `mc-${server.subdomain}`,
+            'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
           },
         },
         template: {
           metadata: {
             labels: {
-              'app.kubernetes.io/name': `mc-${server.subdomain}`,
+              'app.kubernetes.io/name': serverWorkloadName(server.resource_name),
               'app.kubernetes.io/part-of': 'minekubernetes',
               'minekubernetes.io/server-id': server.id,
             },
@@ -276,7 +277,7 @@ export class ManifestBuilder {
               {
                 name: 'server-data',
                 persistentVolumeClaim: {
-                  claimName: serverDataVolumeName(server.subdomain),
+                  claimName: serverDataVolumeName(server.resource_name),
                 },
               },
             ],
@@ -311,7 +312,7 @@ export class ManifestBuilder {
     configService: AppConfigService,
   ) {
     const namespace = configService.kubernetes.namespace;
-    const filename = `${server.subdomain}_${backupType}_${timestamp}.tar.gz`;
+    const filename = `${server.resource_name}_${backupType}_${timestamp}.tar.gz`;
     const affinity = configService.kubernetes.nodeAffinityValue
       ? {
           nodeAffinity: {
@@ -387,10 +388,10 @@ echo "Cold backup concluido com sucesso."
       apiVersion: 'batch/v1',
       kind: 'Job',
       metadata: {
-        name: `backup-${server.subdomain}-${backupType}-${timestamp}`,
+        name: `backup-${server.resource_name}-${backupType}-${timestamp}`,
         namespace,
         labels: {
-          'app.kubernetes.io/name': `backup-${server.subdomain}`,
+          'app.kubernetes.io/name': `backup-${server.resource_name}`,
           'app.kubernetes.io/part-of': 'minekubernetes',
           'app.kubernetes.io/component': 'backup-worker',
           'minekubernetes.io/server-id': server.id,
@@ -403,10 +404,10 @@ echo "Cold backup concluido com sucesso."
         template: {
           metadata: {
             labels: {
-              'app.kubernetes.io/name': `backup-${server.subdomain}`,
+              'app.kubernetes.io/name': `backup-${server.resource_name}`,
               'app.kubernetes.io/part-of': 'minekubernetes',
               'app.kubernetes.io/component': 'backup-worker',
-              'job-name': `backup-${server.subdomain}-${backupType}-${timestamp}`,
+              'job-name': `backup-${server.resource_name}-${backupType}-${timestamp}`,
             },
           },
           spec: {
@@ -439,7 +440,7 @@ echo "Cold backup concluido com sucesso."
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: serverDataVolumeName(server.subdomain),
+                  claimName: serverDataVolumeName(server.resource_name),
                 },
               },
               {
@@ -542,10 +543,10 @@ fi
       apiVersion: 'batch/v1',
       kind: 'Job',
       metadata: {
-        name: `restore-${server.subdomain}-${timestamp}`,
+        name: `restore-${server.resource_name}-${timestamp}`,
         namespace,
         labels: {
-          'app.kubernetes.io/name': `restore-${server.subdomain}`,
+          'app.kubernetes.io/name': `restore-${server.resource_name}`,
           'app.kubernetes.io/part-of': 'minekubernetes',
           'app.kubernetes.io/component': 'restore-worker',
           'minekubernetes.io/server-id': server.id,
@@ -557,10 +558,10 @@ fi
         template: {
           metadata: {
             labels: {
-              'app.kubernetes.io/name': `restore-${server.subdomain}`,
+              'app.kubernetes.io/name': `restore-${server.resource_name}`,
               'app.kubernetes.io/part-of': 'minekubernetes',
               'app.kubernetes.io/component': 'restore-worker',
-              'job-name': `restore-${server.subdomain}-${timestamp}`,
+              'job-name': `restore-${server.resource_name}-${timestamp}`,
             },
           },
           spec: {
@@ -593,7 +594,7 @@ fi
               {
                 name: 'data-volume',
                 persistentVolumeClaim: {
-                  claimName: serverDataVolumeName(server.subdomain),
+                  claimName: serverDataVolumeName(server.resource_name),
                 },
               },
               {

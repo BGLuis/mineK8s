@@ -28,7 +28,8 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
     sampleServer = {
       id: 'srv-modpack-1',
       name: 'Modpack Server',
-      subdomain: 'modpack-smp',
+      subdomain: 'endereco-novo',
+      resource_name: 'modpack-smp',
       state: 'STOPPED',
       server_type: 'FABRIC',
       game_version: '1.20.1',
@@ -215,5 +216,12 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
         progressPercent: 100,
       }),
     );
+  });
+
+  it('instala no diretório de dados do resource_name, que é o do PVC, e não no do subdomínio', async () => {
+    const serverDir = service.getServerDataDir(sampleServer);
+
+    expect(serverDir).toBe(path.join(tempStorageRoot, 'data-modpack-smp', 'volume'));
+    expect(fs.existsSync(path.join(tempStorageRoot, 'data-endereco-novo'))).toBe(false);
   });
 });

@@ -36,6 +36,7 @@ describe('KubernetesService', () => {
       id: '22222222-2222-2222-2222-222222222222',
       name: 'Paper Lobby',
       subdomain: 'lobby',
+      resource_name: 'lobby',
       game_type: 'minecraft',
       routing_model: 'sni-shared-port',
       server_type: 'PAPER',
@@ -67,7 +68,7 @@ describe('KubernetesService', () => {
   // local-path faz chmod 700 no diretório do PVC ao provisionar: o control plane só continua entrando
   // nele se já for o dono, ou seja, se criou o diretório antes de o PVC existir.
   it('cria o diretório do servidor antes do PVC', async () => {
-    const serverDir = path.join(serversDataRoot, serverDataDirectory(server.subdomain));
+    const serverDir = path.join(serversDataRoot, serverDataDirectory(server.resource_name));
     let existedWhenPvcWasCreated = false;
     const createPvc = driver.createPersistentVolumeClaim.bind(driver);
     driver.createPersistentVolumeClaim = async (manifest) => {
@@ -84,7 +85,7 @@ describe('KubernetesService', () => {
   describe('server.properties (#153)', () => {
     const readProps = (srv: Server) =>
       fs.readFileSync(
-        path.join(serversDataRoot, serverDataDirectory(srv.subdomain), 'server.properties'),
+        path.join(serversDataRoot, serverDataDirectory(srv.resource_name), 'server.properties'),
         'utf-8',
       );
 
@@ -108,7 +109,7 @@ describe('KubernetesService', () => {
       await service.provisionServer(server, settings);
       const propsPath = path.join(
         serversDataRoot,
-        serverDataDirectory(server.subdomain),
+        serverDataDirectory(server.resource_name),
         'server.properties',
       );
       fs.writeFileSync(propsPath, 'enable-rcon=false\nlevel-seed=abc\n');
@@ -129,7 +130,11 @@ describe('KubernetesService', () => {
 
       expect(
         fs.existsSync(
-          path.join(serversDataRoot, serverDataDirectory(server.subdomain), 'server.properties'),
+          path.join(
+            serversDataRoot,
+            serverDataDirectory(server.resource_name),
+            'server.properties',
+          ),
         ),
       ).toBe(false);
     });
@@ -203,6 +208,61 @@ describe('KubernetesService', () => {
     expect(driver.deployments.has('minekubernetes/mc-lobby')).toBe(false);
     expect(driver.services.has('minekubernetes/mc-lobby')).toBe(false);
     expect(driver.pvcs.has('minekubernetes/data-lobby')).toBe(false);
+  });
+
+  // A subdomain is only an address: changing it must not move the server to other Kubernetes resources, or
+  // start/stop/delete would miss the real ones and the reconciler would provision a second, empty set.
+  describe('servidor com subdomínio trocado depois de provisionado', () => {
+    let renamed: Server;
+
+    beforeEach(async () => {
+      await service.provisionServer(server, settings);
+      renamed = { ...server, subdomain: 'novo-endereco' } as Server;
+    });
+
+    const k8sNames = () => [
+      ...driver.pvcs.keys(),
+      ...driver.services.keys(),
+      ...driver.deployments.keys(),
+    ];
+
+    it('start e stop escalam o Deployment criado no provisionamento', async () => {
+      await service.startServer(renamed);
+      expect((await driver.getDeployment('mc-lobby', 'minekubernetes'))?.replicas).toBe(1);
+
+      await service.stopServer(renamed);
+      expect((await driver.getDeployment('mc-lobby', 'minekubernetes'))?.replicas).toBe(0);
+      expect(k8sNames().filter((name) => name.includes('novo-endereco'))).toEqual([]);
+    });
+
+    it('getServerDeployment e getServerPodStats procuram o Deployment pelo nome estável', async () => {
+      const getDeployment = jest.spyOn(driver, 'getDeployment');
+      const getPodStats = jest.spyOn(driver, 'getPodStats');
+
+      expect((await service.getServerDeployment(renamed))?.name).toBe('mc-lobby');
+      await service.getServerPodStats(renamed);
+
+      expect(getDeployment).toHaveBeenCalledWith('mc-lobby', 'minekubernetes');
+      expect(getPodStats).toHaveBeenCalledWith('mc-lobby', 'minekubernetes');
+    });
+
+    it('deprovision remove exatamente o que o provisionamento criou', async () => {
+      expect(k8sNames().sort()).toEqual([
+        'minekubernetes/data-lobby',
+        'minekubernetes/mc-lobby',
+        'minekubernetes/mc-lobby',
+      ]);
+
+      await service.deprovisionServer(renamed);
+
+      expect(k8sNames()).toEqual([]);
+    });
+
+    it('reescreve server.properties no diretório de dados original, não num diretório novo', async () => {
+      await service.startServer({ ...renamed, minecraft_settings: settings } as Server);
+
+      expect(fs.readdirSync(serversDataRoot)).toEqual(['data-lobby']);
+    });
   });
 
   describe('RF-ARQ-08: Graceful Shutdown (save-all flush -> stop -> scale to 0)', () => {

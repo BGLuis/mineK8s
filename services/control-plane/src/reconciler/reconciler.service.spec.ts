@@ -29,28 +29,28 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
     mockK8sService = {
       listDeployments: jest.fn(async () => Array.from(clusterDeployments.values())),
       provisionServer: jest.fn(async (server: Server) => {
-        clusterDeployments.set(`mc-${server.subdomain}`, {
-          name: `mc-${server.subdomain}`,
+        clusterDeployments.set(`mc-${server.resource_name}`, {
+          name: `mc-${server.resource_name}`,
           replicas: server.state === 'READY' ? 1 : 0,
           status: { readyReplicas: server.state === 'READY' ? 1 : 0 },
         });
       }),
       startServer: jest.fn(async (server: Server) => {
-        const dep = clusterDeployments.get(`mc-${server.subdomain}`);
+        const dep = clusterDeployments.get(`mc-${server.resource_name}`);
         if (dep) {
           dep.replicas = 1;
           dep.status.readyReplicas = 1;
         }
       }),
       stopServer: jest.fn(async (server: Server) => {
-        const dep = clusterDeployments.get(`mc-${server.subdomain}`);
+        const dep = clusterDeployments.get(`mc-${server.resource_name}`);
         if (dep) {
           dep.replicas = 0;
           dep.status.readyReplicas = 0;
         }
       }),
       restartServer: jest.fn(async (server: Server) => {
-        const dep = clusterDeployments.get(`mc-${server.subdomain}`);
+        const dep = clusterDeployments.get(`mc-${server.resource_name}`);
         if (dep) {
           dep.replicas = 1;
           dep.status.readyReplicas = 0; // simulating starting
@@ -84,7 +84,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
     mockGatewayIpcService = {
       broadcastRouteUpdate: jest.fn(),
       routeTarget: jest.fn(
-        (server: Server) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`,
+        (server: Server) => `mc-${server.resource_name}.minekubernetes.svc.cluster.local:25565`,
       ),
     };
 
@@ -99,7 +99,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
   });
 
   describe('host do probe', () => {
-    const server = { subdomain: 'survival' } as Server;
+    const server = { subdomain: 'endereco-novo', resource_name: 'survival' } as Server;
 
     it('usa o DNS do Service no cluster', () => {
       mockConfigService.isTest = false;
@@ -121,6 +121,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'READY',
         restart_count: 0,
         last_restart_at: null,
@@ -142,12 +143,38 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
     });
   });
 
+  describe('servidor com subdomínio trocado', () => {
+    it('acha o Deployment pelo resource_name e não provisiona um segundo conjunto de recursos', async () => {
+      const server = {
+        id: 'srv-renamed',
+        name: 'Renamed',
+        subdomain: 'endereco-novo',
+        resource_name: 'smp',
+        state: 'READY',
+        restart_count: 0,
+        last_restart_at: null,
+      } as Server;
+      serversDb.set(server.id, server);
+      clusterDeployments.set('mc-smp', {
+        name: 'mc-smp',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+
+      const summary = await reconciler.reconcile();
+
+      expect(summary.healedDeployments).toEqual([]);
+      expect(mockK8sService.provisionServer).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Replica drift reconciliation', () => {
     it('should scale deployment to 1 when DB desired state is READY but cluster has 0 replicas', async () => {
       const server: Server = {
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'READY',
         restart_count: 0,
         last_restart_at: null,
@@ -171,6 +198,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'STOPPED',
         restart_count: 0,
         last_restart_at: null,
@@ -196,6 +224,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'STARTING',
         restart_count: 1,
         last_restart_at: new Date(),
@@ -226,6 +255,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'STARTING',
         restart_count: 0,
         last_restart_at: null,
@@ -257,6 +287,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'READY',
         restart_count: 0,
         last_restart_at: null,
@@ -296,6 +327,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'READY',
         restart_count: 0,
         last_restart_at: null,
@@ -338,6 +370,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-smp-1',
         name: 'Survival SMP',
         subdomain: 'smp',
+        resource_name: 'smp',
         state: 'READY',
         restart_count: 2,
         last_restart_at: elevenMinutesAgo,
@@ -371,6 +404,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-idle-1',
         name: 'Idle Server',
         subdomain: 'idle',
+        resource_name: 'idle',
         state: 'READY',
         sleep_timeout_minutes: 15,
         last_player_active_at: sixteenMinutesAgo,
@@ -411,6 +445,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-active-1',
         name: 'Active Server',
         subdomain: 'active',
+        resource_name: 'active',
         state: 'READY',
         sleep_timeout_minutes: 15,
         last_player_active_at: tenMinutesAgo,
@@ -445,6 +480,7 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
         id: 'srv-alwayson-1',
         name: 'Always On Server',
         subdomain: 'alwayson',
+        resource_name: 'alwayson',
         state: 'READY',
         sleep_timeout_minutes: 0,
         last_player_active_at: twoHoursAgo,

@@ -52,6 +52,7 @@ describe('ServersService', () => {
         for (const s of serversDb.values()) {
           if (where.id && s.id === where.id) return s;
           if (where.subdomain && s.subdomain === where.subdomain) return s;
+          if (where.resource_name && s.resource_name === where.resource_name) return s;
         }
         return null;
       }),
@@ -139,7 +140,7 @@ describe('ServersService', () => {
       broadcastRouteUpdate: jest.fn(),
       publishRoute: jest.fn().mockResolvedValue(undefined),
       routeTarget: jest.fn(
-        (server: any) => `mc-${server.subdomain}.minekubernetes.svc.cluster.local:25565`,
+        (server: any) => `mc-${server.resource_name}.minekubernetes.svc.cluster.local:25565`,
       ),
     };
 
@@ -264,6 +265,43 @@ describe('ServersService', () => {
       expect(serversDb.size).toBe(0);
       expect(mockK8sService.provisionServer).not.toHaveBeenCalled();
     });
+
+    it('uses the subdomain as the stable resource name of a new server', async () => {
+      await service.create({ name: 'Hub', subdomain: 'hub' });
+
+      const saved = [...serversDb.values()][0];
+      expect(saved.resource_name).toBe('hub');
+      expect(mockK8sService.provisionServer.mock.calls[0][0].resource_name).toBe('hub');
+    });
+
+    it('does not reuse the resource name of a server that was renamed away from that subdomain', async () => {
+      serversDb.set('old', { id: 'old', subdomain: 'hub-novo', resource_name: 'hub' } as any);
+
+      const result = await service.create({ name: 'New Hub', subdomain: 'hub' });
+
+      const created = [...serversDb.values()].find((s) => s.subdomain === 'hub')!;
+      expect(result.subdomain).toBe('hub');
+      expect(created.resource_name).not.toBe('hub');
+      expect(created.resource_name).toMatch(/^hub-[0-9a-f]{6}$/);
+      expect(mockK8sService.provisionServer.mock.calls[0][0].resource_name).toBe(
+        created.resource_name,
+      );
+    });
+
+    it.each([60, 63])(
+      'keeps a disambiguated resource name within the Service name limit for a %i-character subdomain',
+      async (length) => {
+        const subdomain = 'a'.repeat(length);
+        serversDb.set('old', { id: 'old', subdomain: 'outro', resource_name: subdomain } as any);
+
+        await service.create({ name: 'Long', subdomain });
+
+        const created = [...serversDb.values()].find((s) => s.subdomain === subdomain)!;
+        expect(created.resource_name).not.toBe(subdomain);
+        expect(created.resource_name).toMatch(/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/);
+        expect(`mc-${created.resource_name}`.length).toBeLessThanOrEqual(63);
+      },
+    );
 
     it('should throw ConflictException if subdomain already exists', async () => {
       serversDb.set('1', {
@@ -561,6 +599,30 @@ describe('ServersService', () => {
       const res = await service.updateDomain('srv-1', 'lobby-new');
       expect(res.message).toBe('Domain updated');
       expect(server.subdomain).toBe('lobby-new');
+    });
+
+    it('keeps the Kubernetes resource name, so the server keeps its Deployment, Service and PVC', async () => {
+      const server: Server = { id: 'srv-1', subdomain: 'hub', resource_name: 'hub' } as any;
+      serversDb.set('srv-1', server);
+
+      await service.updateDomain('srv-1', 'lobby-new');
+
+      expect(server.resource_name).toBe('hub');
+      expect(mockK8sService.provisionServer).not.toHaveBeenCalled();
+      expect(mockK8sService.deprovisionServer).not.toHaveBeenCalled();
+    });
+
+    it('lists the replicas of a server whose subdomain changed from its own Deployment', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        subdomain: 'lobby-new',
+        resource_name: 'hub',
+      } as any);
+
+      const [summary] = await service.findAll();
+
+      expect(summary.replicas).toBe(1);
+      expect(summary.ready_replicas).toBe(1);
     });
 
     it('should throw ConflictException if domain is taken by another server', async () => {

@@ -14,7 +14,8 @@ describe('target_ip_port igual em todas as origens de rota (#137)', () => {
   const config = { isTest: true, kubernetes: { namespace: 'games' } } as any;
   const server = {
     id: 'srv-1',
-    subdomain: 'hub',
+    subdomain: 'hub-novo',
+    resource_name: 'hub',
     state: 'STOPPED',
     allocated_port: 25570,
     auto_wake: true,
@@ -46,7 +47,7 @@ describe('target_ip_port igual em todas as origens de rota (#137)', () => {
     gatewayIpc.getRouteUpdatesStream().subscribe((event) => events.push(event));
   });
 
-  it('aponta para o Service mc-<subdomínio> no namespace configurado, na porta alocada', async () => {
+  it('aponta para o Service mc-<resource_name>, mesmo com o subdomínio trocado, no namespace configurado, na porta alocada', async () => {
     const reconciler = new ReconcilerService(
       {} as any,
       {} as any,

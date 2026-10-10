@@ -17,6 +17,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { ServerAuditLog, ExecutionSource } from '@database/entities/server-audit-log.entity';
 import { User } from '@database/entities/user.entity';
 import { KubernetesService } from '@k8s/k8s.service';
+import { disambiguatedResourceName, serverWorkloadName } from '@k8s/resource-names';
 import {
   CONSOLE_DRIVER_TOKEN,
   ConsoleDriver,
@@ -105,6 +106,7 @@ export class ServersService implements OnApplicationBootstrap {
     if (existing) {
       throw new ConflictException(`Subdomain "${dto.subdomain}" is already in use`);
     }
+    const resourceName = await this.allocateResourceName(dto.subdomain);
 
     const accessPolicy = dto.access_policy || 'GROUP';
     const gameType = dto.game_type || 'minecraft';
@@ -119,6 +121,7 @@ export class ServersService implements OnApplicationBootstrap {
     const server = this.serverRepo.create({
       name: dto.name,
       subdomain: dto.subdomain,
+      resource_name: resourceName,
       game_type: gameType,
       routing_model: dto.routing_model || 'sni-shared-port',
       allocated_port: dto.allocated_port ?? null,
@@ -185,6 +188,14 @@ export class ServersService implements OnApplicationBootstrap {
     };
   }
 
+  /** The subdomain, unless a server renamed away from it still owns that name for its Kubernetes resources. */
+  private async allocateResourceName(subdomain: string): Promise<string> {
+    const holder = await this.serverRepo.findOne({ where: { resource_name: subdomain } });
+    return holder
+      ? disambiguatedResourceName(subdomain, randomBytes(3).toString('hex'))
+      : subdomain;
+  }
+
   async findAll(): Promise<ServerSummaryDto[]> {
     const servers = await this.serverRepo.find();
     let deployments: any[] = [];
@@ -197,7 +208,7 @@ export class ServersService implements OnApplicationBootstrap {
     const deploymentMap = new Map(deployments.map((d) => [d.name, d]));
 
     return servers.map((s) => {
-      const depName = `mc-${s.subdomain}`;
+      const depName = serverWorkloadName(s.resource_name);
       const dep = deploymentMap.get(depName);
       return {
         id: s.id,

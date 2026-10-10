@@ -74,7 +74,7 @@ export class ServersBackupService {
 
   public getServerDataDir(server: Server): string {
     const baseRoot = path.resolve(this.configService.storage.serversDataRoot);
-    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.subdomain));
+    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.resource_name));
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
     }
@@ -162,11 +162,11 @@ export class ServersBackupService {
 
     const timestamp = Date.now();
     const backupTypeLower = type.toLowerCase() as 'hot' | 'cold';
-    const filename = `${server.subdomain}_${backupTypeLower}_${timestamp}.tar.gz`;
+    const filename = `${server.resource_name}_${backupTypeLower}_${timestamp}.tar.gz`;
     const backupsDir = this.getBackupsDir();
     const targetArchive = path.join(backupsDir, filename);
     const serverDir = this.getServerDataDir(server);
-    const jobName = `backup-${server.subdomain}-${backupTypeLower}-${timestamp}`;
+    const jobName = `backup-${server.resource_name}-${backupTypeLower}-${timestamp}`;
 
     let saveOffCalled = false;
     let saveOnCalled = false;
@@ -397,7 +397,7 @@ export class ServersBackupService {
    */
   async createPreRestoreBackup(server: Server): Promise<BackupResult> {
     const timestamp = Date.now();
-    const filename = `${server.subdomain}_pre-restore_${timestamp}.tar.gz`;
+    const filename = `${server.resource_name}_pre-restore_${timestamp}.tar.gz`;
     const backupsDir = this.getBackupsDir();
     const targetArchive = path.join(backupsDir, filename);
     const serverDir = this.getServerDataDir(server);
@@ -523,7 +523,7 @@ export class ServersBackupService {
       // 6. Despacho do Job K8s se k8sService estiver ativo
       const timestamp = Date.now();
       const backupFilename = path.basename(backupPath);
-      const jobName = `restore-${server.subdomain}-${timestamp}`;
+      const jobName = `restore-${server.resource_name}-${timestamp}`;
 
       if (this.k8sService) {
         const manifest = ManifestBuilder.buildRestoreJob(

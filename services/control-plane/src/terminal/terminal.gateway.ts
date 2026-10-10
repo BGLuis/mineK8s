@@ -232,7 +232,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
 
     // Inicia stream k8s contínuo para o pod
-    this.logStreamer.attachServerStream(server.id, server.subdomain).catch((err) => {
+    this.logStreamer.attachServerStream(server.id, server.resource_name).catch((err) => {
       this.logger.warn(
         `Stream inicial de logs k8s para ${server.subdomain} pendente: ${err.message}`,
       );

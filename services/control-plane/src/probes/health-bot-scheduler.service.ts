@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { Server } from '@database/entities/server.entity';
 import { AppConfigService } from '@config/app-config.service';
+import { serverWorkloadName } from '@k8s/resource-names';
 
 import { HealthBotProbeService, HealthBotReport } from './health-bot-probe.service';
 
@@ -68,7 +69,7 @@ export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModu
     if (this.configService.isTest || this.configService.kubernetes.useMockDriver) {
       return '127.0.0.1';
     }
-    return `mc-${server.subdomain}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
+    return `${serverWorkloadName(server.resource_name)}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
   }
 
   /**

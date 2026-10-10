@@ -90,7 +90,8 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
     sampleServer = {
       id: 'srv-1234',
       name: 'Test Server',
-      subdomain: 'test-mc',
+      subdomain: 'endereco-novo',
+      resource_name: 'test-mc',
       state: 'STOPPED',
     } as Server;
 
@@ -231,7 +232,7 @@ describe('ServersFilesService (RF-ARQ-17, L-04)', () => {
       expect(res.message).toBe('Extraction completed successfully');
       expect(res.extractedCount).toBe(2);
 
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
       const levelDat = await fs.promises.readFile(
         path.join(serverDir, 'world', 'level.dat'),
         'utf-8',

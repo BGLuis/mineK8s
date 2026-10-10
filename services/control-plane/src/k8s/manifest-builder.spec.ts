@@ -30,6 +30,7 @@ describe('ManifestBuilder', () => {
       id: '11111111-1111-1111-1111-111111111111',
       name: 'Survival SMP',
       subdomain: 'smp',
+      resource_name: 'smp',
       game_type: 'minecraft',
       routing_model: 'sni-shared-port',
       server_type: 'PAPER',
@@ -358,6 +359,48 @@ describe('ManifestBuilder', () => {
 
         expect(dep.spec.template.spec.containers[0].image).toBe('registry.local/runner:custom');
       });
+    });
+  });
+
+  describe('servidor com subdomínio diferente do resource_name', () => {
+    const renamed = () => ({ ...sampleServer, subdomain: 'novo-endereco' }) as Server;
+
+    it('nomeia e seleciona tudo pelo resource_name, nunca pelo subdomínio', () => {
+      const server = renamed();
+      const manifests = [
+        ManifestBuilder.buildPVC(server, mockConfigService),
+        ManifestBuilder.buildService(server, mockConfigService),
+        ManifestBuilder.buildDeployment(server, sampleSettings, mockConfigService),
+        ManifestBuilder.buildBackupJob(server, 'hot', 1700000000, mockConfigService),
+        ManifestBuilder.buildBackupJob(server, 'cold', 1700000000, mockConfigService),
+        ManifestBuilder.buildRestoreJob(
+          server,
+          'smp_hot_1.tar.gz',
+          undefined,
+          1700000000,
+          mockConfigService,
+        ),
+      ];
+
+      for (const manifest of manifests) {
+        expect(JSON.stringify(manifest)).not.toContain('novo-endereco');
+      }
+      expect(ManifestBuilder.buildPVC(server, mockConfigService).metadata.name).toBe('data-smp');
+      expect(ManifestBuilder.buildService(server, mockConfigService).metadata.name).toBe('mc-smp');
+      expect(
+        ManifestBuilder.buildDeployment(server, sampleSettings, mockConfigService).metadata.name,
+      ).toBe('mc-smp');
+    });
+
+    it('o Service seleciona os pods do Deployment e o gateway alcança o Service', () => {
+      const server = renamed();
+      const service = ManifestBuilder.buildService(server, mockConfigService);
+      const deployment = ManifestBuilder.buildDeployment(server, sampleSettings, mockConfigService);
+
+      expect(deployment.spec.template.metadata.labels).toMatchObject(service.spec.selector);
+      expect(ManifestBuilder.routeTarget(server, mockConfigService)).toBe(
+        'mc-smp.minekubernetes.svc.cluster.local:25565',
+      );
     });
   });
 

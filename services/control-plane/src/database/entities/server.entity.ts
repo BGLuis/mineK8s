@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -35,6 +36,14 @@ export class Server {
 
   @Column({ type: 'varchar', length: 63, unique: true })
   subdomain: string;
+
+  /**
+   * Stable name behind every Kubernetes resource and the data directory of this server. The subdomain is only an
+   * address and can change; this never does, so a renamed server keeps finding its own Deployment, Service and PVC.
+   */
+  @Index('uq_servers_resource_name', { unique: true })
+  @Column({ type: 'varchar', length: 63 })
+  resource_name: string;
 
   @Column({ type: 'varchar', length: 30, default: 'minecraft' })
   game_type: string;
