@@ -20,6 +20,7 @@ import {
   DialogService,
   McButton,
   McPanel,
+  McPlayerHead,
   McRamSlider,
   McSwitch,
   McTextField,
@@ -73,7 +74,7 @@ function avatarColor(nick: string): string {
 @Component({
   selector: 'mc-server-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McButton, McPanel, McRamSlider, McSwitch, McTextField],
+  imports: [FormsModule, McButton, McPanel, McPlayerHead, McRamSlider, McSwitch, McTextField],
   template: `
     @if (store.server(); as server) {
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -138,13 +139,11 @@ function avatarColor(nick: string): string {
               <ul class="flex flex-col gap-3">
                 @for (player of onlinePlayers(); track player.nick) {
                   <li class="flex items-center gap-3 border-b-2 border-border-strong pb-3">
-                    <span
-                      class="t-label-md flex size-10 shrink-0 items-center justify-center border-2 border-border-strong"
+                    <mc-player-head
+                      class="border-2 border-border-strong"
                       [class]="avatarClass(player.nick)"
-                      aria-hidden="true"
-                    >
-                      {{ player.nick.charAt(0).toUpperCase() }}
-                    </span>
+                      [nick]="player.nick"
+                    />
                     <span class="t-body-strong min-w-0 flex-1 truncate">{{ player.nick }}</span>
                     <span class="t-body-md text-text-muted">{{ session(player) }}</span>
                     <mc-button

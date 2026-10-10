@@ -1,5 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AppConfigService } from '../../config/app-config.service';
+import { MinecraftServerSettings } from '../../database/entities/minecraft-server-settings.entity';
 import { Server } from '../../database/entities/server.entity';
 import { resolveRconCredentials } from '../../k8s/server-properties';
 import { serverWorkloadName } from '../../k8s/resource-names';
@@ -9,8 +12,14 @@ import { RconClient } from '../client/rcon-client';
 export class RconConnectionPool implements OnModuleDestroy {
   private readonly logger = new Logger(RconConnectionPool.name);
   private readonly clients = new Map<string, RconClient>();
+  private readonly pending = new Map<string, Promise<RconClient>>();
 
-  constructor(private readonly configService: AppConfigService) {}
+  constructor(
+    private readonly configService: AppConfigService,
+    @Optional()
+    @InjectRepository(MinecraftServerSettings)
+    private readonly settingsRepo?: Repository<MinecraftServerSettings>,
+  ) {}
 
   public getConnection(serverId: string): RconClient | undefined {
     return this.clients.get(serverId);
@@ -21,6 +30,19 @@ export class RconConnectionPool implements OnModuleDestroy {
    * Resolução de DNS ClusterIP e credenciais de banco (PR-14).
    */
   public async getOrCreateConnection(server: Server): Promise<RconClient> {
+    // Callers that arrive while a connection is being opened share it: each one would otherwise
+    // destroy the client the previous one is still authenticating.
+    const opening = this.pending.get(server.id);
+    if (opening) {
+      return opening;
+    }
+
+    const creation = this.openConnection(server).finally(() => this.pending.delete(server.id));
+    this.pending.set(server.id, creation);
+    return creation;
+  }
+
+  private async openConnection(server: Server): Promise<RconClient> {
     const existing = this.clients.get(server.id);
     if (existing && existing.isConnected()) {
       return existing;
@@ -38,7 +60,11 @@ export class RconConnectionPool implements OnModuleDestroy {
     const isMock = this.configService.kubernetes.useMockDriver;
     const host = isMock ? '127.0.0.1' : `${serviceName}.${namespace}.svc.cluster.local`;
 
-    const { port, password } = resolveRconCredentials(server.minecraft_settings);
+    // Servers loaded without the relation would otherwise fall back to the default password, which
+    // the server rejects: the RCON password lives in minecraft_server_settings.
+    const settings =
+      server.minecraft_settings ?? (await this.settingsRepo?.findOneBy({ server_id: server.id }));
+    const { port, password } = resolveRconCredentials(settings ?? undefined);
 
     this.logger.log(`Criando nova conexão RCON no pool para [${server.id}] ${host}:${port}`);
 

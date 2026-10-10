@@ -21,6 +21,7 @@ import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
 import { CONSOLE_DRIVER_TOKEN, ConsoleDriver } from '../console/console-driver.interface';
+import { KubernetesService } from '../k8s/k8s.service';
 import { K8sLogStreamerService } from '../logging/k8s-log-streamer.service';
 
 export interface JoinTerminalDto {
@@ -57,6 +58,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     @Inject(CONSOLE_DRIVER_TOKEN)
     private readonly consoleDriver: ConsoleDriver,
     private readonly logStreamer: K8sLogStreamerService,
+    private readonly k8sService: KubernetesService,
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
     private readonly trustedProxies: TrustedProxyService,
@@ -217,26 +219,34 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   private ensureRoomLogStream(server: Server): void {
-    if (this.subscribedRooms.has(server.id)) {
-      return;
+    if (!this.subscribedRooms.has(server.id)) {
+      this.subscribedRooms.add(server.id);
+
+      // Conecta pipeline de deltas para emitir para todos na sala (log_delta)
+      this.logStreamer.subscribeToDeltas(server.id, (entry) => {
+        this.server?.to?.(server.id)?.emit('log_delta', {
+          serverId: server.id,
+          entry,
+        });
+      });
     }
 
-    this.subscribedRooms.add(server.id);
-
-    // Conecta pipeline de deltas para emitir para todos na sala (log_delta)
-    this.logStreamer.subscribeToDeltas(server.id, (entry) => {
-      this.server?.to?.(server.id)?.emit('log_delta', {
-        serverId: server.id,
-        entry,
+    // Inicia (ou retoma, se parou por falta de clientes) o stream k8s contínuo do pod
+    const hasViewers = () => (this.server?.sockets?.adapter?.rooms?.get(server.id)?.size ?? 0) > 0;
+    this.logStreamer
+      .attachServerStream(
+        server.id,
+        server.resource_name,
+        () => this.k8sService.streamServerLogs(server),
+        {
+          shouldRetry: hasViewers,
+        },
+      )
+      .catch((err) => {
+        this.logger.warn(
+          `Stream inicial de logs k8s para ${server.subdomain} pendente: ${err.message}`,
+        );
       });
-    });
-
-    // Inicia stream k8s contínuo para o pod
-    this.logStreamer.attachServerStream(server.id, server.resource_name).catch((err) => {
-      this.logger.warn(
-        `Stream inicial de logs k8s para ${server.subdomain} pendente: ${err.message}`,
-      );
-    });
   }
 
   private authenticateClient(client: any): Promise<User | null> {

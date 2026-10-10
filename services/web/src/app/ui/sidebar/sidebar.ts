@@ -5,6 +5,7 @@ import { filter, map } from 'rxjs';
 
 import { UserRole } from '../../core/api/models';
 import { McIcon } from '../icon/icon';
+import { McPlayerHead } from '../player-head/player-head';
 import { IconName } from '../icon/icon-registry';
 
 export interface SidebarUser {
@@ -68,7 +69,7 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
 @Component({
   selector: 'mc-sidebar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McIcon, RouterLink],
+  imports: [McIcon, McPlayerHead, RouterLink],
   host: { class: 'contents' },
   template: `
     <aside
@@ -118,12 +119,7 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
         }
         @if (user(); as current) {
           <div class="flex items-center gap-3">
-            <span
-              class="t-label-md inline-flex size-10 shrink-0 items-center justify-center bg-action-primary"
-              aria-hidden="true"
-            >
-              {{ initial() }}
-            </span>
+            <mc-player-head class="bg-action-primary" [nick]="current.nick" />
             <div class="min-w-0 flex-1">
               <p class="t-body-strong truncate">{{ current.nick }}</p>
               <p class="t-caption text-text-muted">{{ roleLabel() }}</p>
@@ -154,11 +150,11 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
       @if (user(); as current) {
         <button
           type="button"
-          class="t-label-md inline-flex size-10 items-center justify-center bg-action-primary"
+          class="inline-flex"
           [attr.aria-label]="'Sair (' + current.nick + ')'"
           (click)="logout.emit()"
         >
-          {{ initial() }}
+          <mc-player-head class="bg-action-primary" [nick]="current.nick" />
         </button>
       }
     </header>
@@ -205,7 +201,6 @@ export class McSidebar {
     { initialValue: this.router.url },
   );
 
-  protected readonly initial = computed(() => (this.user()?.nick ?? '?').charAt(0).toUpperCase());
   protected readonly roleLabel = computed(() => ROLE_LABELS[this.user()?.role ?? 'PLAYER']);
 
   protected isActive(entry: NavEntry): boolean {

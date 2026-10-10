@@ -43,6 +43,19 @@ describe('writeServerProperties (#153)', () => {
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+  it('desliga a whitelist do Minecraft: quem entra é decidido pelo gateway, e o vanilla 26.x a liga por padrão', async () => {
+    fs.writeFileSync(
+      path.join(dir, 'server.properties'),
+      'white-list=true\nenforce-whitelist=true\n',
+    );
+
+    await writeServerProperties(dir, { settings, isModpack: false });
+
+    const props = readProps();
+    expect(props.get('white-list')).toBe('false');
+    expect(props.get('enforce-whitelist')).toBe('false');
+  });
+
   it('liga o RCON com a mesma porta e senha que o pool usa para conectar', async () => {
     await writeServerProperties(dir, { settings, isModpack: false });
 

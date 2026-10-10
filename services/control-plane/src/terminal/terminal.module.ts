@@ -7,6 +7,7 @@ import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
+import { KubernetesModule } from '../k8s/k8s.module';
 import { LoggingModule } from '../logging/logging.module';
 import { TerminalGateway } from './terminal.gateway';
 
@@ -15,6 +16,7 @@ import { TerminalGateway } from './terminal.gateway';
     TypeOrmModule.forFeature([Server, ServerAuditLog, User, UserServerAccess]),
     ConsoleModule,
     LoggingModule,
+    KubernetesModule,
     AuthModule,
   ],
   providers: [TerminalGateway],

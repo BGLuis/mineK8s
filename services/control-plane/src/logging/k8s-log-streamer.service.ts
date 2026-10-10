@@ -11,7 +11,16 @@ type LogDeltaListener = (entry: LogEntry) => void;
 export interface LogStreamHandle {
   abortController: AbortController;
   resourceName: string;
+  retryTimer?: NodeJS.Timeout;
 }
+
+export interface AttachStreamOptions {
+  /** Called when the pod's stream ends or has no pod yet: false means nobody is watching, so stop following. */
+  shouldRetry?: () => boolean;
+  retryDelayMs?: number;
+}
+
+const DEFAULT_RETRY_DELAY_MS = 5000;
 
 @Injectable()
 export class K8sLogStreamerService implements OnModuleDestroy {
@@ -88,22 +97,22 @@ export class K8sLogStreamerService implements OnModuleDestroy {
 
   /**
    * Conecta stream contínuo de logs de pod k8s (RF-RCON-07, Guarda C-11).
+   * `streamFactory` abre o log do pod ou devolve null quando ele não existe; o stream é reaberto
+   * enquanto `shouldRetry` disser que há quem acompanhe, já que o pod é substituído a cada partida.
    */
   public async attachServerStream(
     serverId: string,
     resourceName: string,
-    streamFactory?: () => Promise<Readable>,
+    streamFactory?: () => Promise<Readable | null>,
+    options: AttachStreamOptions = {},
   ): Promise<CircularLogBuffer> {
     const buffer = this.getBuffer(serverId);
     if (this.activeStreams.has(serverId)) {
       return buffer;
     }
 
-    const abortController = new AbortController();
-    this.activeStreams.set(serverId, {
-      abortController,
-      resourceName,
-    });
+    const handle: LogStreamHandle = { abortController: new AbortController(), resourceName };
+    this.activeStreams.set(serverId, handle);
 
     const namespace = this.configService.kubernetes.namespace || 'minekubernetes';
     const podName = serverWorkloadName(resourceName);
@@ -112,20 +121,62 @@ export class K8sLogStreamerService implements OnModuleDestroy {
       `Iniciando stream de logs follow=true&tailLines=500 [${serverId}] pod: ${podName} ns: ${namespace}`,
     );
 
-    // Se fornecida streamFactory personalizada (ex.: testes ou driver mock)
     if (streamFactory) {
-      try {
-        const stream = await streamFactory();
-        this.pipeStreamToBuffer(serverId, stream, abortController);
-      } catch (err) {
-        this.logger.warn(
-          `Falha ao iniciar stream customizado para ${resourceName}: ${(err as Error).message}`,
-        );
-      }
-      return buffer;
+      await this.openStream(serverId, handle, streamFactory, options);
+    }
+    return buffer;
+  }
+
+  private async openStream(
+    serverId: string,
+    handle: LogStreamHandle,
+    streamFactory: () => Promise<Readable | null>,
+    options: AttachStreamOptions,
+  ): Promise<void> {
+    let stream: Readable | null = null;
+    try {
+      stream = await streamFactory();
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao abrir o stream de logs de ${handle.resourceName}: ${(err as Error).message}`,
+      );
     }
 
-    return buffer;
+    if (handle.abortController.signal.aborted) {
+      stream?.destroy();
+      return;
+    }
+    if (!stream) {
+      this.scheduleReopen(serverId, handle, streamFactory, options);
+      return;
+    }
+
+    // The new pod's log starts over; the previous pod's lines would only be stale history.
+    this.clearBuffer(serverId);
+    this.pipeStreamToBuffer(serverId, stream, handle.abortController, () =>
+      this.scheduleReopen(serverId, handle, streamFactory, options),
+    );
+  }
+
+  private scheduleReopen(
+    serverId: string,
+    handle: LogStreamHandle,
+    streamFactory: () => Promise<Readable | null>,
+    options: AttachStreamOptions,
+  ): void {
+    if (handle.abortController.signal.aborted) {
+      return;
+    }
+    if (!options.shouldRetry?.()) {
+      // Nobody is following: the next attach starts again.
+      this.activeStreams.delete(serverId);
+      return;
+    }
+    handle.retryTimer = setTimeout(
+      () => void this.openStream(serverId, handle, streamFactory, options),
+      options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS,
+    );
+    handle.retryTimer.unref();
   }
 
   /**
@@ -135,6 +186,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
     serverId: string,
     stream: Readable,
     abortController?: AbortController,
+    onEnd?: () => void,
   ): void {
     const rl = readline.createInterface({
       input: stream,
@@ -149,8 +201,14 @@ export class K8sLogStreamerService implements OnModuleDestroy {
       this.ingestRawLine(serverId, line);
     });
 
+    stream.on('error', (err) => {
+      this.logger.warn(`Erro no stream de logs do servidor ${serverId}: ${err.message}`);
+      rl.close();
+    });
+
     rl.on('close', () => {
       this.logger.log(`Stream de logs finalizado para servidor ${serverId}`);
+      onEnd?.();
     });
   }
 
@@ -160,6 +218,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
   public detachServerStream(serverId: string): void {
     const handle = this.activeStreams.get(serverId);
     if (handle) {
+      clearTimeout(handle.retryTimer);
       handle.abortController.abort();
       this.activeStreams.delete(serverId);
       this.logger.log(`Stream de logs cancelado para servidor ${serverId}`);

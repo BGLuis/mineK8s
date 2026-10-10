@@ -14,6 +14,7 @@ import {
   ServerRuntimeStats,
   ServerSummary,
   UpdateServerRequest,
+  UpdateServerSettingsRequest,
   UpdateVersionRequest,
   UpdateVersionResponse,
 } from './models';
@@ -61,6 +62,10 @@ export class ServersApi {
 
   delete(id: string): Observable<MessageResponse> {
     return this.api.delete(`/api/servers/${id}`);
+  }
+
+  updateSettings(id: string, patch: UpdateServerSettingsRequest): Observable<ServerDetail> {
+    return this.api.patch(`/api/servers/${id}/settings`, patch);
   }
 
   updateDomain(id: string, domain: string): Observable<MessageResponse> {
