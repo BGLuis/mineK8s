@@ -32,7 +32,7 @@ import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 import { CloudflareDnsDriver } from '../dns/drivers/cloudflare-dns.driver';
 import { NodeMetricsService } from '../node/node-metrics.service';
 
-import { CreateServerDto, ServerType } from './dto/create-server.dto';
+import { CreateServerDto, MinecraftSettingsDto, ServerType } from './dto/create-server.dto';
 import { ServerDetailDto, ServerSummaryDto, toServerSettingsDto } from './dto/server-summary.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
@@ -424,6 +424,37 @@ export class ServersService implements OnApplicationBootstrap {
     this.dropRoute(removed);
 
     return { message: 'Instance removed' };
+  }
+
+  /** Saves the Minecraft settings; they reach server.properties the next time the server starts. */
+  async updateSettings(id: string, dto: MinecraftSettingsDto): Promise<ServerDetailDto> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: { minecraft_settings: true },
+    });
+    if (!server?.minecraft_settings) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    const changes = Object.entries(dto).filter(([, value]) => value !== undefined);
+    if (changes.length === 0) {
+      throw new BadRequestException('Provide at least one field to update');
+    }
+    if (dto.rcon_password !== undefined) {
+      throw new BadRequestException(
+        'The RCON password cannot be changed after creation: the running server keeps the old one',
+      );
+    }
+    if (server.access_policy === 'INTERNET' && dto.online_mode === false) {
+      throw new ConflictException(
+        'Server is published on the internet and requires online-mode=true: unpublish it first',
+      );
+    }
+
+    Object.assign(server.minecraft_settings, Object.fromEntries(changes));
+    await this.settingsRepo.save(server.minecraft_settings);
+
+    return this.findOne(id);
   }
 
   async updateDomain(id: string, domain: string): Promise<{ message: string }> {

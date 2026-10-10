@@ -27,7 +27,7 @@ import { UserRole } from '@database/entities/user.entity';
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
 import { ServersBackupService } from './servers-backup.service';
-import { CreateServerDto } from './dto/create-server.dto';
+import { CreateServerDto, MinecraftSettingsDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { CommandDto } from './dto/command.dto';
@@ -148,6 +148,18 @@ export class ServersController {
   @ApiResponse({ status: 404, description: 'Server not found' })
   async delete(@Param('id') id: string) {
     return this.serversService.delete(id);
+  }
+
+  @Patch(':id/settings')
+  @ApiOperation({
+    summary: 'Update the Minecraft settings (server.properties); they apply on the next start',
+  })
+  @ApiResponse({ status: 200, description: 'Settings saved' })
+  @ApiResponse({ status: 400, description: 'Empty body or RCON password change' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'Server is published: online-mode must stay on' })
+  async updateSettings(@Param('id') id: string, @Body() dto: MinecraftSettingsDto) {
+    return this.serversService.updateSettings(id, dto);
   }
 
   @Patch(':id/domain')
