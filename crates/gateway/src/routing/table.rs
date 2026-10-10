@@ -52,8 +52,13 @@ impl RouteTable {
         };
         let server_id = route.server_id.clone();
         let status = route.status;
-        self.server_index.insert(server_id.clone(), key.clone());
-        self.routes.insert(key, route);
+        let previous_key = self.server_index.insert(server_id.clone(), key.clone());
+        self.routes.insert(key.clone(), route);
+        if let Some(previous_key) = previous_key.filter(|previous| *previous != key) {
+            // A chave antiga pode já ter sido tomada por outro servidor: só remove se ainda for deste.
+            self.routes
+                .remove_if(&previous_key, |_, stale| stale.server_id == server_id);
+        }
         let _ = self.status_broadcaster.send((server_id, status));
     }
 
