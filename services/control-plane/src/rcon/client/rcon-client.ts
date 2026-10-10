@@ -41,6 +41,8 @@ interface QueuedCommand {
   timeoutMs: number;
   resolve: (response: string) => void;
   reject: (reason: any) => void;
+  /** Fires when the command is still queued after `timeoutMs`, e.g. because the client never connected. */
+  queueTimer?: NodeJS.Timeout;
 }
 
 export class RconClient {
@@ -142,6 +144,18 @@ export class RconClient {
         resolve,
         reject,
       };
+
+      queuedCmd.queueTimer = setTimeout(() => {
+        const index = this.commandQueue.indexOf(queuedCmd);
+        if (index !== -1) {
+          this.commandQueue.splice(index, 1);
+          reject(
+            new RconTimeoutException(
+              `RCON command was not sent within ${queuedCmd.timeoutMs}ms: client is not connected`,
+            ),
+          );
+        }
+      }, queuedCmd.timeoutMs);
 
       this.commandQueue.push(queuedCmd);
       this.processQueue();
@@ -275,6 +289,7 @@ export class RconClient {
     if (!next) {
       return;
     }
+    clearTimeout(next.queueTimer);
 
     const requestId = this.nextRequestId();
     let packetBuffer: Buffer;
@@ -349,6 +364,7 @@ export class RconClient {
     }
     while (this.commandQueue.length > 0) {
       const cmd = this.commandQueue.shift();
+      clearTimeout(cmd?.queueTimer);
       cmd?.reject(reason);
     }
   }

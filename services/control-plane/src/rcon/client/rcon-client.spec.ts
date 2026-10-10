@@ -208,6 +208,21 @@ describe('RconClient (RF-RCON-03, RF-RCON-04, RF-RCON-05, RF-RCON-06, RF-RCON-15
     client.destroy();
   });
 
+  it('a command sent while the client is not connected fails at its timeout instead of waiting forever', async () => {
+    const client = new RconClient({
+      serverId: 'srv-never-connected',
+      host: '127.0.0.1',
+      port: serverPort,
+      password: 'wrong-password',
+      autoReconnect: false,
+    });
+    await expect(client.connect()).rejects.toThrow(RconAuthenticationException);
+
+    await expect(client.sendCommand('save-all flush', 100)).rejects.toThrow(RconTimeoutException);
+
+    client.destroy();
+  });
+
   it('destroy settles a connect that is still in flight, so its caller is not left waiting forever', async () => {
     // A socket that never connects nor fails, like a DNS lookup that is still pending.
     const stalledSocket = new net.Socket();
