@@ -1,10 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { ServerDetail, ServerRuntimeStats } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
-import { ServersSocket } from '../../core/realtime/servers-socket';
+import { ServerSocketSignal, ServersSocket } from '../../core/realtime/servers-socket';
 import { ServerLifecycle } from '../dashboard/server-lifecycle';
 import { ServerDetailStore } from './server-detail.store';
 
@@ -76,21 +76,58 @@ describe('ServerDetailStore', () => {
   });
 
   describe('live refresh', () => {
+    const ready = { ...detail('GROUP'), state: 'READY' as const };
+
+    function createWithSignals(signals: Subject<ServerSocketSignal>, get: () => unknown) {
+      TestBed.configureTestingModule({
+        providers: [
+          ServerDetailStore,
+          { provide: ServersApi, useValue: { get, stats: () => of(stats) } },
+          { provide: ServersSocket, useValue: { signals: () => signals } },
+          { provide: ServerLifecycle, useValue: { busy: signal(new Set<string>()) } },
+        ],
+      });
+      return TestBed.inject(ServerDetailStore);
+    }
+
     afterEach(() => vi.useRealTimers());
 
-    it('keeps reloading the open server while the socket is connected but silent', async () => {
+    it('reloads the open server when the control plane pushes activity for it, and only for it', async () => {
       vi.useFakeTimers();
-      const get = vi.fn(() => of({ ...detail('GROUP'), state: 'READY' as const }));
-      const store = create(detail('GROUP'), undefined, get);
+      const signals = new Subject<ServerSocketSignal>();
+      const get = vi.fn(() => of(ready));
+      const store = createWithSignals(signals, get);
 
       store.watch('srv-1');
       TestBed.tick();
-      expect(get).toHaveBeenCalledTimes(1);
+      signals.next({ type: 'connected' });
+      await vi.advanceTimersByTimeAsync(0);
+      get.mockClear();
 
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(get).toHaveBeenCalledTimes(2);
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(get).toHaveBeenCalledTimes(3);
+      signals.next({ type: 'activity', event: { id: 'srv-2', kind: 'players' } });
+      await vi.advanceTimersByTimeAsync(300);
+      expect(get).not.toHaveBeenCalled();
+
+      signals.next({ type: 'activity', event: { id: 'srv-1', kind: 'players' } });
+      await vi.advanceTimersByTimeAsync(300);
+      expect(get).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not poll while the socket is connected', async () => {
+      vi.useFakeTimers();
+      const signals = new Subject<ServerSocketSignal>();
+      const get = vi.fn(() => of(ready));
+      const store = createWithSignals(signals, get);
+
+      store.watch('srv-1');
+      TestBed.tick();
+      signals.next({ type: 'connected' });
+      await vi.advanceTimersByTimeAsync(0);
+      get.mockClear();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(get).not.toHaveBeenCalled();
     });
   });
 

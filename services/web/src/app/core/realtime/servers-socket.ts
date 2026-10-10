@@ -12,10 +12,17 @@ export interface ServerStateEvent {
   is_maintenance: boolean;
 }
 
+/** Payload of `serverActivity` (server-activity.bus.ts): that part of the server changed, reload it. */
+export interface ServerActivityEvent {
+  id: string;
+  kind: 'players' | 'backups' | 'stats';
+}
+
 export type ServerSocketSignal =
   | { type: 'connected' }
   | { type: 'disconnected' }
-  | { type: 'state'; event: ServerStateEvent };
+  | { type: 'state'; event: ServerStateEvent }
+  | { type: 'activity'; event: ServerActivityEvent };
 
 /**
  * Client for the `/ws/servers` namespace. The connection is opened while something is subscribed
@@ -69,6 +76,9 @@ export class ServersSocket implements OnDestroy {
       socket.on('connect_error', () => this.bus.next({ type: 'disconnected' }));
       socket.on('serverState', (event: ServerStateEvent) =>
         this.bus.next({ type: 'state', event }),
+      );
+      socket.on('serverActivity', (event: ServerActivityEvent) =>
+        this.bus.next({ type: 'activity', event }),
       );
       this.socket = socket;
     }

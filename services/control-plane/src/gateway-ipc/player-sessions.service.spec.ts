@@ -1,4 +1,5 @@
 import { SessionEventType, SessionLifecycleEvent } from './gateway-ipc.interfaces';
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { PlayerSessionsService } from './player-sessions.service';
 
 const event = (overrides: Partial<SessionLifecycleEvent>): SessionLifecycleEvent => ({
@@ -80,5 +81,36 @@ describe('PlayerSessionsService', () => {
     sessions.clearAll();
 
     expect(sessions.count('srv-1')).toBe(0);
+  });
+
+  describe('avisa o painel quando os jogadores de um servidor mudam', () => {
+    let published: { id: string; kind: string }[];
+
+    beforeEach(() => {
+      const bus = new ServerActivityBus();
+      published = [];
+      bus.events$.subscribe((e) => published.push(e));
+      sessions = new PlayerSessionsService(bus);
+    });
+
+    it('ao entrar e ao sair', () => {
+      sessions.connected(event({ session_id: 's1' }));
+      sessions.disconnected(event({ session_id: 's1' }));
+
+      expect(published).toEqual([
+        { id: 'srv-1', kind: 'players' },
+        { id: 'srv-1', kind: 'players' },
+      ]);
+    });
+
+    it('para cada servidor que perdeu as sessões quando o stream do Gateway cai', () => {
+      sessions.connected(event({ session_id: 's1', server_id: 'srv-1' }));
+      sessions.connected(event({ session_id: 's2', server_id: 'srv-2' }));
+      published.length = 0;
+
+      sessions.clearAll();
+
+      expect(published.map((e) => e.id).sort()).toEqual(['srv-1', 'srv-2']);
+    });
   });
 });

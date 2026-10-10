@@ -26,6 +26,7 @@ import { KubernetesService } from '@k8s/k8s.service';
 import { ManifestBuilder } from '@k8s/manifest-builder';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { TaskExecutionService } from '../tasks/task-execution.service';
 
 const execFileAsync = promisify(execFile);
@@ -66,6 +67,7 @@ export class ServersBackupService {
     @InjectRepository(Server)
     private readonly serverRepo?: Repository<Server>,
     @Optional() private readonly taskExecutionService?: TaskExecutionService,
+    @Optional() private readonly activity?: ServerActivityBus,
   ) {}
 
   public isServerBusy(serverId: string): boolean {
@@ -930,7 +932,9 @@ export class ServersBackupService {
         retentionExpiresAt: data.retentionExpiresAt ?? null,
       });
 
-      return await this.backupRepo.save(entity);
+      const saved = await this.backupRepo.save(entity);
+      this.activity?.publish(data.serverId, 'backups');
+      return saved;
     } catch (err: any) {
       this.logger.error(`Erro ao persistir registro de backup no banco: ${err.message}`);
       return null;
@@ -993,6 +997,7 @@ export class ServersBackupService {
         }
 
         await this.backupRepo.delete(backup.id);
+        this.activity?.publish(serverId, 'backups');
         removedBackups.push(backup.id);
         this.logger.log(
           `[RF-STO-15] Backup rotineiro excedente removido por política FIFO (N=${maxRoutine}): ${backup.filename} (${backup.id})`,
@@ -1079,6 +1084,7 @@ export class ServersBackupService {
 
     if (this.backupRepo) {
       await this.backupRepo.delete(backup.id);
+      this.activity?.publish(serverId, 'backups');
     }
 
     this.logger.log(`[RF-STO-17] Backup [${backup.filename}] (${backup.id}) removido.`);

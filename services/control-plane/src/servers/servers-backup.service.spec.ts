@@ -4,10 +4,12 @@ import * as path from 'node:path';
 import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { Server } from '@database/entities/server.entity';
 import { ServersBackupService } from './servers-backup.service';
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { serverDataDirectory } from '@k8s/server-data-volume';
 
 describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
   let service: ServersBackupService;
+  let published: { id: string; kind: string }[];
   let tempStorageRoot: string;
   let tempBackupsRoot: string;
   let sampleServer: Server;
@@ -599,6 +601,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         }),
       };
 
+      const activity = new ServerActivityBus();
+      published = [];
+      activity.events$.subscribe((e) => published.push(e));
       service = new ServersBackupService(
         mockConfigService,
         mockK8sService,
@@ -606,7 +611,29 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
         undefined,
         mockBackupRepo,
         mockServerRepo,
+        undefined,
+        activity,
       );
+    });
+
+    it('avisa o painel quando um backup é registrado e quando é removido', async () => {
+      const archive = path.join(tempBackupsRoot, 'avisa.tar.gz');
+      await fs.promises.writeFile(archive, 'dummy');
+
+      const record = await service.persistBackupRecord({
+        serverId: sampleServer.id,
+        filename: 'avisa.tar.gz',
+        storagePath: archive,
+        sizeBytes: 5,
+        sha256Checksum: 'sha',
+        backupType: 'COLD_MANUAL' as any,
+        status: 'COMPLETED' as any,
+      });
+      expect(published).toEqual([{ id: sampleServer.id, kind: 'backups' }]);
+
+      published.length = 0;
+      await service.deleteBackup(sampleServer.id, record!.id, true);
+      expect(published).toEqual([{ id: sampleServer.id, kind: 'backups' }]);
     });
 
     it('critério de aceite: 6º backup rotineiro remove o mais antigo; pre-update nunca é removido pela contagem (RF-STO-15)', async () => {

@@ -6,11 +6,18 @@ import { ConsoleModule } from '@console/console.module';
 import { Server } from '@database/entities/server.entity';
 import { KubernetesModule } from '@k8s/k8s.module';
 
+import { ServerActivityModule } from '../server-events/server-activity.module';
 import { ServerStatsController } from './server-stats.controller';
 import { ServerStatsService } from './server-stats.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Server]), AppConfigModule, KubernetesModule, ConsoleModule],
+  imports: [
+    TypeOrmModule.forFeature([Server]),
+    AppConfigModule,
+    KubernetesModule,
+    ConsoleModule,
+    ServerActivityModule,
+  ],
   controllers: [ServerStatsController],
   providers: [ServerStatsService],
 })

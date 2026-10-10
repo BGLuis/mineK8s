@@ -9,15 +9,16 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subscription, skip } from 'rxjs';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { Subscription, skip, switchMap } from 'rxjs';
 
 import { BackupsApi } from '../../../core/api/backups.api';
 import { BackupMode, ServerBackup, ServerState, TaskProgress } from '../../../core/api/models';
 import { ServersApi } from '../../../core/api/servers.api';
 import { TasksSocket } from '../../../core/realtime/tasks-socket';
 import { AuthSession } from '../../../core/auth/auth-session';
-import { visiblePoll } from '../../../core/polling/visible-poll';
+import { ServersSocket } from '../../../core/realtime/servers-socket';
+import { liveRefresh } from '../../dashboard/live-refresh';
 import {
   McBanner,
   McButton,
@@ -289,6 +290,7 @@ export class ServerBackupsPage {
   private readonly backupsApi = inject(BackupsApi);
   private readonly servers = inject(ServersApi);
   private readonly tasksSocket = inject(TasksSocket);
+  private readonly socket = inject(ServersSocket);
   private readonly session = inject(AuthSession);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
@@ -379,8 +381,18 @@ export class ServerBackupsPage {
     this.destroyRef.onDestroy(() => this.taskSub?.unsubscribe());
 
     // Scheduled hot backups and retention change the list without the user doing anything.
-    visiblePoll(LIST_POLL_MS)
-      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+    toObservable(this.id)
+      .pipe(
+        switchMap((id) =>
+          liveRefresh(
+            this.socket.signals(),
+            LIST_POLL_MS,
+            () => false,
+            (event) => event.id === id && event.kind === 'backups',
+          ).pipe(skip(1)),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe(() => this.refreshList());
   }
 

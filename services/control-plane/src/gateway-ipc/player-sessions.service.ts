@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 
 import { SessionLifecycleEvent } from './gateway-ipc.interfaces';
 
@@ -19,6 +21,8 @@ export interface PlayerSession {
 export class PlayerSessionsService {
   private readonly byServer = new Map<string, Map<string, PlayerSession>>();
 
+  constructor(@Optional() private readonly activity?: ServerActivityBus) {}
+
   connected(event: SessionLifecycleEvent): void {
     const sessions = this.byServer.get(event.server_id) ?? new Map<string, PlayerSession>();
     // Um nick só pode ter uma sessão por servidor (o Gateway despeja a anterior, RF-GW-13).
@@ -34,6 +38,7 @@ export class PlayerSessionsService {
       connectedAt: event.timestamp_epoch_ms > 0 ? new Date(event.timestamp_epoch_ms) : new Date(),
     });
     this.byServer.set(event.server_id, sessions);
+    this.activity?.publish(event.server_id, 'players');
   }
 
   disconnected(event: SessionLifecycleEvent): void {
@@ -45,6 +50,7 @@ export class PlayerSessionsService {
     if (sessions.size === 0) {
       this.byServer.delete(event.server_id);
     }
+    this.activity?.publish(event.server_id, 'players');
   }
 
   list(serverId: string): PlayerSession[] {
@@ -58,6 +64,10 @@ export class PlayerSessionsService {
   }
 
   clearAll(): void {
+    const serverIds = [...this.byServer.keys()];
     this.byServer.clear();
+    for (const serverId of serverIds) {
+      this.activity?.publish(serverId, 'players');
+    }
   }
 }

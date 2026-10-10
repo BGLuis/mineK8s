@@ -1,18 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { EMPTY, Subject, catchError, exhaustMap, filter, merge, skip, switchMap, tap } from 'rxjs';
+import { EMPTY, Subject, catchError, exhaustMap, filter, merge, switchMap, tap } from 'rxjs';
 
 import { ServerAccessPolicy, ServerDetail, ServerRuntimeStats } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { ServersSocket } from '../../core/realtime/servers-socket';
 import { LifecycleAction, ServerLifecycle } from '../dashboard/server-lifecycle';
 import { liveRefresh } from '../dashboard/live-refresh';
-import { visiblePoll } from '../dashboard/visible-poll';
 
 const POLL_MS = 5_000;
-/** The socket only pushes state transitions; players, uptime and stats change without one. */
-const LIVE_POLL_MS = 10_000;
 const STATS_REFRESH_MS = 30_000;
 
 export type DetailLoadState = 'loading' | 'ready' | 'error' | 'not-found';
@@ -50,8 +47,13 @@ export class ServerDetailStore {
         filter((id): id is string => id !== null),
         switchMap((id) =>
           merge(
-            liveRefresh(this.socket.signals(), POLL_MS, (event) => event.id === id),
-            visiblePoll(LIVE_POLL_MS).pipe(skip(1)),
+            // Besides state transitions, the control plane pushes when players, backups or stats change.
+            liveRefresh(
+              this.socket.signals(),
+              POLL_MS,
+              (event) => event.id === id,
+              (event) => event.id === id,
+            ),
             this.refresh$,
           ).pipe(exhaustMap(() => this.fetch(id))),
         ),

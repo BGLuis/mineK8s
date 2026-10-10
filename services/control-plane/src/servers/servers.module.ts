@@ -12,6 +12,7 @@ import { ConsoleModule } from '@console/console.module';
 import { LoggingModule } from '@logging/logging.module';
 import { ProbesModule } from '../probes/probes.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
+import { ServerActivityModule } from '../server-events/server-activity.module';
 import { DnsModule } from '../dns/dns.module';
 import { NodeModule } from '../node/node.module';
 import { TasksModule } from '../tasks/tasks.module';
@@ -39,6 +40,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     LoggingModule,
     ProbesModule,
     GatewayIpcModule,
+    ServerActivityModule,
     DnsModule,
     NodeModule,
     TasksModule,

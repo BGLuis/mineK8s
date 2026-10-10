@@ -63,6 +63,7 @@ describe('ServersSocket', () => {
 
     fake.receive('connect');
     fake.receive('serverState', { id: 'srv-1', status: 'READY', is_maintenance: false });
+    fake.receive('serverActivity', { id: 'srv-1', kind: 'players' });
     fake.receive('connect_error');
     fake.receive('disconnect');
     subscription.unsubscribe();
@@ -70,6 +71,7 @@ describe('ServersSocket', () => {
     expect(received).toEqual([
       { type: 'connected' },
       { type: 'state', event: { id: 'srv-1', status: 'READY', is_maintenance: false } },
+      { type: 'activity', event: { id: 'srv-1', kind: 'players' } },
       { type: 'disconnected' },
       { type: 'disconnected' },
     ]);
