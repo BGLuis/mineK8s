@@ -14,7 +14,8 @@ import {
   KUBERNETES_DRIVER,
 } from './k8s.interface';
 import { ManifestBuilder } from './manifest-builder';
-import { serverDataDirectory } from './server-data-volume';
+import { serverWorkloadName } from './resource-names';
+import { serverDataDirectory, serverDataVolumeName } from './server-data-volume';
 import { isModpackServerType, writeServerProperties } from './server-properties';
 
 @Injectable()
@@ -81,7 +82,7 @@ export class KubernetesService {
       ManifestBuilder.buildDeployment(server, server.minecraft_settings, this.configService),
     );
     await this.driver.scaleDeployment(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       1,
       this.configService.kubernetes.namespace,
     );
@@ -90,7 +91,7 @@ export class KubernetesService {
   private serverDataDir(server: Server): string {
     return path.resolve(
       this.configService.storage.serversDataRoot,
-      serverDataDirectory(server.subdomain),
+      serverDataDirectory(server.resource_name),
     );
   }
 
@@ -124,7 +125,7 @@ export class KubernetesService {
 
     this.logger.log(`Stopping server [${server.subdomain}]: scaling deployment to 0...`);
     await this.driver.scaleDeployment(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       0,
       this.configService.kubernetes.namespace,
     );
@@ -141,15 +142,15 @@ export class KubernetesService {
   async deprovisionServer(server: Server): Promise<void> {
     this.logger.log(`Deprovisioning Kubernetes resources for server [${server.subdomain}]...`);
     await this.driver.deleteDeployment(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
     await this.driver.deleteService(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
     await this.driver.deletePersistentVolumeClaim(
-      `data-${server.subdomain}`,
+      serverDataVolumeName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
     this.logger.log(`Successfully deprovisioned resources for [${server.subdomain}].`);
@@ -157,14 +158,14 @@ export class KubernetesService {
 
   async getServerDeployment(server: Server): Promise<K8sDeploymentInfo | null> {
     return this.driver.getDeployment(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
   }
 
   async getServerPodStats(server: Server): Promise<K8sPodStats | null> {
     return this.driver.getPodStats(
-      `mc-${server.subdomain}`,
+      serverWorkloadName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
   }

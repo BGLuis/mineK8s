@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as readline from 'readline';
 import { Readable } from 'stream';
 import { AppConfigService } from '../config/app-config.service';
+import { serverWorkloadName } from '../k8s/resource-names';
 import { CircularLogBuffer, LogEntry, LogSource } from './circular-log-buffer';
 import { LogNoiseFilter } from './log-noise-filter';
 
@@ -9,7 +10,7 @@ type LogDeltaListener = (entry: LogEntry) => void;
 
 export interface LogStreamHandle {
   abortController: AbortController;
-  subdomain: string;
+  resourceName: string;
 }
 
 @Injectable()
@@ -90,7 +91,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
    */
   public async attachServerStream(
     serverId: string,
-    subdomain: string,
+    resourceName: string,
     streamFactory?: () => Promise<Readable>,
   ): Promise<CircularLogBuffer> {
     const buffer = this.getBuffer(serverId);
@@ -101,11 +102,11 @@ export class K8sLogStreamerService implements OnModuleDestroy {
     const abortController = new AbortController();
     this.activeStreams.set(serverId, {
       abortController,
-      subdomain,
+      resourceName,
     });
 
     const namespace = this.configService.kubernetes.namespace || 'minekubernetes';
-    const podName = `mc-${subdomain}`;
+    const podName = serverWorkloadName(resourceName);
 
     this.logger.log(
       `Iniciando stream de logs follow=true&tailLines=500 [${serverId}] pod: ${podName} ns: ${namespace}`,
@@ -118,7 +119,7 @@ export class K8sLogStreamerService implements OnModuleDestroy {
         this.pipeStreamToBuffer(serverId, stream, abortController);
       } catch (err) {
         this.logger.warn(
-          `Falha ao iniciar stream customizado para ${subdomain}: ${(err as Error).message}`,
+          `Falha ao iniciar stream customizado para ${resourceName}: ${(err as Error).message}`,
         );
       }
       return buffer;

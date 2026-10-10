@@ -38,7 +38,7 @@ export class ServersFilesService {
 
   public getServerDataDir(server: Server): string {
     const baseRoot = path.resolve(this.configService.storage.serversDataRoot);
-    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.subdomain));
+    const serverDir = path.resolve(baseRoot, serverDataDirectory(server.resource_name));
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
     }

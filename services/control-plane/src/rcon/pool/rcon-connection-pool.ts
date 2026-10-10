@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import { Server } from '../../database/entities/server.entity';
 import { resolveRconCredentials } from '../../k8s/server-properties';
+import { serverWorkloadName } from '../../k8s/resource-names';
 import { RconClient } from '../client/rcon-client';
 
 @Injectable()
@@ -31,7 +32,7 @@ export class RconConnectionPool implements OnModuleDestroy {
     }
 
     const namespace = this.configService.kubernetes.namespace || 'minekubernetes';
-    const serviceName = `mc-${server.subdomain}`;
+    const serviceName = serverWorkloadName(server.resource_name);
 
     // Suporte para homelab / mock k8s rodando fora do cluster
     const isMock = this.configService.kubernetes.useMockDriver;

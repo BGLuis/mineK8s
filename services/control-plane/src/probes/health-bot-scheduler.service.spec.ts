@@ -100,6 +100,20 @@ describe('HealthBotSchedulerService (RF-ARQ-30, Milestone F9)', () => {
     expect(schedulerService.getLatestReport('srv-1')).toBe(dummyReport);
   });
 
+  it('usa o DNS do Service pelo resource_name, que não muda quando o subdomínio muda', () => {
+    const inCluster = new HealthBotSchedulerService(
+      mockServerRepo as Repository<Server>,
+      mockProbeService as HealthBotProbeService,
+      {
+        isTest: false,
+        kubernetes: { namespace: 'minekubernetes', useMockDriver: false },
+      } as AppConfigService,
+    );
+    const server = { id: 'srv-1', subdomain: 'endereco-novo', resource_name: 'survival' } as Server;
+
+    expect(inCluster.getProbeHost(server)).toBe('mc-survival.minekubernetes.svc.cluster.local');
+  });
+
   it('should throw error when probing non-existent server', async () => {
     (mockServerRepo.findOne as jest.Mock).mockResolvedValue(null);
 

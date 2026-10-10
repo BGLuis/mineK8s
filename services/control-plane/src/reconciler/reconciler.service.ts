@@ -12,6 +12,7 @@ import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { Server, ServerState } from '@database/entities/server.entity';
 import { KubernetesService } from '@k8s/k8s.service';
+import { serverWorkloadName } from '@k8s/resource-names';
 import { MinecraftSlpProbeService } from '../probes/minecraft-slp-probe.service';
 import { GenericTcpProbeService } from '../probes/generic-tcp-probe.service';
 import { ProbeResult } from '../probes/probe-provider.interface';
@@ -93,7 +94,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
     if (this.configService.isTest || this.configService.kubernetes.useMockDriver) {
       return '127.0.0.1';
     }
-    return `mc-${server.subdomain}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
+    return `${serverWorkloadName(server.resource_name)}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
   }
 
   /**
@@ -145,7 +146,7 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
           continue;
         }
 
-        const depName = `mc-${server.subdomain}`;
+        const depName = serverWorkloadName(server.resource_name);
         const observedDep = deploymentMap.get(depName);
 
         // 1. Auto-healing: If deployment is missing from cluster, reprovision it (RF-ARQ-25)

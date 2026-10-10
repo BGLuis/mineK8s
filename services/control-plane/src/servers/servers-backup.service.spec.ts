@@ -50,7 +50,8 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     sampleServer = {
       id: 'srv-backup-123',
       name: 'Modpack Server',
-      subdomain: 'modpack-smp',
+      subdomain: 'endereco-novo',
+      resource_name: 'modpack-smp',
       state: 'STOPPED',
       game_type: 'minecraft',
     } as Server;
@@ -58,13 +59,14 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     readyServer = {
       id: 'srv-ready-456',
       name: 'Paper SMP',
-      subdomain: 'paper-smp',
+      subdomain: 'paper-novo',
+      resource_name: 'paper-smp',
       state: 'READY',
       game_type: 'minecraft',
     } as Server;
 
     // Configura estrutura de arquivos para sampleServer
-    const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+    const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
     await fs.promises.mkdir(path.join(serverDir, 'mods'), { recursive: true });
     await fs.promises.mkdir(path.join(serverDir, 'world'), { recursive: true });
     await fs.promises.writeFile(path.join(serverDir, 'mods', 'jei-1.20.jar'), 'binary-mod-v1');
@@ -72,7 +74,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     await fs.promises.writeFile(path.join(serverDir, 'server.properties'), 'motd=Original');
 
     // Configura estrutura com todas as dimensões Paper para readyServer (D-02)
-    const readyDir = path.join(tempStorageRoot, serverDataDirectory(readyServer.subdomain));
+    const readyDir = path.join(tempStorageRoot, serverDataDirectory(readyServer.resource_name));
     await fs.promises.mkdir(path.join(readyDir, 'world', 'region'), { recursive: true });
     await fs.promises.mkdir(path.join(readyDir, 'world_nether', 'DIM-1', 'region'), {
       recursive: true,
@@ -135,7 +137,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('should purge mods directory without touching world or configuration files', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
 
       await service.purgeModsDirectory(sampleServer);
 
@@ -147,7 +149,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('should restore pre-update backup during rollback, recovering deleted mods and original files', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
 
       const backupPath = await service.createPreUpdateBackup(sampleServer);
 
@@ -175,7 +177,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(result).toBeDefined();
       expect(result.backupType).toBe('HOT');
       expect(result.serverId).toBe(readyServer.id);
-      expect(result.filename).toMatch(new RegExp(`^${readyServer.subdomain}_hot_\\d+\\.tar\\.gz$`));
+      expect(result.filename).toMatch(
+        new RegExp(`^${readyServer.resource_name}_hot_\\d+\\.tar\\.gz$`),
+      );
       expect(result.sizeBytes).toBeGreaterThan(0);
       expect(result.sha256Checksum).toHaveLength(64);
       expect(result.freezeDurationMs).toBeDefined();
@@ -188,7 +192,9 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // K8s Job lifecycle (RF-STO-01)
       expect(mockK8sService.createJob).toHaveBeenCalled();
-      expect(mockK8sService.waitForJobPodRunning).toHaveBeenCalled();
+      const jobName = mockK8sService.createJob.mock.calls[0][0].metadata.name;
+      expect(jobName).toMatch(/^backup-paper-smp-hot-\d+$/);
+      expect(mockK8sService.waitForJobPodRunning).toHaveBeenCalledWith(jobName, expect.anything());
       expect(mockK8sService.waitForJobCompletion).toHaveBeenCalled();
       expect(mockK8sService.deleteJob).toHaveBeenCalled();
 
@@ -202,7 +208,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('Critério de Aceite (D-01..D-04): O Tar contém todas as dimensões Paper e o snapshot não muda após save-on', async () => {
-      const readyDir = path.join(tempStorageRoot, serverDataDirectory(readyServer.subdomain));
+      const readyDir = path.join(tempStorageRoot, serverDataDirectory(readyServer.resource_name));
 
       // Simula escrita in-place da JVM após o religamento do save-on (D-03, D-04)
       mockConsoleDriver.saveOn.mockImplementation(async () => {
@@ -339,7 +345,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(result).toBeDefined();
       expect(result.backupType).toBe('COLD');
       expect(result.filename).toMatch(
-        new RegExp(`^${sampleServer.subdomain}_cold_\\d+\\.tar\\.gz$`),
+        new RegExp(`^${sampleServer.resource_name}_cold_\\d+\\.tar\\.gz$`),
       );
       expect(mockConsoleDriver.saveOff).not.toHaveBeenCalled();
       expect(mockConsoleDriver.saveOn).not.toHaveBeenCalled();
@@ -393,7 +399,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('deve restaurar com sucesso um backup íntegro gerando PRE_RESTORE prévio (RF-STO-04, D-05)', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
 
       const result = await service.restoreBackup(sampleServer, 'valid-backup.tar.gz');
 
@@ -426,7 +432,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('Critério de Aceite (D-05): Backup corrompido deixa /data 100% idêntico ao estado anterior (Rollback completo)', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
 
       // Simula diretório de sistema lost+found e dotfiles originais em /data
       await fs.promises.mkdir(path.join(serverDir, 'lost+found'), { recursive: true });
@@ -478,7 +484,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('deve disparar rollback quando validação de estrutura (RF-MG-07) reprovar o mundo restaurado', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
       const origLevelDat = await fs.promises.readFile(
         path.join(serverDir, 'world', 'level.dat'),
         'utf-8',
@@ -497,7 +503,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
     });
 
     it('deve abortar na Fase 1 sem tocar em /data se o checksum SHA-256 for divergente', async () => {
-      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.subdomain));
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
       const origLevelDat = await fs.promises.readFile(
         path.join(serverDir, 'world', 'level.dat'),
         'utf-8',
