@@ -3,6 +3,7 @@ import * as net from 'net';
 import { randomUUID } from 'crypto';
 
 import { AppConfigService } from '@config/app-config.service';
+import { MinecraftSlpProbeService } from './minecraft-slp-probe.service';
 
 export interface HealthBotLatencies {
   tcpConnectMs: number;
@@ -55,7 +56,16 @@ export class HealthBotProbeService {
   public static readonly PROTOCOL_VERSION = 765;
   public static readonly BOT_USERNAME = '__healthbot__';
 
-  constructor(private readonly configService: AppConfigService) {}
+  constructor(
+    private readonly configService: AppConfigService,
+    private readonly slpProbe: MinecraftSlpProbeService = new MinecraftSlpProbeService(),
+  ) {}
+
+  /** The login handshake must carry the server's own protocol: any other number is refused as incompatible. */
+  private async serverProtocol(host: string, port: number, timeoutMs: number): Promise<number> {
+    const status = await this.slpProbe.probe(host, port, timeoutMs);
+    return status.protocol ?? HealthBotProbeService.PROTOCOL_VERSION;
+  }
 
   /**
    * Executes a synthetic native Minecraft protocol E2E health check (RF-ARQ-30, Milestone F9).
@@ -66,6 +76,7 @@ export class HealthBotProbeService {
     const reportId = randomUUID();
     const port = target.port ?? 25565;
     const timeoutMs = target.timeoutMs ?? this.configService.healthBot?.timeoutMs ?? 5000;
+    const protocol = await this.serverProtocol(target.host, port, timeoutMs);
     const startTime = Date.now();
 
     const latencies: HealthBotLatencies = {
@@ -161,7 +172,7 @@ export class HealthBotProbeService {
 
           const handshakePayload = Buffer.concat([
             this.encodeVarInt(0x00), // Packet ID: Handshake
-            this.encodeVarInt(HealthBotProbeService.PROTOCOL_VERSION),
+            this.encodeVarInt(protocol),
             this.encodeString(target.host),
             portBuf,
             this.encodeVarInt(2), // Next state: 2 (Login)

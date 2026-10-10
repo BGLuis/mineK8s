@@ -71,6 +71,7 @@ describe('MinecraftSlpProbeService (RF-ARQ-04, C-14)', () => {
     const res = await probeService.probe('127.0.0.1', serverPort, 2000);
     expect(res.ready).toBe(true);
     expect(res.version).toBe('Paper 1.20.4');
+    expect(res.protocol).toBe(765);
     expect(res.playersOnline).toBe(3);
     expect(res.maxPlayers).toBe(20);
     expect(res.latencyMs).toBeGreaterThanOrEqual(0);
