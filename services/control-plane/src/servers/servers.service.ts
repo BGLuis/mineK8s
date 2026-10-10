@@ -318,6 +318,7 @@ export class ServersService implements OnApplicationBootstrap {
     server.state = 'STARTING';
     await this.serverRepo.save(server);
     await this.k8sService.startServer(server);
+    this.notifyGateway(server, 'STARTING');
 
     return { message: 'Instance starting' };
   }
@@ -331,6 +332,8 @@ export class ServersService implements OnApplicationBootstrap {
     server.state = 'STOPPED';
     await this.serverRepo.save(server);
     await this.k8sService.stopServer(server);
+    // The reconciler only reports a stop it sees as a transition, and this one is already STOPPED.
+    this.notifyGateway(server, 'STOPPED');
 
     return { message: 'Instance stopping' };
   }
@@ -352,6 +355,7 @@ export class ServersService implements OnApplicationBootstrap {
     await this.k8sService.restartServer(server);
     server.state = 'STARTING';
     await this.serverRepo.save(server);
+    this.notifyGateway(server, 'STARTING');
 
     return { message: 'Instance restarting' };
   }
