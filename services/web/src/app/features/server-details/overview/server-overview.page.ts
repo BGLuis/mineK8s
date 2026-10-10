@@ -173,7 +173,7 @@ function avatarColor(nick: string): string {
                 <mc-text-field
                   label="Hibernar após (minutos)"
                   inputmode="numeric"
-                  helpText="Minutos sem jogadores. 0 desliga a hibernação (máx. 1440)."
+                  helpText="Minutos sem jogadores até o mundo desligar sozinho. Com 0, ele nunca desliga (máx. 1440)."
                   [errorText]="sleepError() ?? ''"
                   [ngModel]="sleep()"
                   (ngModelChange)="sleep.set($event)"
