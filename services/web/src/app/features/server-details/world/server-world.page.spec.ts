@@ -21,6 +21,7 @@ const SETTINGS: MinecraftServerSettings = {
   rcon_port: 25575,
   enforce_secure_chat: false,
   online_mode: false,
+  language: 'pt-BR',
 };
 
 describe('ServerWorldPage', () => {
@@ -85,6 +86,22 @@ describe('ServerWorldPage', () => {
 
     expect(updateSettings).toHaveBeenCalledWith('srv-1', { max_players: 8 });
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it('sends the language of the gateway messages when it is changed', async () => {
+    await render('STOPPED');
+    const wrapper = Array.from(el.querySelectorAll('mc-select')).find((f) =>
+      f.textContent?.includes('Idioma'),
+    );
+    const select = wrapper?.querySelector('select') as HTMLSelectElement;
+
+    select.value = 'en';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    saveButton().click();
+    await fixture.whenStable();
+
+    expect(updateSettings).toHaveBeenCalledWith('srv-1', { language: 'en' });
   });
 
   it('does not save an invalid value', async () => {

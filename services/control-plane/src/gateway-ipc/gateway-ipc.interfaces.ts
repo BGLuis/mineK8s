@@ -27,6 +27,12 @@ export interface RouteUpdateEvent {
   auto_wake: boolean;
   /** `data:image/png;base64,...`; empty when the server has no icon. */
   favicon?: string;
+  /** Display name of the world; the gateway shows it in the server list and in refusals. */
+  name?: string;
+  /** 0 when unknown: the gateway assumes 20. */
+  max_players?: number;
+  /** `pt-BR` or `en`: language of the texts the gateway shows the client. */
+  language?: string;
 }
 
 export interface SessionLifecycleEvent {

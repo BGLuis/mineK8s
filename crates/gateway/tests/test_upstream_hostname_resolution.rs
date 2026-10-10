@@ -79,6 +79,9 @@ fn route_event(action: RouteAction, target: &str, status: &str) -> RouteUpdateEv
         listen_port: 0,
         auto_wake: true,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     }
 }
 

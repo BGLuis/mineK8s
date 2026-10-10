@@ -11,6 +11,7 @@ use minecraft_protocol::proxy_protocol::header::ProxyHeader;
 
 use crate::connection::ClientConnection;
 use crate::error::{GatewayError, Result};
+use crate::messages::Refusal;
 use crate::routing::{CachedServerRoute, UpstreamAddr};
 use crate::server::GatewayServer;
 use crate::session::manager::SessionManager;
@@ -154,13 +155,11 @@ pub async fn handle_login_proxy(
                 error = %err,
                 "Falha ao conectar no upstream"
             );
-            let reason = match &err {
-                GatewayError::UpstreamResolution { .. } => {
-                    "§cNão foi possível localizar o servidor de destino."
-                }
-                _ => "§cServidor indisponível no momento. Tente novamente em instantes.",
+            let refusal = match &err {
+                GatewayError::UpstreamResolution { .. } => Refusal::UpstreamNotFound,
+                _ => Refusal::UpstreamUnavailable,
             };
-            let _ = GatewayServer::send_login_disconnect(conn, reason).await;
+            let _ = GatewayServer::refuse(conn, refusal, route.language, &route.name).await;
             return Err(err);
         }
     };

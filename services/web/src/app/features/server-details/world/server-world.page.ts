@@ -30,6 +30,8 @@ import {
   DIFFICULTY_LABELS,
   GAMEMODES,
   GAMEMODE_LABELS,
+  LANGUAGES,
+  LANGUAGE_LABELS,
   WorldSettings,
   diffWorldSettings,
   toWorldSettings,
@@ -42,6 +44,10 @@ const RUNNING_STATES: ReadonlySet<ServerState> = new Set(['STARTING', 'READY', '
 const DIFFICULTY_OPTIONS: SelectOption[] = DIFFICULTIES.map((value) => ({
   value,
   label: DIFFICULTY_LABELS[value],
+}));
+const LANGUAGE_OPTIONS: SelectOption[] = LANGUAGES.map((value) => ({
+  value,
+  label: LANGUAGE_LABELS[value],
 }));
 const GAMEMODE_OPTIONS: SelectOption[] = GAMEMODES.map((value) => ({
   value,
@@ -79,9 +85,17 @@ const GAMEMODE_OPTIONS: SelectOption[] = GAMEMODES.map((value) => ({
             <mc-text-field
               label="MOTD (mensagem na lista de servidores)"
               autocomplete="off"
+              helpText="Use \\n para quebrar a linha e códigos de cor como §a (verde), §e (amarelo), §7 (cinza) e §l (negrito)."
               [errorText]="errors().motd ?? ''"
               [ngModel]="current.motd"
               (ngModelChange)="set('motd', $event)"
+            />
+            <mc-select
+              label="Idioma das mensagens do gateway"
+              hint="O Minecraft não informa o idioma do jogador antes de entrar, então o texto da lista e os avisos de recusa seguem este idioma, igual para todos."
+              [options]="languages"
+              [value]="current.language"
+              (valueChange)="set('language', $event)"
             />
             <div class="grid gap-5 sm:grid-cols-2">
               <mc-select
@@ -195,6 +209,7 @@ export class ServerWorldPage {
 
   protected readonly difficulties = DIFFICULTY_OPTIONS;
   protected readonly gamemodes = GAMEMODE_OPTIONS;
+  protected readonly languages = LANGUAGE_OPTIONS;
 
   protected readonly form = signal<WorldSettings | null>(null);
   protected readonly saving = signal(false);

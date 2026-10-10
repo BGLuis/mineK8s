@@ -108,7 +108,7 @@ async fn test_server_stopped_responds_hibernation_motd_without_touching_jvm() {
                     // Validação do MOTD sintético de hibernação
                     match status_json.description {
                         MotdDescription::Plain(text) => {
-                            assert!(text.contains("§8[§c💤 HIBERNANDO§8]"));
+                            assert!(text.contains("Hibernando"));
                             assert!(text.contains("Survival World"));
                         }
                         other => panic!("Esperado MotdDescription::Plain, recebido: {:?}", other),
@@ -120,7 +120,7 @@ async fn test_server_stopped_responds_hibernation_motd_without_touching_jvm() {
                         .players
                         .sample
                         .expect("Deve conter player sample");
-                    assert_eq!(sample[0].name, "§7[Clique para Conectar e Acordar]");
+                    assert_eq!(sample[0].name, "§e► §7Entre e o mundo será ligado");
                     break;
                 }
                 Err(_) => {

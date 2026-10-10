@@ -1,11 +1,12 @@
 use crate::identity::nickname_validator::{validate_minecraft_nickname, NicknameValidationError};
+use crate::messages::Refusal;
 use crate::routing::{AccessPolicy, CachedServerRoute};
 
 /// Resultado da avaliação do motor de decisão de acesso (RF-TS-02).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccessDecision {
     Allowed { admin_bypass: bool },
-    Denied { reason: &'static str },
+    Denied { reason: Refusal },
 }
 
 /// Resultado da validação de Anti-Impersonation (RF-ARQ-21).
@@ -31,7 +32,7 @@ impl AccessDecisionEngine {
     ) -> AccessDecision {
         if !is_active {
             return AccessDecision::Denied {
-                reason: "§cConta de usuário inativa ou revogada.",
+                reason: Refusal::AccountInactive,
             };
         }
 
@@ -43,7 +44,7 @@ impl AccessDecisionEngine {
         // 2. Servidor em manutenção técnica (C-01)
         if route.access_policy == AccessPolicy::Maintenance {
             return AccessDecision::Denied {
-                reason: "§cServidor em manutenção técnica programada.",
+                reason: Refusal::Maintenance,
             };
         }
 
@@ -68,7 +69,7 @@ impl AccessDecisionEngine {
                 };
             } else {
                 return AccessDecision::Denied {
-                    reason: "§cVocê não pertence aos grupos autorizados deste mundo.",
+                    reason: Refusal::NotInGroup,
                 };
             }
         }
@@ -81,13 +82,13 @@ impl AccessDecisionEngine {
                 };
             } else {
                 return AccessDecision::Denied {
-                    reason: "§cAcesso restrito nominalmente a convidados específicos.",
+                    reason: Refusal::NotInvited,
                 };
             }
         }
 
         AccessDecision::Denied {
-            reason: "§cAcesso não autorizado.",
+            reason: Refusal::NotAuthorized,
         }
     }
 
@@ -138,6 +139,7 @@ mod tests {
             game_type: "MINECRAFT".into(),
             auto_wake: true,
             favicon: None,
+            language: Default::default(),
         }
     }
 
@@ -177,7 +179,7 @@ mod tests {
         assert_eq!(
             player_dec,
             AccessDecision::Denied {
-                reason: "§cServidor em manutenção técnica programada.",
+                reason: Refusal::Maintenance,
             }
         );
 
@@ -202,7 +204,7 @@ mod tests {
         assert_eq!(
             denied,
             AccessDecision::Denied {
-                reason: "§cVocê não pertence aos grupos autorizados deste mundo.",
+                reason: Refusal::NotInGroup,
             }
         );
 
@@ -241,7 +243,7 @@ mod tests {
         assert_eq!(
             denied,
             AccessDecision::Denied {
-                reason: "§cAcesso restrito nominalmente a convidados específicos.",
+                reason: Refusal::NotInvited,
             }
         );
     }
