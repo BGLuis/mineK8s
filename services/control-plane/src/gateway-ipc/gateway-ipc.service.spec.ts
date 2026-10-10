@@ -7,6 +7,7 @@ import {
   RouteAction,
   RouteUpdateEvent,
   SessionEventType,
+  SessionLifecycleEvent,
 } from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
 import { PlayerSessionsService } from './player-sessions.service';
@@ -200,6 +201,18 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       expect(playerSessions.count('server-uuid-1')).toBe(2);
 
       await service.handleSessionEvent(sessionEvent(SessionEventType.DISCONNECTED, 's1', 'Steve'));
+
+      expect(playerSessions.count('server-uuid-1')).toBe(1);
+    });
+
+    it('conta como sessão o CONNECTED que chega sem event_type, porque o prost não serializa o zero', async () => {
+      const { event_type: _omitted, ...onTheWire } = sessionEvent(
+        SessionEventType.CONNECTED,
+        's1',
+        'Steve',
+      );
+
+      await service.handleSessionEvent(onTheWire as unknown as SessionLifecycleEvent);
 
       expect(playerSessions.count('server-uuid-1')).toBe(1);
     });

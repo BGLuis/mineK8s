@@ -254,7 +254,8 @@ export class GatewayIpcService {
       `Evento de sessão recebido do Gateway: [${event.event_type}] user=${event.minecraft_nick} server=${event.server_id} ip=${event.client_ip}`,
     );
 
-    switch (event.event_type) {
+    // O prost não serializa o zero do proto3 e o proto-loader não preenche defaults: CONNECTED (0) chega sem o campo.
+    switch (event.event_type ?? SessionEventType.CONNECTED) {
       case SessionEventType.WAKE_REQUESTED:
         await this.handleWakeRequest(event.server_id);
         break;
