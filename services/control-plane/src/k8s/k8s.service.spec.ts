@@ -123,6 +123,20 @@ describe('KubernetesService', () => {
       expect(props).toContain('level-seed=abc');
     });
 
+    it('inicia um servidor carregado sem minecraft_settings com a senha RCON e as configurações do banco', async () => {
+      const stored = { ...settings, rcon_password: 'senha-do-banco', motd: 'Do banco' };
+      const settingsRepo = { findOneBy: jest.fn(async () => stored) };
+      service = new KubernetesService(driver, mockConfigService, undefined, settingsRepo as any);
+      server.minecraft_settings = undefined;
+
+      await service.startServer(server);
+
+      expect(settingsRepo.findOneBy).toHaveBeenCalledWith({ server_id: server.id });
+      const props = readProps(server);
+      expect(props).toContain('rcon.password=senha-do-banco');
+      expect(props).toContain('motd=Do banco');
+    });
+
     it('não grava server.properties para jogos que não são Minecraft', async () => {
       server.game_type = 'terraria';
 

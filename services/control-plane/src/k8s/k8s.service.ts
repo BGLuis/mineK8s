@@ -2,6 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Readable } from 'node:stream';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
@@ -29,6 +31,9 @@ export class KubernetesService {
     private readonly configService: AppConfigService,
     @Optional()
     private readonly consoleDriver?: MinecraftRconConsoleDriver,
+    @Optional()
+    @InjectRepository(MinecraftServerSettings)
+    private readonly settingsRepo?: Repository<MinecraftServerSettings>,
   ) {}
 
   async provisionServer(server: Server, settings?: MinecraftServerSettings): Promise<void> {
@@ -78,9 +83,15 @@ export class KubernetesService {
     this.logger.log(
       `Starting server [${server.subdomain}]: applying deployment and scaling to 1...`,
     );
-    await this.writeServerProperties(server, server.minecraft_settings);
+    // Callers that loaded the server without the relation would otherwise start it on the defaults,
+    // including the default RCON password the control plane then fails to authenticate with.
+    const settings =
+      server.minecraft_settings ??
+      (await this.settingsRepo?.findOneBy({ server_id: server.id })) ??
+      undefined;
+    await this.writeServerProperties(server, settings);
     await this.driver.replaceDeployment(
-      ManifestBuilder.buildDeployment(server, server.minecraft_settings, this.configService),
+      ManifestBuilder.buildDeployment(server, settings, this.configService),
     );
     await this.driver.scaleDeployment(
       serverWorkloadName(server.resource_name),
