@@ -48,14 +48,24 @@ import { SERVER_ICON_ENCODER, SERVER_ICON_SIZE } from './server-icon';
             partida.
           </p>
 
+          <!-- The native control is nearly invisible on the dark theme; the button below opens it. -->
           <input
+            #picker
             type="file"
             accept="image/*"
-            class="t-body-md"
+            class="sr-only"
             aria-label="Escolher a imagem do ícone"
             [disabled]="busy()"
             (change)="choose($event)"
           />
+          <div class="flex flex-wrap items-center gap-3">
+            <mc-button variant="light" [disabled]="busy()" (click)="picker.click()">
+              Escolher imagem
+            </mc-button>
+            <span class="t-body-md min-w-0 truncate text-text-muted">
+              {{ pendingName() ?? 'Nenhuma imagem escolhida' }}
+            </span>
+          </div>
 
           <div class="flex flex-wrap gap-3">
             <mc-button variant="primary" [disabled]="!pending() || busy()" (click)="upload()">
@@ -82,7 +92,8 @@ export class ServerIconPanel {
   /** Object URL of the icon the server has now. */
   protected readonly current = signal<string | null>(null);
   /** The converted image the admin picked and has not sent yet. */
-  protected readonly pending = signal<{ blob: Blob; url: string } | null>(null);
+  protected readonly pending = signal<{ blob: Blob; url: string; name: string } | null>(null);
+  protected readonly pendingName = () => this.pending()?.name ?? null;
   protected readonly shown = () => this.pending()?.url ?? this.current();
 
   private readonly urls = new Set<string>();
@@ -109,7 +120,7 @@ export class ServerIconPanel {
     }
     try {
       const blob = await this.encode(file);
-      this.setPending({ blob, url: this.track(blob) });
+      this.setPending({ blob, url: this.track(blob), name: file.name });
     } catch (error) {
       this.toast.error(`Não foi possível ler essa imagem. ${errorReason(error)}`);
     }
@@ -180,7 +191,7 @@ export class ServerIconPanel {
     }
   }
 
-  private setPending(next: { blob: Blob; url: string } | null): void {
+  private setPending(next: { blob: Blob; url: string; name: string } | null): void {
     const previous = this.pending();
     this.pending.set(next);
     if (previous && previous.url !== next?.url) {

@@ -84,6 +84,25 @@ describe('ServerIconPanel', () => {
     expect(button('Enviar').disabled).toBe(true);
   });
 
+  it('has a visible button that opens the file picker, since the native control is hard to see on the dark theme', async () => {
+    await render(null);
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const open = vi.spyOn(input, 'click');
+
+    button('Escolher imagem').click();
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('Nenhuma imagem escolhida');
+  });
+
+  it('shows the name of the chosen file next to the button', async () => {
+    await render(null);
+
+    await pick('foto-do-mundo.jpg');
+
+    expect(el.textContent).toContain('foto-do-mundo.jpg');
+  });
+
   it('previews the converted image and sends that one, not the original file', async () => {
     await render(null);
 
