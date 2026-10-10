@@ -1,4 +1,5 @@
 import * as net from 'net';
+import * as zlib from 'zlib';
 import { HealthBotProbeService } from './health-bot-probe.service';
 import { AppConfigService } from '@config/app-config.service';
 
@@ -246,5 +247,97 @@ describe('HealthBotProbeService (RF-ARQ-30, Milestone F9)', () => {
     expect(report.error).toBeUndefined();
     expect(report.healthy).toBe(true);
     expect(handshakes).toContainEqual({ protocol: 777, nextState: 2 });
+  });
+  describe('servers with network compression', () => {
+    const frame = (payload: Buffer) =>
+      Buffer.concat([probeService.encodeVarInt(payload.length), payload]);
+    const loginSuccess = () =>
+      Buffer.concat([
+        probeService.encodeVarInt(0x02),
+        Buffer.alloc(16, 1),
+        probeService.encodeString('__healthbot__'),
+        probeService.encodeVarInt(0),
+      ]);
+    const statusJson = JSON.stringify({
+      version: { name: '26.3', protocol: 777 },
+      players: { online: 0, max: 20 },
+    });
+
+    const listen = async (reply: (socket: net.Socket) => void) => {
+      server = net.createServer((socket) => {
+        let answered = false;
+        socket.on('data', (chunk) => {
+          // The handshake is always the first packet of a connection; later chunks are Login Start or Status Request.
+          if (answered) return;
+          answered = true;
+          const handshake = probeService.decodeVarInt(chunk, 0);
+          let offset = handshake.bytesRead;
+          offset += probeService.decodeVarInt(chunk, offset).bytesRead;
+          offset += probeService.decodeVarInt(chunk, offset).bytesRead;
+          offset += probeService.decodeString(chunk, offset).bytesRead + 2;
+          if (probeService.decodeVarInt(chunk, offset).value === 1) {
+            socket.write(
+              frame(
+                Buffer.concat([
+                  probeService.encodeVarInt(0x00),
+                  probeService.encodeString(statusJson),
+                ]),
+              ),
+            );
+          } else {
+            reply(socket);
+          }
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server!.listen(0, '127.0.0.1', () => {
+          serverPort = (server!.address() as net.AddressInfo).port;
+          resolve();
+        });
+      });
+    };
+
+    const probe = () =>
+      probeService.probe({
+        serverId: 'srv-compressed',
+        subdomain: 'sekiro',
+        host: '127.0.0.1',
+        port: serverPort,
+        timeoutMs: 2000,
+      });
+
+    it('reads Login Success after Set Compression, where every packet gains a data-length prefix', async () => {
+      await listen((socket) => {
+        socket.write(
+          frame(Buffer.concat([probeService.encodeVarInt(0x03), probeService.encodeVarInt(256)])),
+        );
+        // Below the threshold: data length 0 and the packet as is.
+        socket.write(frame(Buffer.concat([probeService.encodeVarInt(0), loginSuccess()])));
+      });
+
+      const report = await probe();
+
+      expect(report.error).toBeUndefined();
+      expect(report.healthy).toBe(true);
+      expect(report.stage).toBe('login_success');
+      expect(report.onlineMode).toBe(false);
+    });
+
+    it('inflates a packet the server did compress', async () => {
+      await listen((socket) => {
+        socket.write(
+          frame(Buffer.concat([probeService.encodeVarInt(0x03), probeService.encodeVarInt(0)])),
+        );
+        const body = loginSuccess();
+        socket.write(
+          frame(Buffer.concat([probeService.encodeVarInt(body.length), zlib.deflateSync(body)])),
+        );
+      });
+
+      const report = await probe();
+
+      expect(report.error).toBeUndefined();
+      expect(report.stage).toBe('login_success');
+    });
   });
 });

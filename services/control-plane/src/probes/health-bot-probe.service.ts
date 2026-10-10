@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as net from 'net';
+import * as zlib from 'zlib';
 import { randomUUID } from 'crypto';
 
 import { AppConfigService } from '@config/app-config.service';
@@ -209,6 +210,8 @@ export class HealthBotProbeService {
       });
 
       let responseBuffer = Buffer.alloc(0);
+      // Set by the server's Set Compression; from then on every packet carries a data-length prefix.
+      let compressionThreshold = -1;
 
       socket.on('data', (chunk) => {
         responseBuffer = Buffer.concat([responseBuffer, chunk]);
@@ -241,8 +244,19 @@ export class HealthBotProbeService {
             }
 
             // Extract complete framed packet
-            const packetData = responseBuffer.subarray(offset, offset + packetLength);
+            let packetData = responseBuffer.subarray(offset, offset + packetLength);
             responseBuffer = responseBuffer.subarray(offset + packetLength);
+
+            if (compressionThreshold >= 0) {
+              const dataLength = this.decodeVarInt(packetData, 0);
+              const body = packetData.subarray(dataLength.bytesRead);
+              packetData = dataLength.value === 0 ? body : zlib.inflateSync(body);
+            }
+
+            if (currentState === ConnectionState.LOGIN && packetData[0] === 0x03) {
+              compressionThreshold = this.decodeVarInt(packetData, 1).value;
+              continue;
+            }
 
             if (latencies.handshakeLatencyMs === 0) {
               latencies.handshakeLatencyMs = Date.now() - handshakeSentTime;
@@ -268,7 +282,11 @@ export class HealthBotProbeService {
 
                   // In modern Minecraft (1.20.2+), respond with Login Acknowledged (0x03)
                   try {
-                    const ackPayload = this.encodeVarInt(0x03);
+                    // Under compression an uncompressed packet starts with a data length of 0.
+                    const ackPayload = Buffer.concat([
+                      ...(compressionThreshold >= 0 ? [this.encodeVarInt(0)] : []),
+                      this.encodeVarInt(0x03),
+                    ]);
                     const ackPacket = Buffer.concat([
                       this.encodeVarInt(ackPayload.length),
                       ackPayload,
