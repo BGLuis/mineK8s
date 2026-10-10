@@ -46,6 +46,9 @@ export async function writeServerProperties(
   props.set('enable-rcon', 'true');
   props.set('rcon.port', String(rcon.port));
   props.set('rcon.password', rcon.password);
+  // The gateway decides who joins; a vanilla whitelist on top would turn every player away.
+  props.set('white-list', 'false');
+  props.set('enforce-whitelist', 'false');
   props.set('online-mode', String(settings?.online_mode ?? false));
   props.set('enforce-secure-chat', String(settings?.enforce_secure_chat ?? false));
   // Resolução C-08: max-tick-time=-1 para modpacks, 60000 para vanilla
