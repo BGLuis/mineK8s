@@ -9,6 +9,9 @@ import { AppConfigService } from '@config/app-config.service';
 import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, K8sPodStats } from '../k8s.interface';
 import { memoryQuantityToBytes } from '../memory-quantity';
 
+// @kubernetes/client-node 2.x throws ApiException, which carries the HTTP status in `code`.
+const isNotFound = (err: any): boolean => err?.code === 404;
+
 @Injectable()
 export class RealKubernetesDriver implements IKubernetesDriver {
   private readonly logger = new Logger(RealKubernetesDriver.name);
@@ -99,7 +102,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         namespace,
       });
     } catch (err: any) {
-      if (err?.statusCode !== 404) throw err;
+      if (!isNotFound(err)) throw err;
     }
   }
 
@@ -113,7 +116,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         namespace,
       });
     } catch (err: any) {
-      if (err?.statusCode !== 404) throw err;
+      if (!isNotFound(err)) throw err;
     }
   }
 
@@ -127,7 +130,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         namespace,
       });
     } catch (err: any) {
-      if (err?.statusCode !== 404) throw err;
+      if (!isNotFound(err)) throw err;
     }
   }
 
@@ -152,7 +155,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         },
       };
     } catch (err: any) {
-      if (err?.statusCode === 404) return null;
+      if (isNotFound(err)) return null;
       throw err;
     }
   }
@@ -240,7 +243,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         },
       };
     } catch (err: any) {
-      if (err?.statusCode === 404) return null;
+      if (isNotFound(err)) return null;
       throw err;
     }
   }
@@ -256,7 +259,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         propagationPolicy: 'Foreground',
       });
     } catch (err: any) {
-      if (err?.statusCode !== 404) throw err;
+      if (!isNotFound(err)) throw err;
     }
   }
 
