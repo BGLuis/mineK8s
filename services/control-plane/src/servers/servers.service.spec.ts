@@ -196,6 +196,33 @@ describe('ServersService', () => {
       expect(settingsDb.size).toBe(1);
     });
 
+    it('publishes the route to the gateway once the server is provisioned, since the gateway ignores status changes for routes it does not know', async () => {
+      const result = await service.create({ name: 'Hub', subdomain: 'hub' });
+
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(result.id);
+      const [provisionOrder] = mockK8sService.provisionServer.mock.invocationCallOrder;
+      const [publishOrder] = mockGatewayIpcService.publishRoute.mock.invocationCallOrder;
+      expect(publishOrder).toBeGreaterThan(provisionOrder);
+    });
+
+    it('does not publish a route for a server whose provisioning failed', async () => {
+      mockK8sService.provisionServer.mockRejectedValueOnce(new Error('quota exceeded'));
+
+      await expect(service.create({ name: 'Hub', subdomain: 'hub' })).rejects.toThrow(
+        'quota exceeded',
+      );
+
+      expect(mockGatewayIpcService.publishRoute).not.toHaveBeenCalled();
+    });
+
+    it('still creates the server when the gateway is unreachable', async () => {
+      mockGatewayIpcService.publishRoute.mockRejectedValue(new Error('stream fechado'));
+
+      const result = await service.create({ name: 'Hub', subdomain: 'hub' });
+
+      expect(result.status).toBe('STOPPED');
+    });
+
     it('refuses to create when the disk is full, before saving anything or touching k8s', async () => {
       const diskFull = new HttpException({ code: 'DISK_USAGE_BLOCKED', message: 'full' }, 507);
       mockNodeMetrics.assertDiskAllowsCreation.mockRejectedValue(diskFull);

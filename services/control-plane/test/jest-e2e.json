@@ -5,7 +5,9 @@
   "transform": {
     "^.+\\.(t|j)s$": "@swc/jest"
   },
-  "transformIgnorePatterns": ["/node_modules/(?!(@nestjs|es-toolkit)/)"],
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(@nestjs|es-toolkit|@kubernetes/client-node|openid-client|oauth4webapi|jose|socks-proxy-agent|agent-base)/)"
+  ],
   "setupFiles": ["<rootDir>/test/jest-setup.ts"],
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/src/$1",

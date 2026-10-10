@@ -175,6 +175,8 @@ export class ServersService implements OnApplicationBootstrap {
       throw err;
     }
 
+    await this.republishRoute(savedServer);
+
     return {
       id: savedServer.id,
       name: savedServer.name,

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Invite } from '../database/entities/invite.entity';
@@ -38,7 +38,7 @@ import { TailscaleController } from './tailscale.controller';
       Server,
     ]),
     ConsoleModule,
-    GatewayIpcModule,
+    forwardRef(() => GatewayIpcModule),
   ],
   controllers: [TailscaleController],
   providers: [
