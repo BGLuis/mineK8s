@@ -263,14 +263,15 @@ export class ServerOverviewPage {
 
   private readonly fetchedPlayers = toSignal(
     toObservable(
+      // The store replaces `server` on every refresh, so the list is reloaded as players come and go.
       computed(() => {
         const server = this.store.server();
-        return server?.state === 'READY' ? server.id : null;
+        return server?.state === 'READY' ? server : null;
       }),
     ).pipe(
-      switchMap((id) =>
-        id
-          ? this.serversApi.players(id).pipe(
+      switchMap((server) =>
+        server
+          ? this.serversApi.players(server.id).pipe(
               map((result) => result.players),
               catchError(() => of([] as OnlinePlayer[])),
             )

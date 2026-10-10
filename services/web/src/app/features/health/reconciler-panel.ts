@@ -1,10 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { skip } from 'rxjs';
 
 import { HealthApi, ReconcilerStatus, ReconciliationSummary } from '../../core/api';
+import { visiblePoll } from '../../core/polling/visible-poll';
 import { McBanner, McButton, McPanel, ToastService } from '../../ui';
 import { formatRelative } from '../access/format';
 import { apiErrorMessage } from '../join/api-error';
 import { divergences, formatDuration, isIdle } from './health-views';
+
+const REFRESH_MS = 30_000;
 
 @Component({
   selector: 'mc-reconciler-panel',
@@ -90,6 +95,17 @@ export class ReconcilerPanel {
 
   constructor() {
     this.load();
+    // The reconciler runs every 30 s on its own.
+    visiblePoll(REFRESH_MS)
+      .pipe(skip(1), takeUntilDestroyed())
+      .subscribe(() => this.refresh());
+  }
+
+  private refresh(): void {
+    this.health.reconcilerStatus().subscribe({
+      next: (status) => this.status.set(status),
+      error: () => undefined,
+    });
   }
 
   protected load(): void {

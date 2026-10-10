@@ -6,6 +6,7 @@ import {
   NotFoundException,
   OnApplicationBootstrap,
   OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -15,6 +16,7 @@ import { CONSOLE_DRIVER_TOKEN, ConsoleDriver } from '@console/console-driver.int
 import { Server } from '@database/entities/server.entity';
 import { KubernetesService } from '@k8s/k8s.service';
 
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { ServerStatsDto, StatsSample } from './dto/server-stats.dto';
 import { parseTickQuery, parseTpsCommand } from './tick-output';
 
@@ -45,6 +47,7 @@ export class ServerStatsService implements OnApplicationBootstrap, OnModuleDestr
     @Inject(CONSOLE_DRIVER_TOKEN)
     private readonly console: ConsoleDriver,
     private readonly config: AppConfigService,
+    @Optional() private readonly activity?: ServerActivityBus,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -131,6 +134,7 @@ export class ServerStatsService implements OnApplicationBootstrap, OnModuleDestr
       memoryUsedMb: pod.memoryUsedMb,
     });
     this.samples.set(server.id, kept);
+    this.activity?.publish(server.id, 'stats');
   }
 
   /** `tps` exists on Paper and Purpur; `tick query` on vanilla 1.20.3+ and gives MSPT. Either may be missing. */

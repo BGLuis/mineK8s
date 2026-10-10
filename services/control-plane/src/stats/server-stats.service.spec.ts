@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
+import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { ServerStatsService } from './server-stats.service';
 
 const TICK_QUERY = [
@@ -14,6 +15,7 @@ describe('ServerStatsService', () => {
   let commands: Record<string, string | Error>;
   let podStats: any;
   let service: ServerStatsService;
+  let published: { id: string; kind: string }[];
 
   beforeEach(() => {
     servers = [ready];
@@ -41,11 +43,15 @@ describe('ServerStatsService', () => {
         return output;
       }),
     };
+    const bus = new ServerActivityBus();
+    published = [];
+    bus.events$.subscribe((event) => published.push(event));
     service = new ServerStatsService(
       repo as any,
       k8s as any,
       consoleDriver as any,
       { isTest: true, serverStatsIntervalMs: 60000 } as any,
+      bus,
     );
   });
 
@@ -63,6 +69,17 @@ describe('ServerStatsService', () => {
     });
     expect(stats.uptimeSeconds).toBeGreaterThanOrEqual(90);
     expect(stats.history).toHaveLength(1);
+  });
+
+  it('avisa o painel a cada amostra nova, e não quando nada respondeu', async () => {
+    await service.collect();
+    expect(published).toEqual([{ id: 'srv-1', kind: 'stats' }]);
+
+    published.length = 0;
+    commands = { tps: new Error('timeout'), 'tick query': new Error('timeout') };
+    podStats = { startedAt: null, memoryUsedBytes: null, memoryLimitBytes: null };
+    await service.collect();
+    expect(published).toEqual([]);
   });
 
   it('accumulates one sample per collection', async () => {

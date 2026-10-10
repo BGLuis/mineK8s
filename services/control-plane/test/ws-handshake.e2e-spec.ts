@@ -18,6 +18,7 @@ import { UserServerAccess } from '../src/database/entities/user-server-access.en
 import { KubernetesService } from '../src/k8s/k8s.service';
 import { K8sLogStreamerService } from '../src/logging/k8s-log-streamer.service';
 import { ServersStateGateway } from '../src/server-events/servers-state.gateway';
+import { ServerActivityBus } from '../src/server-events/server-activity.bus';
 import { TasksGateway } from '../src/tasks/tasks.gateway';
 import { TerminalGateway } from '../src/terminal/terminal.gateway';
 
@@ -68,6 +69,7 @@ describe('Socket.IO namespaces: origin and handshake authentication (#92)', () =
         { provide: CONSOLE_DRIVER_TOKEN, useValue: {} },
         { provide: K8sLogStreamerService, useValue: {} },
         { provide: KubernetesService, useValue: {} },
+        ServerActivityBus,
       ],
     }).compile();
 

@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { rxResource } from '@angular/core/rxjs-interop';
-import { catchError, of } from 'rxjs';
+import { rxResource, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, of, skip } from 'rxjs';
 
 import { HealthApi, HealthBotReport, ServersApi } from '../../core/api';
 import { McBanner, McButton, McIcon, McPanel, McTable, ToastService } from '../../ui';
+import { visiblePoll } from '../../core/polling/visible-poll';
 import { apiErrorMessage } from '../join/api-error';
 import { BotRow, TONE_TEXT, botRow } from './health-views';
+
+const REFRESH_MS = 30_000;
 
 @Component({
   selector: 'mc-bot-panel',
@@ -119,6 +122,13 @@ export class BotPanel {
       ),
     );
   });
+
+  constructor() {
+    // The bot runs on its own schedule, so new reports arrive without any click.
+    visiblePoll(REFRESH_MS)
+      .pipe(skip(1), takeUntilDestroyed())
+      .subscribe(() => this.overview.reload());
+  }
 
   protected errorText(): string {
     return apiErrorMessage(this.overview.error(), 'Tente de novo em instantes.');

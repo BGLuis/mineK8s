@@ -47,7 +47,13 @@ export class ServerDetailStore {
         filter((id): id is string => id !== null),
         switchMap((id) =>
           merge(
-            liveRefresh(this.socket.signals(), POLL_MS, (event) => event.id === id),
+            // Besides state transitions, the control plane pushes when players, backups or stats change.
+            liveRefresh(
+              this.socket.signals(),
+              POLL_MS,
+              (event) => event.id === id,
+              (event) => event.id === id,
+            ),
             this.refresh$,
           ).pipe(exhaustMap(() => this.fetch(id))),
         ),

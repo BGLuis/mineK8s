@@ -20,8 +20,13 @@ describe('liveRefresh', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  const watch = (accept?: (event: { id: string }) => boolean) =>
-    liveRefresh(signals, 10_000, accept as never).subscribe(() => reloads++);
+  const watch = (
+    accept?: (event: { id: string }) => boolean,
+    acceptActivity?: (event: { id: string; kind: string }) => boolean,
+  ) =>
+    liveRefresh(signals, 10_000, accept as never, acceptActivity as never).subscribe(
+      () => reloads++,
+    );
 
   it('polls like before while the socket is down', async () => {
     watch();
@@ -93,5 +98,51 @@ describe('liveRefresh', () => {
 
     await vi.advanceTimersByTimeAsync(10_000);
     expect(reloads).toBe(2);
+  });
+
+  describe('serverActivity pushes', () => {
+    const activity = (id: string, kind = 'players'): ServerSocketSignal => ({
+      type: 'activity',
+      event: { id, kind } as never,
+    });
+
+    it('reload on an accepted activity push, ignoring the rest', async () => {
+      watch(undefined, (event) => event.id === 'srv-1');
+      signals.next({ type: 'connected' });
+      await vi.advanceTimersByTimeAsync(0);
+      reloads = 0;
+
+      signals.next(activity('srv-2'));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(reloads).toBe(0);
+
+      signals.next(activity('srv-1'));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(reloads).toBe(1);
+    });
+
+    it('ignores activity by default, so screens that only follow state do not reload', async () => {
+      watch();
+      signals.next({ type: 'connected' });
+      await vi.advanceTimersByTimeAsync(0);
+      reloads = 0;
+
+      signals.next(activity('srv-1'));
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(reloads).toBe(0);
+    });
+
+    it('does not take an activity push for a reconnection and restart polling', async () => {
+      watch();
+      signals.next({ type: 'connected' });
+      await vi.advanceTimersByTimeAsync(0);
+      reloads = 0;
+
+      signals.next(activity('srv-1'));
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(reloads).toBe(0);
+    });
   });
 });
