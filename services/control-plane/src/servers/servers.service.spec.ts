@@ -15,6 +15,7 @@ describe('ServersService', () => {
   let service: ServersService;
   let mockServerRepo: any;
   let mockSettingsRepo: any;
+  let mockIconService: any;
   let mockAuditRepo: any;
   let mockK8sService: any;
   let mockBackupService: any;
@@ -66,6 +67,12 @@ describe('ServersService', () => {
         delete entity.id;
         return entity;
       }),
+    };
+
+    mockIconService = {
+      get: jest.fn(async () => Buffer.from('png')),
+      set: jest.fn().mockResolvedValue(undefined),
+      remove: jest.fn().mockResolvedValue(undefined),
     };
 
     mockSettingsRepo = {
@@ -175,6 +182,7 @@ describe('ServersService', () => {
       mockDnsDriver as any,
       playerSessions,
       mockNodeMetrics as any,
+      mockIconService as any,
     );
   });
 
@@ -584,6 +592,42 @@ describe('ServersService', () => {
       });
 
       await expect(service.delete('srv-1')).resolves.toEqual({ message: 'Instance removed' });
+    });
+  });
+
+  describe('ícone da lista de servidores', () => {
+    it('grava o ícone e republica a rota, para o Gateway mostrá-lo com o servidor dormindo', async () => {
+      const image = Buffer.from('png');
+
+      await service.setIcon('srv-1', image);
+
+      expect(mockIconService.set).toHaveBeenCalledWith('srv-1', image);
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('não republica a rota se a imagem for recusada', async () => {
+      mockIconService.set.mockRejectedValue(new Error('The icon must be a PNG image'));
+
+      await expect(service.setIcon('srv-1', Buffer.from('x'))).rejects.toThrow(/PNG/);
+
+      expect(mockGatewayIpcService.publishRoute).not.toHaveBeenCalled();
+    });
+
+    it('remove o ícone e republica a rota sem ele', async () => {
+      await service.removeIcon('srv-1');
+
+      expect(mockIconService.remove).toHaveBeenCalledWith('srv-1');
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('o ícone fica salvo mesmo se o Gateway estiver fora do ar', async () => {
+      mockGatewayIpcService.publishRoute.mockRejectedValue(new Error('stream fechado'));
+
+      await expect(service.setIcon('srv-1', Buffer.from('png'))).resolves.toBeDefined();
+    });
+
+    it('devolve a imagem gravada', async () => {
+      expect((await service.getIcon('srv-1')).toString()).toBe('png');
     });
   });
 

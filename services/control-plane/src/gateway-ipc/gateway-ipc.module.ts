@@ -9,6 +9,7 @@ import { UserServerAccess } from '@database/entities/user-server-access.entity';
 
 import { KubernetesModule } from '@k8s/k8s.module';
 
+import { ServerIconModule } from '../servers/server-icon.module';
 import { ServerActivityModule } from '../server-events/server-activity.module';
 import { TailscaleModule } from '../tailscale/tailscale.module';
 
@@ -21,6 +22,7 @@ import { PlayerSessionsService } from './player-sessions.service';
     TypeOrmModule.forFeature([Server, User, ServerGroup, UserGroup, UserServerAccess]),
     KubernetesModule,
     ServerActivityModule,
+    ServerIconModule,
     // TailscaleModule também importa este módulo (DevicesService precisa do GatewayIpcService).
     forwardRef(() => TailscaleModule),
   ],

@@ -21,6 +21,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let mockUserGroupRepo: any;
   let mockK8sService: any;
   let playerSessions: PlayerSessionsService;
+  let icons: { dataUri: jest.Mock };
 
   beforeEach(() => {
     mockServerRepo = {
@@ -98,6 +99,7 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     };
 
     playerSessions = new PlayerSessionsService();
+    icons = { dataUri: jest.fn(async () => null) };
 
     service = new GatewayIpcService(
       mockServerRepo,
@@ -109,7 +111,21 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       mockK8sService,
       playerSessions,
       { kubernetes: { namespace: 'minekubernetes' } } as any,
+      icons as any,
     );
+  });
+
+  describe('Ícone da lista de servidores', () => {
+    it('leva o ícone do servidor na rota, para o Gateway responder o status enquanto a JVM dorme', async () => {
+      icons.dataUri.mockImplementation(async (server: any) =>
+        server.id === 'server-uuid-1' ? 'data:image/png;base64,AAAA' : null,
+      );
+
+      const snapshot = await service.getInitialRoutingSnapshot();
+
+      expect(snapshot.routes[0].favicon).toBe('data:image/png;base64,AAAA');
+      expect(snapshot.routes[1].favicon).toBe('');
+    });
   });
 
   describe('GetInitialRoutingSnapshot (RF-GW-16, RF-MG-04)', () => {
@@ -152,6 +168,16 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       allocated_port: 25565,
       minecraft_settings: null,
     };
+
+    it('leva o ícone novo na rota republicada', async () => {
+      icons.dataUri.mockResolvedValue('data:image/png;base64,BBBB');
+      mockServerRepo.findOne = jest.fn(async () => baseServer);
+      const emitted = firstValueFrom(service.getRouteUpdatesStream().pipe(take(1)));
+
+      await service.publishRoute('server-uuid-1');
+
+      expect((await emitted).favicon).toBe('data:image/png;base64,BBBB');
+    });
 
     it('envia a política configurada com os grupos e usuários permitidos', async () => {
       mockServerRepo.findOne = jest.fn(async () => baseServer);

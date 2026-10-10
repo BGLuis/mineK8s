@@ -20,6 +20,7 @@ import { TasksModule } from '../tasks/tasks.module';
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
+import { ServerIconModule } from './server-icon.module';
 import { ServersBackupService } from './servers-backup.service';
 import { MinecraftStorageProvider } from './providers/minecraft-storage.provider';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
@@ -41,6 +42,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     ProbesModule,
     GatewayIpcModule,
     ServerActivityModule,
+    ServerIconModule,
     DnsModule,
     NodeModule,
     TasksModule,
