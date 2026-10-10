@@ -38,6 +38,7 @@ export class ServerSettingsDto {
   rcon_port: number;
   enforce_secure_chat: boolean;
   online_mode: boolean;
+  language: string;
 }
 
 export class ServerDetailDto extends ServerSummaryDto {
@@ -64,5 +65,6 @@ export function toServerSettingsDto(settings: MinecraftServerSettings): ServerSe
     rcon_port: settings.rcon_port,
     enforce_secure_chat: settings.enforce_secure_chat,
     online_mode: settings.online_mode,
+    language: settings.language,
   };
 }

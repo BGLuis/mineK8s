@@ -5,6 +5,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import {
   DEFAULT_RCON_PASSWORD,
   DEFAULT_RCON_PORT,
+  escapeMotd,
   resolveRconCredentials,
   writeServerProperties,
 } from './server-properties';
@@ -133,6 +134,58 @@ describe('writeServerProperties (#153)', () => {
 
     const props = readProps();
     expect(props.get('rcon.password')).toBe('abc123');
-    expect(props.get('motd')).toBe('oi rcon.password=roubada');
+    // The break is kept for the MOTD's second line, as an escape that stays on the same line.
+    expect(props.get('motd')).toBe('oi\\nrcon.password=roubada');
+  });
+});
+
+describe('escapeMotd', () => {
+  it('turns a line break, typed or real, into the escape the server reads as a second line', () => {
+    expect(escapeMotd('Sekiro\\nBom jogo')).toBe('Sekiro\\nBom jogo');
+    expect(escapeMotd('Sekiro\nBom jogo')).toBe('Sekiro\\nBom jogo');
+    expect(escapeMotd('Sekiro\r\nBom jogo')).toBe('Sekiro\\nBom jogo');
+  });
+
+  it('writes the colour sign and accents as unicode escapes, readable whatever the file encoding', () => {
+    expect(escapeMotd('§aOlá')).toBe('\\u00a7aOl\\u00e1');
+  });
+
+  it('keeps a backslash from escaping what follows it', () => {
+    expect(escapeMotd('a\\b')).toBe('a\\\\b');
+  });
+
+  it('leaves plain text as it is', () => {
+    expect(escapeMotd('Bem-vindo ao mundo!')).toBe('Bem-vindo ao mundo!');
+  });
+});
+
+describe('o MOTD no server.properties', () => {
+  it('chega ao arquivo em duas linhas, com cores, sem depender da codificação', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'motd-'));
+    try {
+      await writeServerProperties(dir, {
+        settings: {
+          motd: '§a§lSekiro\\n§7Entre e bom jogo!',
+          max_players: 20,
+          difficulty: 'normal',
+          gamemode: 'survival',
+          hardcore: false,
+          pvp: true,
+          spawn_protection: 16,
+          view_distance: 10,
+          simulation_distance: 10,
+          rcon_port: 25575,
+          rcon_password: 'abc123',
+          enforce_secure_chat: false,
+          online_mode: false,
+        } as MinecraftServerSettings,
+        isModpack: false,
+      });
+
+      const file = fs.readFileSync(path.join(dir, 'server.properties'), 'utf-8');
+      expect(file).toContain('motd=\\u00a7a\\u00a7lSekiro\\n\\u00a77Entre e bom jogo!');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

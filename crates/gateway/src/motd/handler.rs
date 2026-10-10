@@ -21,9 +21,10 @@ pub async fn handle_status_ping(
     mut conn: ClientConnection,
     route: Option<CachedServerRoute>,
     status_cache: &StatusCache,
+    client_protocol: i32,
 ) -> Result<()> {
     // 1. Obter o JSON de resposta (em cache, sintetizado pelo Gateway ou consultado na JVM upstream)
-    let json_response = resolve_status_json(&route, status_cache).await;
+    let json_response = resolve_status_json(&route, status_cache, client_protocol).await;
 
     // 2. Enviar Status Response (Packet ID 0x00)
     let status_pkt = StatusResponsePacket::new(json_response);
@@ -81,6 +82,7 @@ pub async fn handle_status_ping(
 async fn resolve_status_json(
     route: &Option<CachedServerRoute>,
     status_cache: &StatusCache,
+    client_protocol: i32,
 ) -> String {
     match route {
         Some(r) if r.status == ServerInstanceStatus::Ready => {
@@ -102,11 +104,11 @@ async fn resolve_status_json(
             }
 
             // Fallback sintético se a JVM não responder a tempo
-            let synthetic = build_synthetic_status(Some(r));
+            let synthetic = build_synthetic_status(Some(r), client_protocol);
             serde_json::to_string(&synthetic).unwrap_or_default()
         }
         other => {
-            let synthetic = build_synthetic_status(other.as_ref());
+            let synthetic = build_synthetic_status(other.as_ref(), client_protocol);
             serde_json::to_string(&synthetic).unwrap_or_default()
         }
     }

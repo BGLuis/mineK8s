@@ -15,6 +15,8 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { SERVER_LANGUAGES, ServerLanguage } from '../server-language';
+
 export enum ServerType {
   PAPER = 'PAPER',
   PURPUR = 'PURPUR',
@@ -83,6 +85,10 @@ export class MinecraftSettingsDto {
   @IsOptional()
   @IsBoolean()
   online_mode?: boolean;
+
+  @IsOptional()
+  @IsIn(SERVER_LANGUAGES)
+  language?: ServerLanguage;
 }
 
 export class CreateServerDto {

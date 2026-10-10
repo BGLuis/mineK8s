@@ -63,6 +63,7 @@ async fn start_gateway(
         game_type: "MINECRAFT".into(),
         auto_wake: true,
         favicon: None,
+        language: Default::default(),
     });
 
     let mut server = GatewayServer::new(GatewayConfig::default()).with_route_table(route_table);
@@ -106,7 +107,10 @@ async fn unresolved_identity_is_refused_on_every_identity_dependent_policy() {
     ] {
         let mut gw =
             start_gateway(policy, &["grp-e2e"], &["usr-player-1"], Some(&dead), None).await;
-        assert_refused(gw.login("PlayerOne").await, "verificar sua identidade");
+        assert_refused(
+            gw.login("PlayerOne").await,
+            "Não foi possível verificar você",
+        );
     }
 }
 
@@ -126,7 +130,10 @@ async fn unresolved_identity_does_not_block_public_or_internet_routes() {
 #[tokio::test]
 async fn gateway_without_any_identity_source_is_fail_closed_too() {
     let mut gw = start_gateway(AccessPolicy::Group, &["grp-e2e"], &[], None, None).await;
-    assert_refused(gw.login("PlayerOne").await, "verificar sua identidade");
+    assert_refused(
+        gw.login("PlayerOne").await,
+        "Não foi possível verificar você",
+    );
 }
 
 #[tokio::test]
@@ -142,7 +149,10 @@ async fn dead_whois_socket_and_dead_control_plane_refuse_without_hanging() {
     .await;
 
     let started = Instant::now();
-    assert_refused(gw.login("PlayerOne").await, "verificar sua identidade");
+    assert_refused(
+        gw.login("PlayerOne").await,
+        "Não foi possível verificar você",
+    );
     assert!(
         started.elapsed() < Duration::from_secs(5),
         "a recusa demorou {:?}",
@@ -213,7 +223,10 @@ async fn group_and_individual_policies_use_control_plane_ids() {
 
     let mut other_group =
         start_gateway(AccessPolicy::Group, &["grp-other"], &[], socket, Some(&url)).await;
-    assert_refused(other_group.login("PlayerOne").await, "grupos autorizados");
+    assert_refused(
+        other_group.login("PlayerOne").await,
+        "não faz parte dos grupos",
+    );
 
     let mut invited = start_gateway(
         AccessPolicy::Individual,
@@ -269,7 +282,10 @@ async fn device_unknown_to_the_control_plane_is_refused_unless_the_route_is_publ
 
     let mut restricted =
         start_gateway(AccessPolicy::Group, &["grp-e2e"], &[], socket, Some(&url)).await;
-    assert_refused(restricted.login("Ghost").await, "não está registrado");
+    assert_refused(
+        restricted.login("Ghost").await,
+        "Dispositivo não registrado",
+    );
 
     let mut public = start_gateway(AccessPolicy::Public, &[], &[], socket, Some(&url)).await;
     assert_eq!(public.login("Ghost").await, LoginOutcome::Proxied);

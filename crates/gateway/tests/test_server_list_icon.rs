@@ -46,7 +46,7 @@ fn test_synthetic_status_carries_the_server_icon_in_every_state() {
             ..Default::default()
         };
 
-        let response = build_synthetic_status(Some(&route));
+        let response = build_synthetic_status(Some(&route), 765);
 
         assert_eq!(response.favicon.as_deref(), Some(ICON), "estado {status:?}");
     }
@@ -59,8 +59,8 @@ fn test_synthetic_status_without_an_icon_has_no_favicon() {
         ..Default::default()
     };
 
-    assert!(build_synthetic_status(Some(&route)).favicon.is_none());
-    assert!(build_synthetic_status(None).favicon.is_none());
+    assert!(build_synthetic_status(Some(&route), 765).favicon.is_none());
+    assert!(build_synthetic_status(None, 765).favicon.is_none());
 }
 
 #[test]

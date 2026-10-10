@@ -1,5 +1,12 @@
 import { MinecraftServerSettings, UpdateServerSettingsRequest } from '../../../core/api/models';
 
+export const LANGUAGES = ['pt-BR', 'en'] as const;
+
+export const LANGUAGE_LABELS: Record<(typeof LANGUAGES)[number], string> = {
+  'pt-BR': 'Português (Brasil)',
+  en: 'English',
+};
+
 export const DIFFICULTIES = ['peaceful', 'easy', 'normal', 'hard'] as const;
 export const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'] as const;
 
@@ -30,6 +37,7 @@ export interface WorldSettings {
   simulationDistance: string;
   enforceSecureChat: boolean;
   onlineMode: boolean;
+  language: string;
 }
 
 export type WorldSettingsErrors = Partial<Record<keyof WorldSettings, string>>;
@@ -52,6 +60,7 @@ export function toWorldSettings(settings: MinecraftServerSettings): WorldSetting
     simulationDistance: String(settings.simulation_distance),
     enforceSecureChat: settings.enforce_secure_chat,
     onlineMode: settings.online_mode,
+    language: settings.language,
   };
 }
 
@@ -109,5 +118,6 @@ export function diffWorldSettings(
     patch.enforce_secure_chat = current.enforceSecureChat;
   }
   if (current.onlineMode !== initial.onlineMode) patch.online_mode = current.onlineMode;
+  if (current.language !== initial.language) patch.language = current.language;
   return patch;
 }

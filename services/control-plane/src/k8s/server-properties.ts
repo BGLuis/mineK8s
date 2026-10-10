@@ -55,7 +55,7 @@ export async function writeServerProperties(
   props.set('max-tick-time', isModpack ? '-1' : '60000');
 
   if (settings) {
-    props.set('motd', settings.motd);
+    props.set('motd', escapeMotd(settings.motd));
     props.set('max-players', String(settings.max_players));
     props.set('difficulty', settings.difficulty);
     props.set('gamemode', settings.gamemode);
@@ -72,6 +72,23 @@ export async function writeServerProperties(
     lines.push(`${key}=${value.replace(/[\r\n]+/g, ' ')}`);
   }
   await fs.promises.writeFile(propsPath, `${lines.join('\n')}\n`);
+}
+
+/**
+ * A MOTD is written in properties syntax: `\n` (backslash, n) is a line break, and anything outside ASCII,
+ * the `§` of the colour codes included, becomes a `\uXXXX` escape, which every Minecraft version reads
+ * the same way whatever encoding it assumes for the file.
+ */
+export function escapeMotd(motd: string): string {
+  return motd
+    .replace(/\r\n|\r|\n/g, '\\n')
+    .split('\\n')
+    .map((line) =>
+      line
+        .replace(/\\/g, '\\\\')
+        .replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`),
+    )
+    .join('\\n');
 }
 
 async function readProperties(propsPath: string): Promise<Map<string, string>> {

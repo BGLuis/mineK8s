@@ -175,6 +175,9 @@ export class GatewayIpcService {
       listen_port: server.allocated_port || 25565,
       auto_wake: server.auto_wake !== false,
       favicon: (await this.icons?.dataUri(server)) ?? '',
+      name: server.name,
+      max_players: server.minecraft_settings?.max_players ?? 0,
+      language: server.minecraft_settings?.language ?? 'pt-BR',
     };
   }
 

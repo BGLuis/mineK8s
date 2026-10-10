@@ -10,10 +10,12 @@ use crate::connection::{ClientConnection, HandshakeResult};
 use crate::error::{GatewayError, Result};
 use crate::identity::{
     is_tailscale_ip, validate_minecraft_nickname, AccessDecision, AccessDecisionEngine,
-    IdentityLookup, IdentityResolver, NicknameDecision, TailscaleLocalWhoIs,
+    IdentityLookup, IdentityResolver, NicknameDecision, NicknameValidationError,
+    TailscaleLocalWhoIs,
 };
 use crate::ipc::GatewayIpcClient;
 use crate::limiter::ConnectionRateLimiter;
+use crate::messages::{Language, Refusal};
 use crate::motd::{handle_status_ping, StatusCache};
 use crate::routing::{AccessPolicy, HoldError, RouteTable, RoutingModel, ServerInstanceStatus};
 use crate::session::{handle_login_proxy, SessionManager};
@@ -316,20 +318,22 @@ impl GatewayServer {
                     peer = %peer_addr,
                     "Login rejeitado por formato de nickname inválido (< 50ms)"
                 );
-                let msg = match validate_minecraft_nickname(username) {
-                    Err(err) => err.message().to_string(),
-                    Ok(_) => "§cFormato de nickname inválido.".to_string(),
+                let refusal = match validate_minecraft_nickname(username) {
+                    Err(err) => Refusal::InvalidNickname(err),
+                    Ok(_) => Refusal::InvalidNickname(NicknameValidationError::InvalidCharacters),
                 };
-                return Self::send_login_disconnect(conn, &msg).await;
+                return Self::refuse(conn, refusal, Language::default(), "").await;
             }
             Err(GatewayError::Protocol(ProtocolError::StringTooLong { .. })) => {
                 warn!(
                     peer = %peer_addr,
                     "Login rejeitado por tamanho de string excedido (< 50ms)"
                 );
-                return Self::send_login_disconnect(
+                return Self::refuse(
                     conn,
-                    "§cNickname deve ter no máximo 16 caracteres.",
+                    Refusal::InvalidNickname(NicknameValidationError::TooLong),
+                    Language::default(),
+                    "",
                 )
                 .await;
             }
@@ -370,7 +374,8 @@ impl GatewayServer {
                     "Processando Server List Ping"
                 );
                 // RF-GW-09: Processa Server List Ping com MOTD sintético dinâmico e cache TTL de 3s
-                handle_status_ping(conn, route, &status_cache).await?;
+                handle_status_ping(conn, route, &status_cache, handshake.protocol_version.0)
+                    .await?;
             }
             HandshakeResult::Login {
                 handshake,
@@ -379,6 +384,10 @@ impl GatewayServer {
                 original_login_start,
                 client_ip,
             } => {
+                let route = route_table.lookup_virtual_host(local_port, &handshake.server_address);
+                let language = route.as_ref().map(|r| r.language).unwrap_or_default();
+                let world = route.as_ref().map(|r| r.name.clone()).unwrap_or_default();
+
                 // 1. Validação estrita do formato de nickname (RF-ARQ-21, GW:430-432)
                 if let Err(err) = validate_minecraft_nickname(&login_start.username) {
                     warn!(
@@ -387,11 +396,11 @@ impl GatewayServer {
                         peer = %peer_addr,
                         "Login rejeitado por formato de nickname inválido (< 50ms)"
                     );
-                    return Self::send_login_disconnect(conn, err.message()).await;
+                    return Self::refuse(conn, Refusal::InvalidNickname(err), language, &world)
+                        .await;
                 }
 
-                // 2. Busca e validação de rota
-                let route = route_table.lookup_virtual_host(local_port, &handshake.server_address);
+                // 2. Validação de rota
                 let route = match route {
                     Some(r) => r,
                     None => {
@@ -400,8 +409,7 @@ impl GatewayServer {
                             peer = %peer_addr,
                             "Servidor de destino não encontrado na tabela de rotas"
                         );
-                        return Self::send_login_disconnect(conn, "§cServidor não encontrado.")
-                            .await;
+                        return Self::refuse(conn, Refusal::ServerNotFound, language, &world).await;
                     }
                 };
 
@@ -413,11 +421,7 @@ impl GatewayServer {
                         peer = %peer_addr,
                         "Tentativa de acesso via listener público a servidor com política não-INTERNET"
                     );
-                    return Self::send_login_disconnect(
-                        conn,
-                        "§cEste servidor não aceita conexões públicas.",
-                    )
-                    .await;
+                    return Self::refuse(conn, Refusal::NotPublic, language, &world).await;
                 }
 
                 // 3. Identidade, Anti-Impersonation e política de acesso Zero-Trust (apenas no listener privado).
@@ -442,14 +446,22 @@ impl GatewayServer {
                                         peer = %peer_addr,
                                         "Tentativa de impersonação rejeitada (< 50ms)"
                                     );
-                                    return Self::send_login_disconnect(
+                                    return Self::refuse(
                                         conn,
-                                        "§cEste nickname não pertence a este dispositivo/conta.",
+                                        Refusal::NicknameNotYours,
+                                        language,
+                                        &world,
                                     )
                                     .await;
                                 }
                                 NicknameDecision::Invalid(err) => {
-                                    return Self::send_login_disconnect(conn, err.message()).await;
+                                    return Self::refuse(
+                                        conn,
+                                        Refusal::InvalidNickname(err),
+                                        language,
+                                        &world,
+                                    )
+                                    .await;
                                 }
                                 NicknameDecision::Match | NicknameDecision::AutoAdopt => {}
                             }
@@ -467,10 +479,10 @@ impl GatewayServer {
                                 warn!(
                                     user = %login_start.username,
                                     server = %route.name,
-                                    reason = %reason,
+                                    reason = ?reason,
                                     "Acesso negado pela política do servidor"
                                 );
-                                return Self::send_login_disconnect(conn, reason).await;
+                                return Self::refuse(conn, reason, language, &world).await;
                             }
                         }
                         IdentityLookup::Unregistered if identity_required => {
@@ -480,9 +492,11 @@ impl GatewayServer {
                                 client_ip = %client_ip,
                                 "Login rejeitado: dispositivo não registrado no Control Plane"
                             );
-                            return Self::send_login_disconnect(
+                            return Self::refuse(
                                 conn,
-                                "§cSeu dispositivo não está registrado nesta rede.",
+                                Refusal::DeviceNotRegistered,
+                                language,
+                                &world,
                             )
                             .await;
                         }
@@ -493,10 +507,13 @@ impl GatewayServer {
                                 client_ip = %client_ip,
                                 "Login rejeitado: identidade não resolvida (WhoIs local e Control Plane indisponíveis)"
                             );
-                            return Self::send_login_disconnect(
+                            return Self::refuse(
                                 conn,
-                                "§cNão foi possível verificar sua identidade. Tente novamente em instantes.",
-                            ).await;
+                                Refusal::IdentityUnavailable,
+                                language,
+                                &world,
+                            )
+                            .await;
                         }
                         IdentityLookup::Unregistered | IdentityLookup::Unavailable => {}
                     }
@@ -510,9 +527,11 @@ impl GatewayServer {
                                 server = %route.name,
                                 "Login rejeitado: servidor parado e auto-wake desativado"
                             );
-                            return Self::send_login_disconnect(
+                            return Self::refuse(
                                 conn,
-                                "§cServidor desligado e Auto-Wake desativado.",
+                                Refusal::AsleepWithoutAutoWake,
+                                language,
+                                &world,
                             )
                             .await;
                         }
@@ -532,11 +551,7 @@ impl GatewayServer {
                             status = ?route.status,
                             "Login rejeitado: servidor em estado de falha terminal"
                         );
-                        return Self::send_login_disconnect(
-                            conn,
-                            "§cServidor indisponível (estado de falha).",
-                        )
-                        .await;
+                        return Self::refuse(conn, Refusal::ServerFailed, language, &world).await;
                     }
 
                     info!(
@@ -561,8 +576,8 @@ impl GatewayServer {
                                 server = %route.name,
                                 "Timeout de 25s de hold connection expirado. Enviando mensagem de boot em segundo plano."
                             );
-                            let friendly_msg = r#"{"text":"🚀 §e§lMineKubernetes — Servidor em Inicialização!\n\n§fEste servidor estava hibernando para economizar recursos e §afoi acordado agora§f.\n§7A inicialização continua sendo processada em segundo plano no cluster.\n\n§6Por favor, aguarde cerca de 30 a 60 segundos e tente reconectar!","color":"gold"}"#;
-                            return Self::send_login_disconnect(conn, friendly_msg).await;
+                            return Self::refuse(conn, Refusal::StillStarting, language, &world)
+                                .await;
                         }
                         Err(HoldError::Failed(status)) => {
                             warn!(
@@ -570,14 +585,11 @@ impl GatewayServer {
                                 ?status,
                                 "Servidor encerrou com falha durante a inicialização na janela de retenção."
                             );
-                            return Self::send_login_disconnect(
-                                conn,
-                                "§cO servidor encerrou com falha durante a inicialização.",
-                            )
-                            .await;
+                            return Self::refuse(conn, Refusal::FailedToStart, language, &world)
+                                .await;
                         }
                         Err(HoldError::NotFound) => {
-                            return Self::send_login_disconnect(conn, "§cServidor não encontrado.")
+                            return Self::refuse(conn, Refusal::ServerNotFound, language, &world)
                                 .await;
                         }
                     }
@@ -629,6 +641,16 @@ impl GatewayServer {
     }
 
     /// Envia pacote de Disconnect na fase de Login e encerra a conexão TCP imediatamente (< 50ms).
+    /// Refuses the login with the catalog text in the world's language.
+    pub async fn refuse(
+        conn: ClientConnection,
+        refusal: Refusal,
+        language: Language,
+        world: &str,
+    ) -> Result<()> {
+        Self::send_login_disconnect(conn, &refusal.text(language, world)).await
+    }
+
     pub async fn send_login_disconnect(mut conn: ClientConnection, reason: &str) -> Result<()> {
         use bytes::BytesMut;
         use minecraft_protocol::frame::RawPacket;

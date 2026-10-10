@@ -27,6 +27,9 @@ fn test_route_table_rebuild_from_snapshot() {
             listen_port: 25565,
             auto_wake: true,
             favicon: String::new(),
+            name: String::new(),
+            max_players: 0,
+            language: String::new(),
         },
         RouteUpdateEvent {
             action: RouteAction::Upsert as i32,
@@ -43,6 +46,9 @@ fn test_route_table_rebuild_from_snapshot() {
             listen_port: 25565,
             auto_wake: true,
             favicon: String::new(),
+            name: String::new(),
+            max_players: 0,
+            language: String::new(),
         },
         RouteUpdateEvent {
             action: RouteAction::Upsert as i32,
@@ -59,6 +65,9 @@ fn test_route_table_rebuild_from_snapshot() {
             listen_port: 7777,
             auto_wake: false,
             favicon: String::new(),
+            name: String::new(),
+            max_players: 0,
+            language: String::new(),
         },
     ];
 
@@ -133,6 +142,9 @@ fn test_live_route_update_stream_mutations() {
         listen_port: 25565,
         auto_wake: true,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     };
     apply_route_update_event(&route_table, upsert_lobby);
     assert_eq!(route_table.len(), 1);
@@ -153,6 +165,9 @@ fn test_live_route_update_stream_mutations() {
         listen_port: 25565,
         auto_wake: true,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     };
     apply_route_update_event(&route_table, upsert_creative);
     assert_eq!(route_table.len(), 2);
@@ -179,6 +194,9 @@ fn test_live_route_update_stream_mutations() {
         listen_port: 25565,
         auto_wake: true,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     };
     apply_route_update_event(&route_table, status_change);
     let updated = route_table
@@ -202,6 +220,9 @@ fn test_live_route_update_stream_mutations() {
         listen_port: 0,
         auto_wake: false,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     };
     apply_route_update_event(&route_table, delete_event);
     assert_eq!(route_table.len(), 1);
@@ -229,6 +250,9 @@ fn test_protobuf_codec_roundtrips() {
         listen_port: 25565,
         auto_wake: true,
         favicon: String::new(),
+        name: String::new(),
+        max_players: 0,
+        language: String::new(),
     };
 
     let mut buf = Vec::new();
