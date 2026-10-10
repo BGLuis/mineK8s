@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { IKubernetesDriver, K8sDeploymentInfo, K8sJobInfo, K8sPodStats } from '../k8s.interface';
 
@@ -112,6 +114,10 @@ export class MockKubernetesDriver implements IKubernetesDriver {
       }
     }
     return list;
+  }
+
+  async streamPodLogs(): Promise<Readable | null> {
+    return null;
   }
 
   async getPodStats(): Promise<K8sPodStats | null> {

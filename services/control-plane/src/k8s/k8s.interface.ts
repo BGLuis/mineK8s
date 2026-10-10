@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 export interface K8sMetadata {
   name: string;
   namespace?: string;
@@ -50,6 +52,8 @@ export interface IKubernetesDriver {
   deletePersistentVolumeClaim(name: string, namespace?: string): Promise<void>;
   getDeployment(name: string, namespace?: string): Promise<K8sDeploymentInfo | null>;
   listDeployments(namespace?: string): Promise<K8sDeploymentInfo[]>;
+  /** Follows the game container's log in the running pod of a deployment; null when it has none. */
+  streamPodLogs(deploymentName: string, namespace?: string): Promise<Readable | null>;
   /** Stats of the running pod of a deployment; null when it has none. */
   getPodStats(deploymentName: string, namespace?: string): Promise<K8sPodStats | null>;
   createJob(manifest: any): Promise<void>;

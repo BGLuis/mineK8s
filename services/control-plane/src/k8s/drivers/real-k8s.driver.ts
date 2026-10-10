@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
+import { PassThrough, Readable } from 'node:stream';
 
 import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
@@ -12,6 +13,9 @@ import { memoryQuantityToBytes } from '../memory-quantity';
 // @kubernetes/client-node 2.x throws ApiException, which carries the HTTP status in `code`.
 const isNotFound = (err: any): boolean => err?.code === 404;
 
+const GAME_CONTAINER = 'runner';
+const LOG_TAIL_LINES = 500;
+
 @Injectable()
 export class RealKubernetesDriver implements IKubernetesDriver {
   private readonly logger = new Logger(RealKubernetesDriver.name);
@@ -20,6 +24,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
   private readonly appsV1Api: k8s.AppsV1Api;
   private readonly batchV1Api: k8s.BatchV1Api;
   private readonly metricsApi: k8s.Metrics;
+  private readonly log: k8s.Log;
 
   constructor(private readonly configService: AppConfigService) {
     this.kc = new k8s.KubeConfig();
@@ -45,6 +50,7 @@ export class RealKubernetesDriver implements IKubernetesDriver {
     this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
     this.batchV1Api = this.kc.makeApiClient(k8s.BatchV1Api);
     this.metricsApi = new k8s.Metrics(this.kc);
+    this.log = new k8s.Log(this.kc);
   }
 
   async createPersistentVolumeClaim(manifest: any): Promise<void> {
@@ -175,6 +181,28 @@ export class RealKubernetesDriver implements IKubernetesDriver {
         unavailableReplicas: item.status?.unavailableReplicas,
       },
     }));
+  }
+
+  async streamPodLogs(
+    deploymentName: string,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<Readable | null> {
+    const pods = await this.coreV1Api.listNamespacedPod({
+      namespace,
+      labelSelector: `app.kubernetes.io/name=${deploymentName}`,
+    });
+    const podName = pods.items.find((p) => p.status?.phase === 'Running')?.metadata?.name;
+    if (!podName) {
+      return null;
+    }
+
+    const stream = new PassThrough();
+    const abort = await this.log.log(namespace, podName, GAME_CONTAINER, stream, {
+      follow: true,
+      tailLines: LOG_TAIL_LINES,
+    });
+    stream.on('close', () => abort.abort());
+    return stream;
   }
 
   async getPodStats(

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { Readable } from 'node:stream';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
@@ -158,6 +159,13 @@ export class KubernetesService {
 
   async getServerDeployment(server: Server): Promise<K8sDeploymentInfo | null> {
     return this.driver.getDeployment(
+      serverWorkloadName(server.resource_name),
+      this.configService.kubernetes.namespace,
+    );
+  }
+
+  async streamServerLogs(server: Server): Promise<Readable | null> {
+    return this.driver.streamPodLogs(
       serverWorkloadName(server.resource_name),
       this.configService.kubernetes.namespace,
     );
