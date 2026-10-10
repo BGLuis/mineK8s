@@ -62,6 +62,33 @@ spec:
           volumeMounts:
             - name: servers-data
               mountPath: /srv/servers
+        # NODE_ENV=production skips migrationsRun on boot, so the schema is built here. Postgres is a
+        # StatefulSet that may still be starting; retry, then fail so the kubelet restarts the step.
+        - name: migrate
+          image: minekubernetes/control-plane:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              attempt=0
+              until node services/control-plane/node_modules/typeorm/cli.js migration:run \
+                -d services/control-plane/dist/database/data-source.js; do
+                attempt=$((attempt + 1))
+                [ "$attempt" -ge 30 ] && exit 1
+                sleep 5
+              done
+          envFrom:
+            - configMapRef:
+                name: control-plane-config
+            - secretRef:
+                name: control-plane-site
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
       containers:
         - name: control-plane
           image: minekubernetes/control-plane:local
@@ -76,7 +103,8 @@ spec:
               containerPort: 8080
             - name: grpc
               containerPort: 50051
-          # Pending migrations run before the API listens; a slow one must not trip liveness.
+          # The migrate init container finishes before this one starts; the probe only covers the boot,
+          # and a slow one must not trip liveness.
           startupProbe:
             httpGet:
               path: /healthz

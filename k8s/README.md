@@ -45,6 +45,12 @@ kubectl apply -k k8s
 kubectl -n minekubernetes rollout status deploy/control-plane
 ```
 
+As migrações do banco rodam sozinhas no init container `migrate` do control plane (mesma imagem, tenta de novo até o Postgres ficar pronto), antes de a API subir; em produção o boot da API não as aplica. Para ver o resultado:
+
+```bash
+kubectl -n minekubernetes logs deploy/control-plane -c migrate
+```
+
 O painel fica em `http://luisarch:8080`. Sem `INITIAL_BOOTSTRAP_TOKEN`, o control plane escreve no log o token de criação do primeiro admin:
 
 ```bash
@@ -58,5 +64,7 @@ Repita o passo 2 e reinicie:
 ```bash
 kubectl -n minekubernetes rollout restart deploy/control-plane deploy/gateway
 ```
+
+Cada pod novo do control plane roda as migrações pendentes no init container `migrate`, então não há passo manual; "No migrations are pending" no log do `migrate` significa que o banco já estava em dia. Se o `migrate` falhar (por exemplo, migração com erro), o pod não sobe e o `rollout status` não conclui; veja o log com o comando acima.
 
 Mudanças em `site.env` ou `control-plane.env` mudam o nome gerado do Secret ou do ConfigMap, e o `kubectl apply -k k8s` já reinicia o control plane.
