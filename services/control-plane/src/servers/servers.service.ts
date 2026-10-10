@@ -406,6 +406,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     await this.k8sService.deprovisionServer(server);
     await this.serverRepo.remove(server);
+    this.dropRoute(server);
 
     return { message: 'Instance removed' };
   }
@@ -423,6 +424,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     server.subdomain = domain;
     await this.serverRepo.save(server);
+    await this.republishRoute(server);
 
     return { message: 'Domain updated' };
   }
@@ -847,6 +849,31 @@ export class ServersService implements OnApplicationBootstrap {
     } catch (err: any) {
       this.logger.warn(
         `Falha ao publicar rota atualizada de [${server.subdomain}] no Gateway: ${err.message}`,
+      );
+    }
+  }
+
+  /** Without this the gateway keeps resolving the subdomain of a server that no longer exists. */
+  private dropRoute(server: Server): void {
+    try {
+      this.gatewayIpcService?.broadcastRouteUpdate({
+        action: RouteAction.DELETE,
+        server_id: server.id,
+        subdomain: server.subdomain,
+        target_ip_port: '',
+        status: 'STOPPED',
+        access_policy: server.access_policy || 'GROUP',
+        allowed_group_ids: [],
+        allowed_user_ids: [],
+        proxy_protocol: false,
+        game_type: server.game_type || 'MINECRAFT',
+        routing_model: server.routing_model || 'VirtualHost',
+        listen_port: server.allocated_port || 25565,
+        auto_wake: false,
+      });
+    } catch (err: any) {
+      this.logger.warn(
+        `Falha ao remover a rota de [${server.subdomain}] do Gateway: ${err.message}`,
       );
     }
   }
