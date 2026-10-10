@@ -19,10 +19,17 @@ import { SERVER_ICON_ENCODER, SERVER_ICON_SIZE } from './server-icon';
 @Component({
   selector: 'mc-server-icon-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:paste)': 'paste($event)' },
   imports: [McButton, McPanel],
   template: `
     <mc-panel title="Ícone na lista de servidores">
-      <div class="flex flex-wrap items-start gap-6">
+      <div
+        class="flex flex-wrap items-start gap-6 border-2 border-dashed p-3"
+        [class]="dragging() ? 'border-action-primary bg-bg-sunken' : 'border-transparent'"
+        (dragover)="dragOver($event)"
+        (dragleave)="dragging.set(false)"
+        (drop)="drop($event)"
+      >
         <div
           class="size-24 shrink-0 border-2 border-border-strong bg-surface-input"
           [attr.aria-busy]="busy()"
@@ -42,10 +49,10 @@ import { SERVER_ICON_ENCODER, SERVER_ICON_SIZE } from './server-icon';
 
         <div class="flex min-w-0 flex-1 flex-col gap-3">
           <p class="t-body-md text-text-muted">
-            Qualquer imagem serve: ela é recortada no centro e reduzida para
-            {{ size }}×{{ size }} px, o tamanho que o Minecraft mostra. Com o mundo hibernando o
-            ícone já aparece na lista; com ele ligado, o Minecraft só troca a imagem na próxima
-            partida.
+            Arraste uma imagem para cá, cole uma com Ctrl+V ou use o botão. Qualquer imagem serve: ela
+            é recortada no centro e reduzida para {{ size }}×{{ size }} px, o tamanho que o Minecraft
+            mostra. Com o mundo hibernando o ícone já aparece na lista; com ele ligado, o Minecraft
+            só troca a imagem na próxima partida.
           </p>
 
           <!-- The native control is nearly invisible on the dark theme; the button below opens it. -->
@@ -89,6 +96,7 @@ export class ServerIconPanel {
 
   protected readonly size = SERVER_ICON_SIZE;
   protected readonly busy = signal(false);
+  protected readonly dragging = signal(false);
   /** Object URL of the icon the server has now. */
   protected readonly current = signal<string | null>(null);
   /** The converted image the admin picked and has not sent yet. */
@@ -115,7 +123,43 @@ export class ServerIconPanel {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file) {
+    if (file) {
+      await this.take(file);
+    }
+  }
+
+  protected dragOver(event: DragEvent): void {
+    // Without this the browser refuses the drop and opens the file instead.
+    event.preventDefault();
+    this.dragging.set(true);
+  }
+
+  protected async drop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    this.dragging.set(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      await this.take(file);
+    }
+  }
+
+  /** A screenshot or a copied image can be pasted anywhere on the page. */
+  protected async paste(event: ClipboardEvent): Promise<void> {
+    const file = Array.from(event.clipboardData?.files ?? []).find((f) =>
+      f.type.startsWith('image/'),
+    );
+    if (file) {
+      event.preventDefault();
+      await this.take(file);
+    }
+  }
+
+  private async take(file: File): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      this.toast.error('Esse arquivo não é uma imagem. Use PNG, JPG, WebP ou GIF.');
       return;
     }
     try {
