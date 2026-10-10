@@ -9,6 +9,7 @@ import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServersService } from './servers.service';
 import { ServerType } from './dto/create-server.dto';
+import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 
 describe('ServersService', () => {
   let service: ServersService;
@@ -58,8 +59,10 @@ describe('ServersService', () => {
       update: jest.fn(async (id: string, partial: Partial<Server>) => {
         Object.assign(serversDb.get(id)!, partial);
       }),
+      // TypeORM clears the primary key of the entity it removes.
       remove: jest.fn(async (entity) => {
         serversDb.delete(entity.id);
+        delete entity.id;
         return entity;
       }),
     };
@@ -474,6 +477,49 @@ describe('ServersService', () => {
       expect(mockK8sService.deprovisionServer).toHaveBeenCalledWith(server);
       expect(mockServerRepo.remove).toHaveBeenCalledWith(server);
     });
+
+    it('tells the gateway to drop the route so the removed server stops resolving', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'STOPPED',
+      } as any);
+
+      await service.delete('srv-1');
+
+      expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ action: RouteAction.DELETE, server_id: 'srv-1' }),
+      );
+    });
+
+    it('keeps the route when the k8s resources could not be removed', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'STOPPED',
+      } as any);
+      mockK8sService.deprovisionServer.mockRejectedValue(new Error('apiserver down'));
+
+      await expect(service.delete('srv-1')).rejects.toThrow('apiserver down');
+
+      expect(mockGatewayIpcService.broadcastRouteUpdate).not.toHaveBeenCalled();
+    });
+
+    it('still deletes the server when the gateway is unreachable', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'STOPPED',
+      } as any);
+      mockGatewayIpcService.broadcastRouteUpdate.mockImplementation(() => {
+        throw new Error('stream fechado');
+      });
+
+      await expect(service.delete('srv-1')).resolves.toEqual({ message: 'Instance removed' });
+    });
   });
 
   describe('updateDomain', () => {
@@ -495,6 +541,32 @@ describe('ServersService', () => {
       serversDb.set('srv-2', { id: 'srv-2', subdomain: 'lobby' } as any);
 
       await expect(service.updateDomain('srv-1', 'lobby')).rejects.toThrow(ConflictException);
+    });
+
+    it('republishes the route so the gateway serves the new subdomain', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', name: 'Hub', subdomain: 'hub' } as any);
+
+      await service.updateDomain('srv-1', 'lobby-new');
+
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('does not republish when the new subdomain is taken', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', subdomain: 'hub' } as any);
+      serversDb.set('srv-2', { id: 'srv-2', subdomain: 'lobby' } as any);
+
+      await expect(service.updateDomain('srv-1', 'lobby')).rejects.toThrow(ConflictException);
+
+      expect(mockGatewayIpcService.publishRoute).not.toHaveBeenCalled();
+    });
+
+    it('still updates the domain when the gateway is unreachable', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', name: 'Hub', subdomain: 'hub' } as any);
+      mockGatewayIpcService.publishRoute.mockRejectedValue(new Error('stream fechado'));
+
+      await expect(service.updateDomain('srv-1', 'lobby-new')).resolves.toEqual({
+        message: 'Domain updated',
+      });
     });
   });
 
