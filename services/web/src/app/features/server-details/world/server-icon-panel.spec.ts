@@ -65,6 +65,13 @@ describe('ServerIconPanel', () => {
     await fixture.whenStable();
   }
 
+  const dropEvent = (type: 'dragover' | 'drop', files: File[] = []) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { files } });
+    return event;
+  };
+  const dropZone = () => el.querySelector('.border-dashed') as HTMLElement;
+
   afterEach(() => vi.restoreAllMocks());
 
   it('shows the icon the server already has', async () => {
@@ -122,6 +129,63 @@ describe('ServerIconPanel', () => {
     expect(button('Enviar').disabled).toBe(true);
     expect(button('Remover').disabled).toBe(false);
     expect(revoked).toEqual([]);
+  });
+
+  it('accepts an image dropped on the panel, and does not let the browser open it instead', async () => {
+    await render(null);
+    const over = dropEvent('dragover');
+    dropZone().dispatchEvent(over);
+    await fixture.whenStable();
+    expect(over.defaultPrevented).toBe(true);
+    expect(dropZone().className).toContain('border-action-primary');
+
+    const drop = dropEvent('drop', [new File(['x'], 'arrastada.png', { type: 'image/png' })]);
+    dropZone().dispatchEvent(drop);
+    await fixture.whenStable();
+
+    expect(drop.defaultPrevented).toBe(true);
+    expect(encode).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('arrastada.png');
+    expect(dropZone().className).not.toContain('border-action-primary');
+    expect(button('Enviar').disabled).toBe(false);
+  });
+
+  it('refuses a dropped file that is not an image', async () => {
+    await render(null);
+
+    dropZone().dispatchEvent(
+      dropEvent('drop', [new File(['x'], 'notas.txt', { type: 'text/plain' })]),
+    );
+    await fixture.whenStable();
+
+    expect(encode).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('não é uma imagem'));
+  });
+
+  it('accepts an image pasted from the clipboard, such as a screenshot', async () => {
+    await render(null);
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', {
+      value: { files: [new File(['x'], 'captura.png', { type: 'image/png' })] },
+    });
+
+    document.dispatchEvent(paste);
+    await fixture.whenStable();
+
+    expect(encode).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('captura.png');
+  });
+
+  it('ignores a paste that carries no image, so ordinary text pasting keeps working', async () => {
+    await render(null);
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { files: [] } });
+
+    document.dispatchEvent(paste);
+    await fixture.whenStable();
+
+    expect(encode).not.toHaveBeenCalled();
+    expect(paste.defaultPrevented).toBe(false);
   });
 
   it('frees the previous preview when another image is picked', async () => {
