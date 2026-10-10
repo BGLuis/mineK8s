@@ -33,6 +33,20 @@ export function formatBackupDate(iso: string): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** `backup_<world>_<yyyy-MM-dd_HH-mm-ss>.tar.gz`, with the date in the browser's time zone. */
+export function backupDownloadName(serverName: string, createdAt: string): string {
+  const slug = serverName
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const date = new Date(createdAt);
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+  return `backup_${slug || 'mundo'}_${day}_${time}.tar.gz`;
+}
+
 export function formatBackupSize(bytes: number): string {
   if (!bytes || bytes <= 0) {
     return '—';

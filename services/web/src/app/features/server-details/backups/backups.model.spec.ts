@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ServerBackup } from '../../../core/api/models';
 import {
   backupDisplayPercent,
+  backupDownloadName,
   backupErrorMessage,
   backupTypeLabel,
   canRestore,
@@ -91,5 +92,25 @@ describe('backupDisplayPercent', () => {
     expect(backupDisplayPercent(100, false)).toBe(90);
     expect(backupDisplayPercent(100, true)).toBe(100);
     expect(backupDisplayPercent(10, true)).toBe(100);
+  });
+});
+
+describe('backupDownloadName', () => {
+  const createdAt = new Date(2026, 9, 10, 2, 1, 30).toISOString();
+
+  it('prefixes the world name with "backup" and ends with the date in the local time zone', () => {
+    expect(backupDownloadName('Mundo Teste', createdAt)).toBe(
+      'backup_mundo-teste_2026-10-10_02-01-30.tar.gz',
+    );
+  });
+
+  it('turns accents and punctuation of the world name into a file-safe slug', () => {
+    expect(backupDownloadName('  Ilha do Zé: 2ª temporada!  ', createdAt)).toBe(
+      'backup_ilha-do-ze-2a-temporada_2026-10-10_02-01-30.tar.gz',
+    );
+  });
+
+  it('still produces a name when the world name has nothing usable', () => {
+    expect(backupDownloadName('???', createdAt)).toBe('backup_mundo_2026-10-10_02-01-30.tar.gz');
   });
 });
