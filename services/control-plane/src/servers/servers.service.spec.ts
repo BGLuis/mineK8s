@@ -205,6 +205,36 @@ describe('ServersService', () => {
       expect(settingsDb.size).toBe(1);
     });
 
+    it('starts a world with a friendly MOTD and Portuguese messages, not the generic generated line', async () => {
+      await service.create({ name: 'Sekiro', subdomain: 'sekiro' });
+
+      const settings = [...settingsDb.values()][0];
+      expect(settings.motd).toBe('§a§lSekiro\\n§7Entre e bom jogo!');
+      expect(settings.language).toBe('pt-BR');
+    });
+
+    it('writes the default MOTD in the language chosen for the world', async () => {
+      await service.create({
+        name: 'Sekiro',
+        subdomain: 'sekiro',
+        minecraft_settings: { language: 'en' },
+      });
+
+      const settings = [...settingsDb.values()][0];
+      expect(settings.motd).toBe('§a§lSekiro\\n§7Join in and have fun!');
+      expect(settings.language).toBe('en');
+    });
+
+    it('keeps the MOTD the admin typed', async () => {
+      await service.create({
+        name: 'Sekiro',
+        subdomain: 'sekiro',
+        minecraft_settings: { motd: 'Meu mundo' },
+      });
+
+      expect([...settingsDb.values()][0].motd).toBe('Meu mundo');
+    });
+
     it('publishes the route to the gateway once the server is provisioned, since the gateway ignores status changes for routes it does not know', async () => {
       const result = await service.create({ name: 'Hub', subdomain: 'hub' });
 
@@ -670,6 +700,14 @@ describe('ServersService', () => {
       const detail = await service.updateSettings('srv-1', { motd: 'Novo' });
 
       expect(JSON.stringify(detail)).not.toContain('segredo-rcon');
+    });
+
+    it('republica a rota, para o Gateway usar o idioma e o limite de jogadores novos', async () => {
+      seed();
+
+      await service.updateSettings('srv-1', { language: 'en', max_players: 8 });
+
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
     });
 
     it('recusa trocar a senha do RCON: o servidor em execução continuaria com a antiga', async () => {

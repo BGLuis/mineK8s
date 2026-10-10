@@ -66,6 +66,10 @@ export class MinecraftServerSettings {
   @Column({ type: 'boolean', default: false })
   online_mode: boolean;
 
+  /** Language of the texts the gateway shows the client of this world: `pt-BR` or `en`. */
+  @Column({ type: 'varchar', length: 8, default: 'pt-BR' })
+  language: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

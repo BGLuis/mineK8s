@@ -7,6 +7,7 @@ import { UniqueUserTailscaleId1710000000005 } from './1710000000005-UniqueUserTa
 import { AddBackupModpackCasTables1710000000006 } from './1710000000006-AddBackupModpackCasTables';
 import { AddServerRuntime1710000000007 } from './1710000000007-AddServerRuntime';
 import { AddServerResourceName1710000000008 } from './1710000000008-AddServerResourceName';
+import { AddServerLanguage1710000000009 } from './1710000000009-AddServerLanguage';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -18,4 +19,5 @@ export const migrations = [
   AddBackupModpackCasTables1710000000006,
   AddServerRuntime1710000000007,
   AddServerResourceName1710000000008,
+  AddServerLanguage1710000000009,
 ];

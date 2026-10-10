@@ -39,6 +39,7 @@ import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
 import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { ServerIconService } from './server-icon.service';
+import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
 
@@ -143,13 +144,14 @@ export class ServersService implements OnApplicationBootstrap {
     let savedSettings: MinecraftServerSettings | undefined;
 
     if (savedServer.game_type === 'minecraft') {
+      const language = dto.minecraft_settings?.language ?? DEFAULT_SERVER_LANGUAGE;
       const rconPassword = dto.minecraft_settings?.rcon_password || randomBytes(12).toString('hex');
       // RF-CF-02: Se access_policy for INTERNET, obriga online-mode=true
       const onlineMode =
         accessPolicy === 'INTERNET' ? true : (dto.minecraft_settings?.online_mode ?? false);
       const settings = this.settingsRepo.create({
         server_id: savedServer.id,
-        motd: dto.minecraft_settings?.motd || `A MineKubernetes Server [${dto.name}]`,
+        motd: dto.minecraft_settings?.motd || defaultMotd(dto.name, language),
         max_players: dto.minecraft_settings?.max_players ?? 20,
         difficulty: dto.minecraft_settings?.difficulty || 'normal',
         gamemode: dto.minecraft_settings?.gamemode || 'survival',
@@ -163,6 +165,7 @@ export class ServersService implements OnApplicationBootstrap {
         rcon_password: rconPassword,
         enforce_secure_chat: dto.minecraft_settings?.enforce_secure_chat ?? false,
         online_mode: onlineMode,
+        language,
       });
       savedSettings = await this.settingsRepo.save(settings);
     }
@@ -456,6 +459,8 @@ export class ServersService implements OnApplicationBootstrap {
 
     Object.assign(server.minecraft_settings, Object.fromEntries(changes));
     await this.settingsRepo.save(server.minecraft_settings);
+    // The gateway shows the player limit and the language in the server list and in refusals.
+    await this.republishRouteById(id);
 
     return this.findOne(id);
   }

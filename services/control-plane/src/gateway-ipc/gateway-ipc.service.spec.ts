@@ -34,9 +34,12 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
           game_type: 'MINECRAFT',
           routing_model: 'VirtualHost',
           allocated_port: 25565,
+          name: 'Survival',
           minecraft_settings: {
             server_port: 25565,
             proxy_protocol: true,
+            max_players: 12,
+            language: 'en',
           },
         },
         {
@@ -116,6 +119,22 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   });
 
   describe('Ícone da lista de servidores', () => {
+    it('leva nome, limite de jogadores e idioma, para o Gateway não mostrar o UUID nem um limite inventado', async () => {
+      const snapshot = await service.getInitialRoutingSnapshot();
+
+      expect(snapshot.routes[0]).toMatchObject({
+        name: 'Survival',
+        max_players: 12,
+        language: 'en',
+      });
+    });
+
+    it('um mundo sem configurações vai com limite 0 e o idioma padrão', async () => {
+      const snapshot = await service.getInitialRoutingSnapshot();
+
+      expect(snapshot.routes[1]).toMatchObject({ max_players: 0, language: 'pt-BR' });
+    });
+
     it('leva o ícone do servidor na rota, para o Gateway responder o status enquanto a JVM dorme', async () => {
       icons.dataUri.mockImplementation(async (server: any) =>
         server.id === 'server-uuid-1' ? 'data:image/png;base64,AAAA' : null,
