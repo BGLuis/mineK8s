@@ -32,6 +32,7 @@ import { UpdateDomainDto } from './dto/update-domain.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { CommandDto } from './dto/command.dto';
 import { WriteFileDto } from './dto/write-file.dto';
+import { MAX_SERVER_ICON_BYTES } from './server-icon.service';
 import { CreateDirectoryDto } from './dto/create-directory.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
@@ -255,6 +256,35 @@ export class ServersController {
     @UploadedFile() file?: any,
   ) {
     return this.filesService.uploadFile(id, relPath, file);
+  }
+
+  @Get(':id/icon')
+  @ApiOperation({ summary: 'The 64x64 PNG shown in the Minecraft server list' })
+  @ApiResponse({ status: 200, description: 'PNG image' })
+  @ApiResponse({ status: 404, description: 'Server not found or without an icon' })
+  async getIcon(@Param('id') id: string, @Res() res: Response) {
+    const icon = await this.serversService.getIcon(id);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(icon);
+  }
+
+  @Put(':id/icon')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SERVER_ICON_BYTES + 1 } }))
+  @ApiOperation({ summary: 'Set the server list icon (a 64x64 PNG, multipart field "file")' })
+  @ApiResponse({ status: 200, description: 'Icon saved' })
+  @ApiResponse({ status: 400, description: 'Not a 64x64 PNG, or larger than 100 KB' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async setIcon(@Param('id') id: string, @UploadedFile() file?: any) {
+    return this.serversService.setIcon(id, file?.buffer);
+  }
+
+  @Delete(':id/icon')
+  @ApiOperation({ summary: 'Remove the server list icon' })
+  @ApiResponse({ status: 200, description: 'Icon removed' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async removeIcon(@Param('id') id: string) {
+    return this.serversService.removeIcon(id);
   }
 
   @Post(':id/files/directory')

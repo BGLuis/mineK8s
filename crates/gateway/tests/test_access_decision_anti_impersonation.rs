@@ -136,6 +136,7 @@ async fn test_anti_impersonation_disconnect_under_50ms() {
         allowed_user_ids: vec![],
         game_type: "MINECRAFT".into(),
         auto_wake: true,
+        favicon: None,
     };
     route_table.insert(route);
 
@@ -232,6 +233,7 @@ async fn test_invalid_nickname_format_disconnect_under_50ms() {
         allowed_user_ids: vec![],
         game_type: "MINECRAFT".into(),
         auto_wake: true,
+        favicon: None,
     };
     route_table.insert(route);
 
@@ -322,6 +324,7 @@ async fn test_maintenance_mode_and_admin_bypass() {
         allowed_user_ids: vec![],
         game_type: "MINECRAFT".into(),
         auto_wake: true,
+        favicon: None,
     };
     route_table.insert(maint_route);
 

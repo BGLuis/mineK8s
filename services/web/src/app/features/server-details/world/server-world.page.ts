@@ -24,6 +24,7 @@ import {
 } from '../../../ui';
 import { errorReason } from '../../dashboard/server-lifecycle';
 import { ServerDetailStore } from '../server-detail.store';
+import { ServerIconPanel } from './server-icon-panel';
 import {
   DIFFICULTIES,
   DIFFICULTY_LABELS,
@@ -50,10 +51,23 @@ const GAMEMODE_OPTIONS: SelectOption[] = GAMEMODES.map((value) => ({
 @Component({
   selector: 'mc-server-world-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McBanner, McButton, McPanel, McSelect, McSwitch, McTextField],
+  imports: [
+    FormsModule,
+    McBanner,
+    ServerIconPanel,
+    McButton,
+    McPanel,
+    McSelect,
+    McSwitch,
+    McTextField,
+  ],
   template: `
     @if (form(); as current) {
       <div class="flex max-w-3xl flex-col gap-6">
+        @if (store.server(); as server) {
+          <mc-server-icon-panel [serverId]="server.id" />
+        }
+
         @if (pendingRestart()) {
           <mc-banner tone="info" title="Reinicie para aplicar">
             As configurações foram salvas e entram em vigor na próxima vez que o servidor ligar.

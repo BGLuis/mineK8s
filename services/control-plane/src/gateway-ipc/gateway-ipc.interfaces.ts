@@ -25,6 +25,8 @@ export interface RouteUpdateEvent {
   routing_model: string; // VirtualHost, DedicatedPort
   listen_port: number;
   auto_wake: boolean;
+  /** `data:image/png;base64,...`; empty when the server has no icon. */
+  favicon?: string;
 }
 
 export interface SessionLifecycleEvent {

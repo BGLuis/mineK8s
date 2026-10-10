@@ -114,4 +114,7 @@ pub struct CachedServerRoute {
     pub allowed_user_ids: Vec<String>,
     pub game_type: String,
     pub auto_wake: bool,
+    /// `data:image/png;base64,...` the Control Plane read from the world; shown in the server list
+    /// while the JVM cannot answer the status request.
+    pub favicon: Option<String>,
 }

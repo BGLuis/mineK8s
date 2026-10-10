@@ -38,6 +38,7 @@ import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
 import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
+import { ServerIconService } from './server-icon.service';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
 
@@ -69,6 +70,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly playerSessions?: PlayerSessionsService,
     @Optional()
     private readonly nodeMetrics?: NodeMetricsService,
+    @Optional()
+    private readonly iconService?: ServerIconService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -889,6 +892,38 @@ export class ServersService implements OnApplicationBootstrap {
   }
 
   /** O Gateway só enxerga mudanças de política, manutenção e auto-wake por um UPSERT de rota; STATUS_CHANGE não basta. */
+  /** The icon of the server list: stored next to the world, and copied into the gateway's route for the states where the JVM does not answer. */
+  async getIcon(id: string): Promise<Buffer> {
+    return this.icons().get(id);
+  }
+
+  async setIcon(id: string, image: Buffer | undefined): Promise<{ message: string }> {
+    await this.icons().set(id, image);
+    await this.republishRouteById(id);
+    return { message: 'Icon saved. The Minecraft server shows it after its next start.' };
+  }
+
+  async removeIcon(id: string): Promise<{ message: string }> {
+    await this.icons().remove(id);
+    await this.republishRouteById(id);
+    return { message: 'Icon removed' };
+  }
+
+  private icons(): ServerIconService {
+    if (!this.iconService) {
+      throw new Error('ServerIconService is not available');
+    }
+    return this.iconService;
+  }
+
+  private async republishRouteById(id: string): Promise<void> {
+    try {
+      await this.gatewayIpcService?.publishRoute(id);
+    } catch (err: any) {
+      this.logger.warn(`Falha ao publicar a rota de [${id}] no Gateway: ${err.message}`);
+    }
+  }
+
   private async republishRoute(server: Server): Promise<void> {
     try {
       await this.gatewayIpcService?.publishRoute(server.id);

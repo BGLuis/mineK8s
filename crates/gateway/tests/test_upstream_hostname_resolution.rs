@@ -78,6 +78,7 @@ fn route_event(action: RouteAction, target: &str, status: &str) -> RouteUpdateEv
         routing_model: "VirtualHost".into(),
         listen_port: 0,
         auto_wake: true,
+        favicon: String::new(),
     }
 }
 

@@ -137,6 +137,7 @@ mod tests {
             allowed_user_ids: vec!["usr-alice".into()],
             game_type: "MINECRAFT".into(),
             auto_wake: true,
+            favicon: None,
         }
     }
 

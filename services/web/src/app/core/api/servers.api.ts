@@ -68,6 +68,21 @@ export class ServersApi {
     return this.api.patch(`/api/servers/${id}/settings`, patch);
   }
 
+  /** The 64x64 PNG shown in the Minecraft server list; 404 when the server has none. */
+  icon(id: string): Observable<Blob> {
+    return this.api.getBlob(`/api/servers/${id}/icon`);
+  }
+
+  setIcon(id: string, image: Blob): Observable<MessageResponse> {
+    const form = new FormData();
+    form.append('file', image, 'server-icon.png');
+    return this.api.put(`/api/servers/${id}/icon`, form);
+  }
+
+  removeIcon(id: string): Observable<MessageResponse> {
+    return this.api.delete(`/api/servers/${id}/icon`);
+  }
+
   updateDomain(id: string, domain: string): Observable<MessageResponse> {
     return this.api.patch(`/api/servers/${id}/domain`, { domain });
   }

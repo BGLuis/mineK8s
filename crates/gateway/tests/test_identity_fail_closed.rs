@@ -62,6 +62,7 @@ async fn start_gateway(
         allowed_user_ids: allowed_user_ids.iter().map(|s| s.to_string()).collect(),
         game_type: "MINECRAFT".into(),
         auto_wake: true,
+        favicon: None,
     });
 
     let mut server = GatewayServer::new(GatewayConfig::default()).with_route_table(route_table);

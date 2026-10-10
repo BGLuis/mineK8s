@@ -25,6 +25,7 @@ import {
 } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
+import { ServerIconService } from '../servers/server-icon.service';
 import { PlayerSessionsService } from './player-sessions.service';
 import {
   Empty,
@@ -81,6 +82,8 @@ export class GatewayIpcService {
     @Optional()
     private readonly playerSessions?: PlayerSessionsService,
     private readonly configService?: AppConfigService,
+    @Optional()
+    private readonly icons?: ServerIconService,
   ) {}
 
   /**
@@ -171,6 +174,7 @@ export class GatewayIpcService {
       routing_model: server.routing_model || 'VirtualHost',
       listen_port: server.allocated_port || 25565,
       auto_wake: server.auto_wake !== false,
+      favicon: (await this.icons?.dataUri(server)) ?? '',
     };
   }
 
