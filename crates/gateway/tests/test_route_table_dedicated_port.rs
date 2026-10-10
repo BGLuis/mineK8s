@@ -2,7 +2,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
-use gateway::routing::{CachedServerRoute, RouteTable, RoutingModel, ServerInstanceStatus};
+use gateway::routing::{
+    AccessPolicy, CachedServerRoute, RouteTable, RoutingModel, ServerInstanceStatus,
+};
 use gateway::{GatewayConfig, GatewayServer};
 
 /// Testa operações fundamentais da RouteTable (RF-GW-07): inserção, busca por hostname,
@@ -126,4 +128,101 @@ async fn test_dedicated_port_l4_forward_without_parser() {
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
+}
+
+fn virtual_host_route(server_id: &str, subdomain: &str) -> CachedServerRoute {
+    CachedServerRoute {
+        server_id: server_id.into(),
+        name: server_id.into(),
+        subdomain: subdomain.into(),
+        listener_port: 25565,
+        routing_model: RoutingModel::VirtualHost,
+        target_addr: Some("127.0.0.1:25566".parse().unwrap()),
+        status: ServerInstanceStatus::Ready,
+        ..Default::default()
+    }
+}
+
+/// Renomear o subdomínio de um servidor existente (PATCH de domínio) não pode deixar o nome
+/// antigo roteável nem uma rota órfã que sobreviva ao `remove`.
+#[test]
+fn test_upsert_with_new_subdomain_drops_old_route() {
+    let table = RouteTable::new();
+    table.insert(virtual_host_route("srv-a", "old.mine.lan"));
+    table.insert(virtual_host_route("srv-a", "new.mine.lan"));
+
+    assert!(table.lookup_virtual_host(25565, "old.mine.lan").is_none());
+    assert_eq!(
+        table
+            .lookup_virtual_host(25565, "new.mine.lan")
+            .unwrap()
+            .server_id,
+        "srv-a"
+    );
+    assert_eq!(table.len(), 1);
+
+    assert!(table.remove("srv-a").is_some());
+    assert!(table.is_empty());
+    assert!(table.lookup_virtual_host(25565, "new.mine.lan").is_none());
+}
+
+/// Mudar de VirtualHost para porta dedicada troca a chave da rota; a entrada de hostname
+/// antiga precisa sair da tabela.
+#[test]
+fn test_upsert_changing_routing_model_drops_old_route() {
+    let table = RouteTable::new();
+    table.insert(virtual_host_route("srv-a", "old.mine.lan"));
+    table.insert(CachedServerRoute {
+        listener_port: 25570,
+        routing_model: RoutingModel::DedicatedPort,
+        subdomain: "".into(),
+        ..virtual_host_route("srv-a", "")
+    });
+
+    assert!(table.lookup_virtual_host(25565, "old.mine.lan").is_none());
+    assert_eq!(table.lookup_dedicated(25570).unwrap().server_id, "srv-a");
+    assert_eq!(table.len(), 1);
+}
+
+/// UPSERT repetido com a mesma chave continua idempotente e aplica os campos novos.
+#[test]
+fn test_upsert_with_same_key_is_idempotent_and_updates_fields() {
+    let table = RouteTable::new();
+    table.insert(virtual_host_route("srv-a", "same.mine.lan"));
+    table.insert(CachedServerRoute {
+        status: ServerInstanceStatus::Stopped,
+        access_policy: AccessPolicy::Maintenance,
+        ..virtual_host_route("srv-a", "same.mine.lan")
+    });
+
+    assert_eq!(table.len(), 1);
+    let route = table.lookup_virtual_host(25565, "same.mine.lan").unwrap();
+    assert_eq!(route.status, ServerInstanceStatus::Stopped);
+    assert_eq!(route.access_policy, AccessPolicy::Maintenance);
+}
+
+/// Se a chave antiga já foi tomada por outro servidor, a rota dele não pode ser removida
+/// quando o servidor original muda de chave.
+#[test]
+fn test_upsert_rekey_keeps_old_key_owned_by_another_server() {
+    let table = RouteTable::new();
+    table.insert(virtual_host_route("srv-a", "shared.mine.lan"));
+    table.insert(virtual_host_route("srv-b", "shared.mine.lan"));
+    table.insert(virtual_host_route("srv-a", "moved.mine.lan"));
+
+    assert_eq!(
+        table
+            .lookup_virtual_host(25565, "shared.mine.lan")
+            .unwrap()
+            .server_id,
+        "srv-b"
+    );
+    assert_eq!(
+        table
+            .lookup_virtual_host(25565, "moved.mine.lan")
+            .unwrap()
+            .server_id,
+        "srv-a"
+    );
+    assert_eq!(table.len(), 2);
 }
