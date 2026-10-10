@@ -12,22 +12,6 @@ pub enum NicknameValidationError {
     PathTraversal,
 }
 
-impl NicknameValidationError {
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::Empty => "§cNickname não pode ser vazio.",
-            Self::TooShort => "§cNickname deve ter no mínimo 2 caracteres.",
-            Self::TooLong => "§cNickname deve ter no máximo 16 caracteres.",
-            Self::InvalidCharacters => {
-                "§cNickname contém caracteres inválidos. Apenas [a-zA-Z0-9_] são permitidos."
-            }
-            Self::SpacesNotAllowed => "§cNickname não pode conter espaços.",
-            Self::ControlCharacters => "§cCaracteres de controle não permitidos.",
-            Self::PathTraversal => "§cTentativa de path traversal detectada.",
-        }
-    }
-}
-
 pub fn validate_minecraft_nickname(nick: &str) -> Result<(), NicknameValidationError> {
     if nick.is_empty() {
         return Err(NicknameValidationError::Empty);

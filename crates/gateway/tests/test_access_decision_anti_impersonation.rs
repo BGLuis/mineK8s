@@ -137,6 +137,7 @@ async fn test_anti_impersonation_disconnect_under_50ms() {
         game_type: "MINECRAFT".into(),
         auto_wake: true,
         favicon: None,
+        language: Default::default(),
     };
     route_table.insert(route);
 
@@ -234,6 +235,7 @@ async fn test_invalid_nickname_format_disconnect_under_50ms() {
         game_type: "MINECRAFT".into(),
         auto_wake: true,
         favicon: None,
+        language: Default::default(),
     };
     route_table.insert(route);
 
@@ -282,7 +284,7 @@ async fn test_invalid_nickname_format_disconnect_under_50ms() {
     let disconnect = DisconnectPacket::decode(&mut disconnect_cursor).unwrap();
     assert!(disconnect
         .reason_json
-        .contains("Nickname não pode conter espaços"));
+        .contains("O nickname não pode ter espaços"));
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;
@@ -325,6 +327,7 @@ async fn test_maintenance_mode_and_admin_bypass() {
         game_type: "MINECRAFT".into(),
         auto_wake: true,
         favicon: None,
+        language: Default::default(),
     };
     route_table.insert(maint_route);
 
@@ -370,7 +373,7 @@ async fn test_maintenance_mode_and_admin_bypass() {
     let disconnect = DisconnectPacket::decode(&mut disconnect_cursor).unwrap();
     assert!(disconnect
         .reason_json
-        .contains("Servidor em manutenção técnica programada"));
+        .contains("Maintenance World em manutenção"));
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;

@@ -192,7 +192,9 @@ async fn test_auto_wake_disabled_immediate_rejection() {
     let raw = RawPacket::decode_prelogin(&mut cursor).unwrap();
     let mut dc_cursor = &raw.payload[..];
     let disconnect = DisconnectPacket::decode(&mut dc_cursor).unwrap();
-    assert!(disconnect.reason_json.contains("Auto-Wake desativado"));
+    assert!(disconnect
+        .reason_json
+        .contains("despertar automático está desativado"));
 
     let _ = shutdown_tx.send(true);
     let _ = server_task.await;

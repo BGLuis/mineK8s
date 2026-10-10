@@ -1,5 +1,6 @@
 use tracing::warn;
 
+use crate::messages::Language;
 use crate::routing::{
     AccessPolicy, CachedServerRoute, RoutingModel, ServerInstanceStatus, UpstreamAddr,
 };
@@ -34,6 +35,12 @@ pub struct RouteUpdateEvent {
     pub auto_wake: bool,
     #[prost(string, tag = "14")]
     pub favicon: String,
+    #[prost(string, tag = "15")]
+    pub name: String,
+    #[prost(int32, tag = "16")]
+    pub max_players: i32,
+    #[prost(string, tag = "17")]
+    pub language: String,
 }
 
 impl RouteUpdateEvent {
@@ -62,14 +69,22 @@ impl RouteUpdateEvent {
 
         CachedServerRoute {
             server_id: self.server_id.clone(),
-            name: self.server_id.clone(),
+            name: if self.name.is_empty() {
+                self.server_id.clone()
+            } else {
+                self.name.clone()
+            },
             subdomain: self.subdomain.clone(),
             listener_port: self.listen_port as u16,
             routing_model: RoutingModel::from(self.routing_model.as_str()),
             target_addr,
             status: ServerInstanceStatus::from(self.status.as_str()),
             proxy_protocol_upstream: self.proxy_protocol,
-            max_players: 20,
+            max_players: if self.max_players > 0 {
+                self.max_players as u32
+            } else {
+                20
+            },
             protocol_version: 765,
             access_policy: AccessPolicy::from(self.access_policy.as_str()),
             allowed_group_ids: self.allowed_group_ids.clone(),
@@ -77,6 +92,7 @@ impl RouteUpdateEvent {
             game_type: self.game_type.clone(),
             auto_wake: self.auto_wake,
             favicon: Some(self.favicon.clone()).filter(|favicon| !favicon.is_empty()),
+            language: Language::from_tag(&self.language),
         }
     }
 }

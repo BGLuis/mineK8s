@@ -4,6 +4,7 @@ pub mod error;
 pub mod identity;
 pub mod ipc;
 pub mod limiter;
+pub mod messages;
 pub mod motd;
 pub mod routing;
 pub mod server;

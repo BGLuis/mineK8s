@@ -117,4 +117,6 @@ pub struct CachedServerRoute {
     /// `data:image/png;base64,...` the Control Plane read from the world; shown in the server list
     /// while the JVM cannot answer the status request.
     pub favicon: Option<String>,
+    /// Idioma dos textos que o Gateway mostra ao cliente deste mundo.
+    pub language: crate::messages::Language,
 }
