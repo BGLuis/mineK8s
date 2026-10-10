@@ -59,8 +59,10 @@ describe('ServersService', () => {
       update: jest.fn(async (id: string, partial: Partial<Server>) => {
         Object.assign(serversDb.get(id)!, partial);
       }),
+      // TypeORM clears the primary key of the entity it removes.
       remove: jest.fn(async (entity) => {
         serversDb.delete(entity.id);
+        delete entity.id;
         return entity;
       }),
     };

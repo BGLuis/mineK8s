@@ -405,8 +405,10 @@ export class ServersService implements OnApplicationBootstrap {
     }
 
     await this.k8sService.deprovisionServer(server);
+    // TypeORM clears the primary key of the entity it removes, and the route is keyed by it.
+    const removed = { ...server } as Server;
     await this.serverRepo.remove(server);
-    this.dropRoute(server);
+    this.dropRoute(removed);
 
     return { message: 'Instance removed' };
   }
