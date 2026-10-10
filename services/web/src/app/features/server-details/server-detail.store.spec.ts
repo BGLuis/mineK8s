@@ -41,11 +41,15 @@ describe('ServerDetailStore', () => {
     history: [{ timestamp: '2026-10-09T10:00:00Z', tps: 19.5, mspt: 25, memoryUsedMb: 3072 }],
   };
 
-  function create(server: ServerDetail, statsCall = vi.fn(() => of(stats))) {
+  function create(
+    server: ServerDetail,
+    statsCall = vi.fn(() => of(stats)),
+    getCall = vi.fn(() => of(server)),
+  ) {
     TestBed.configureTestingModule({
       providers: [
         ServerDetailStore,
-        { provide: ServersApi, useValue: { get: () => of(server), stats: statsCall } },
+        { provide: ServersApi, useValue: { get: getCall, stats: statsCall } },
         { provide: ServersSocket, useValue: { signals: () => of({ type: 'connected' }) } },
         { provide: ServerLifecycle, useValue: { busy: signal(new Set<string>()) } },
       ],
@@ -69,6 +73,25 @@ describe('ServerDetailStore', () => {
     TestBed.tick();
 
     expect(store.accessPolicy()).toBe('GROUP');
+  });
+
+  describe('live refresh', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('keeps reloading the open server while the socket is connected but silent', async () => {
+      vi.useFakeTimers();
+      const get = vi.fn(() => of({ ...detail('GROUP'), state: 'READY' as const }));
+      const store = create(detail('GROUP'), undefined, get);
+
+      store.watch('srv-1');
+      TestBed.tick();
+      expect(get).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(get).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(get).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('runtime stats', () => {

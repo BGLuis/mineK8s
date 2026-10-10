@@ -9,13 +9,15 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription, skip } from 'rxjs';
 
 import { BackupsApi } from '../../../core/api/backups.api';
 import { BackupMode, ServerBackup, ServerState, TaskProgress } from '../../../core/api/models';
 import { ServersApi } from '../../../core/api/servers.api';
 import { TasksSocket } from '../../../core/realtime/tasks-socket';
 import { AuthSession } from '../../../core/auth/auth-session';
+import { visiblePoll } from '../../../core/polling/visible-poll';
 import {
   McBanner,
   McButton,
@@ -55,6 +57,8 @@ interface Operation {
   filename?: string;
   freezeMs?: number;
 }
+
+const LIST_POLL_MS = 15_000;
 
 const TONE_CLASSES: Record<BackupTone, string> = {
   success: 'text-status-success',
@@ -373,6 +377,22 @@ export class ServerBackupsPage {
       });
     });
     this.destroyRef.onDestroy(() => this.taskSub?.unsubscribe());
+
+    // Scheduled hot backups and retention change the list without the user doing anything.
+    visiblePoll(LIST_POLL_MS)
+      .pipe(skip(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refreshList());
+  }
+
+  /** Reloads without the skeleton and keeps what is on screen if the request fails. */
+  private refreshList(): void {
+    if (this.loading() || this.running()) {
+      return;
+    }
+    this.backupsApi.list(this.id()).subscribe({
+      next: (backups) => this.backups.set(backups),
+      error: () => undefined,
+    });
   }
 
   protected reload(): void {
