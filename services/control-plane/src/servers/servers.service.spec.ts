@@ -388,6 +388,61 @@ describe('ServersService', () => {
     });
   });
 
+  describe('o Gateway é avisado das mudanças de estado feitas pelo painel', () => {
+    const statusEvents = () =>
+      mockGatewayIpcService.broadcastRouteUpdate.mock.calls.map(([event]: any) => event);
+
+    it('stop manda STOPPED, para o Gateway acordar o mundo em vez de proxiar para um pod que não existe', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', name: 'Hub', subdomain: 'hub', state: 'READY' } as any);
+
+      await service.stop('srv-1');
+
+      expect(statusEvents()).toEqual([
+        expect.objectContaining({
+          action: RouteAction.STATUS_CHANGE,
+          server_id: 'srv-1',
+          status: 'STOPPED',
+        }),
+      ]);
+    });
+
+    it('start manda STARTING', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'STOPPED',
+      } as any);
+
+      await service.start('srv-1');
+
+      expect(statusEvents()).toEqual([
+        expect.objectContaining({ server_id: 'srv-1', status: 'STARTING' }),
+      ]);
+    });
+
+    it('restart termina avisando STARTING', async () => {
+      serversDb.set('srv-1', { id: 'srv-1', name: 'Hub', subdomain: 'hub', state: 'READY' } as any);
+
+      await service.restart('srv-1');
+
+      expect(statusEvents().at(-1)).toMatchObject({ server_id: 'srv-1', status: 'STARTING' });
+    });
+
+    it('um start que já estava em andamento não avisa nada', async () => {
+      serversDb.set('srv-1', {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'STARTING',
+      } as any);
+
+      await service.start('srv-1');
+
+      expect(statusEvents()).toEqual([]);
+    });
+  });
+
   describe('jogadores online', () => {
     const connect = (sessionId: string, nick: string) =>
       playerSessions.connected({
