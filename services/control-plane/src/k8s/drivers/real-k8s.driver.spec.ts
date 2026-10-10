@@ -83,6 +83,63 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
     ]);
   });
 
+  describe('recurso que já não existe (404 do API server)', () => {
+    const notFound = (path: string) => {
+      responses[path] = {
+        status: 404,
+        body: {
+          kind: 'Status',
+          apiVersion: 'v1',
+          status: 'Failure',
+          reason: 'NotFound',
+          code: 404,
+        },
+      };
+    };
+    const ns = '/namespaces/minekubernetes';
+
+    it.each([
+      [
+        'Deployment',
+        `/apis/apps/v1${ns}/deployments/mc-lobby`,
+        () => driver.deleteDeployment('mc-lobby'),
+      ],
+      ['Service', `/api/v1${ns}/services/mc-lobby`, () => driver.deleteService('mc-lobby')],
+      [
+        'PersistentVolumeClaim',
+        `/api/v1${ns}/persistentvolumeclaims/data-lobby`,
+        () => driver.deletePersistentVolumeClaim('data-lobby'),
+      ],
+      ['Job', `/apis/batch/v1${ns}/jobs/install-lobby`, () => driver.deleteJob('install-lobby')],
+    ])('apagar o %s ausente não é erro', async (_kind, path, remove) => {
+      notFound(path);
+
+      await expect(remove()).resolves.toBeUndefined();
+    });
+
+    it.each([
+      [
+        'Deployment',
+        `/apis/apps/v1${ns}/deployments/mc-lobby`,
+        () => driver.getDeployment('mc-lobby'),
+      ],
+      ['Job', `/apis/batch/v1${ns}/jobs/install-lobby`, () => driver.getJob('install-lobby')],
+    ])('ler o %s ausente devolve null', async (_kind, path, read) => {
+      notFound(path);
+
+      await expect(read()).resolves.toBeNull();
+    });
+
+    it('um erro que não é 404 continua subindo', async () => {
+      responses[`/apis/apps/v1${ns}/deployments/mc-lobby`] = {
+        status: 500,
+        body: { kind: 'Status', status: 'Failure', code: 500 },
+      };
+
+      await expect(driver.deleteDeployment('mc-lobby')).rejects.toBeDefined();
+    });
+  });
+
   describe('getPodStats', () => {
     const podsPath = '/api/v1/namespaces/minekubernetes/pods';
     const metricsPath = '/apis/metrics.k8s.io/v1beta1/namespaces/minekubernetes/pods';
