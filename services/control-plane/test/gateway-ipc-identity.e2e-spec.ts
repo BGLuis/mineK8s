@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { Group } from '../src/database/entities/group.entity';
+import { MinecraftServerSettings } from '../src/database/entities/minecraft-server-settings.entity';
 import { Invite } from '../src/database/entities/invite.entity';
 import { InviteGroup } from '../src/database/entities/invite-group.entity';
 import { InviteServer } from '../src/database/entities/invite-server.entity';
@@ -41,6 +42,7 @@ describe('GatewayIpcService identity resolution by client IP (real module wiring
       InviteServer,
       TailscaleDevice,
       Group,
+      MinecraftServerSettings,
     ]) {
       builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(emptyRepo);
     }

@@ -55,6 +55,36 @@ describe('RconConnectionPool (RF-RCON-03, PR-14)', () => {
     expect(client['options'].host).toBe('mc-survival-test.minekubernetes.svc.cluster.local');
   });
 
+  it('lê a senha RCON do banco quando o servidor chega sem minecraft_settings', async () => {
+    Object.assign(mockConfigService.kubernetes, { useMockDriver: false });
+    jest.spyOn(RconClient.prototype, 'connect').mockResolvedValue(undefined);
+    const settingsRepo = {
+      findOneBy: jest.fn(async () => ({ rcon_port: 25580, rcon_password: 'from-database' })),
+    };
+    pool = new RconConnectionPool(mockConfigService, settingsRepo as any);
+
+    const client = await pool.getOrCreateConnection({
+      ...mockServer,
+      minecraft_settings: undefined,
+    } as Server);
+
+    expect(settingsRepo.findOneBy).toHaveBeenCalledWith({ server_id: 'srv-pool-1' });
+    expect(client['options']).toMatchObject({ port: 25580, password: 'from-database' });
+  });
+
+  it('chamadas simultâneas compartilham a mesma conexão em vez de destruir uma à outra', async () => {
+    const connect = jest.spyOn(RconClient.prototype, 'connect').mockResolvedValue(undefined);
+    jest.spyOn(RconClient.prototype, 'isConnected').mockReturnValue(false);
+
+    const [first, second] = await Promise.all([
+      pool.getOrCreateConnection(mockServer),
+      pool.getOrCreateConnection(mockServer),
+    ]);
+
+    expect(second).toBe(first);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
   it('should remove and destroy connection on onServerStopped', async () => {
     const client = await pool.getOrCreateConnection(mockServer);
     const destroySpy = jest.spyOn(client, 'destroy');

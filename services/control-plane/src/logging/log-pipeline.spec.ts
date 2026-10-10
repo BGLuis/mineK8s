@@ -100,7 +100,7 @@ describe('Log Pipeline Components (RF-RCON-08, RF-RCON-09, RF-RCON-15)', () => {
       expect(entry.id).toBe('entry-1');
       expect(entry.level).toBe('WARN');
       expect(entry.timestamp).toBe('14:05:30');
-      expect(entry.message).toContain("Can't keep up!");
+      expect(entry.message).toBe("[Server thread/WARN]: Can't keep up! Is the server overloaded?");
       expect(entry.source).toBe('stdout');
     });
 

@@ -35,6 +35,11 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
         });
         const custom = responses[(req.url ?? '').split('?')[0]];
         res.statusCode = custom?.status ?? 200;
+        if (typeof custom?.body === 'string') {
+          res.setHeader('Content-Type', 'text/plain');
+          res.end(custom.body);
+          return;
+        }
         res.setHeader('Content-Type', 'application/json');
         res.end(
           JSON.stringify(custom?.body ?? { apiVersion: 'autoscaling/v1', kind: 'Scale', spec: {} }),
@@ -189,6 +194,42 @@ describe('RealKubernetesDriver contra um API server HTTP local', () => {
       };
 
       expect(await driver.getPodStats('mc-lobby')).toBeNull();
+    });
+  });
+  describe('streamPodLogs', () => {
+    const podsPath = '/api/v1/namespaces/minekubernetes/pods';
+    const logPath = `${podsPath}/mc-lobby-abc/log`;
+    const readAll = async (stream: NodeJS.ReadableStream) => {
+      let text = '';
+      for await (const chunk of stream) text += chunk;
+      return text;
+    };
+
+    it('follows the log of the runner container in the running pod', async () => {
+      responses[podsPath] = {
+        body: {
+          items: [{ metadata: { name: 'mc-lobby-abc' }, status: { phase: 'Running' } }],
+        },
+      };
+      responses[logPath] = { body: '[10:00:00 INFO]: Done\n[10:00:05 INFO]: Steve joined\n' };
+
+      const stream = await driver.streamPodLogs('mc-lobby');
+
+      expect(await readAll(stream as NodeJS.ReadableStream)).toBe(
+        '[10:00:00 INFO]: Done\n[10:00:05 INFO]: Steve joined\n',
+      );
+      const logRequest = requests.find((r) => r.url?.startsWith(logPath));
+      expect(logRequest?.url).toContain('follow=true');
+      expect(logRequest?.url).toContain('tailLines=500');
+      expect(logRequest?.url).toContain('container=runner');
+    });
+
+    it('returns null while the pod is not running', async () => {
+      responses[podsPath] = {
+        body: { items: [{ metadata: { name: 'mc-lobby-abc' }, status: { phase: 'Pending' } }] },
+      };
+
+      expect(await driver.streamPodLogs('mc-lobby')).toBeNull();
     });
   });
 });

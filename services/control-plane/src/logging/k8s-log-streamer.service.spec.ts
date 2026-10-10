@@ -97,4 +97,71 @@ describe('K8sLogStreamerService (RF-RCON-07, RF-RCON-08, RF-RCON-09, Guarda C-11
     // Buffer remains accessible
     expect(streamer.getBuffer('srv-stream-3')).toBeDefined();
   });
+  describe('acompanhamento do pod', () => {
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const podLog = (lines: string[]) => Readable.from(lines.map((line) => `${line}\n`));
+    /** A pod that keeps running: its log does not end, so the streamer has nothing to reopen. */
+    const livePodLog = (lines: string[]) => {
+      const stream = new Readable({ read() {} });
+      for (const line of lines) stream.push(`${line}\n`);
+      return stream;
+    };
+    const messages = (serverId: string) =>
+      streamer
+        .getBuffer(serverId)
+        .getHistory()
+        .map((entry) => entry.message);
+
+    it('tenta de novo enquanto não há pod e passa a ler quando ele aparece', async () => {
+      const factory = jest
+        .fn<Promise<Readable | null>, []>()
+        .mockResolvedValueOnce(null)
+        .mockImplementation(async () =>
+          livePodLog(['[10:00:00 INFO]: Done (1.0s)! For help, type "help"']),
+        );
+
+      await streamer.attachServerStream('srv-wait', 'mundo', factory, {
+        retryDelayMs: 5,
+        shouldRetry: () => true,
+      });
+      await wait(60);
+
+      expect(messages('srv-wait')).toEqual([expect.stringContaining('Done (1.0s)')]);
+    });
+
+    it('reabre o stream quando o pod termina e troca o histórico pelo do pod novo', async () => {
+      const factory = jest
+        .fn<Promise<Readable | null>, []>()
+        .mockResolvedValueOnce(podLog(['[10:00:00 INFO]: pod antigo']))
+        .mockImplementation(async () => livePodLog(['[10:05:00 INFO]: pod novo']));
+
+      await streamer.attachServerStream('srv-restart', 'mundo', factory, {
+        retryDelayMs: 5,
+        shouldRetry: () => true,
+      });
+      await wait(60);
+
+      expect(messages('srv-restart')).toEqual([expect.stringContaining('pod novo')]);
+    });
+
+    it('para de tentar quando ninguém está olhando e deixa o próximo attach recomeçar', async () => {
+      const factory = jest
+        .fn<Promise<Readable | null>, []>()
+        .mockImplementation(async () => podLog(['[10:00:00 INFO]: linha']));
+
+      await streamer.attachServerStream('srv-idle', 'mundo', factory, {
+        retryDelayMs: 5,
+        shouldRetry: () => false,
+      });
+      await wait(60);
+      expect(factory).toHaveBeenCalledTimes(1);
+
+      await streamer.attachServerStream('srv-idle', 'mundo', factory, {
+        retryDelayMs: 5,
+        shouldRetry: () => false,
+      });
+      await wait(30);
+      expect(factory).toHaveBeenCalledTimes(2);
+    });
+  });
 });

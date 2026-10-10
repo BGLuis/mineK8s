@@ -17,6 +17,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
   let mockAccessRepo: any;
   let mockConsoleDriver: any;
   let mockLogStreamer: any;
+  let mockK8sService: any;
   let mockAuthService: any;
   let mockJwtService: any;
   let mockSocketServer: any;
@@ -81,6 +82,8 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       attachServerStream: jest.fn().mockResolvedValue({}),
     };
 
+    mockK8sService = { streamServerLogs: jest.fn().mockResolvedValue(null) };
+
     mockAuthService = {
       validateUserById: jest.fn(async (id: string) => {
         if (id === testAdminUser.id) return testAdminUser;
@@ -107,6 +110,7 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       mockAccessRepo,
       mockConsoleDriver,
       mockLogStreamer,
+      mockK8sService,
       mockAuthService,
       mockJwtService,
       new TrustedProxyService({ authTrustedProxyIps: ['10.0.0.5'] } as any),
@@ -216,7 +220,29 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
 
       await gateway.handleJoinTerminal(mockClient, { serverId: testServer.id });
 
-      expect(mockLogStreamer.attachServerStream).toHaveBeenCalledWith(testServer.id, 'survival');
+      expect(mockLogStreamer.attachServerStream).toHaveBeenCalledWith(
+        testServer.id,
+        'survival',
+        expect.any(Function),
+        expect.objectContaining({ shouldRetry: expect.any(Function) }),
+      );
+    });
+
+    it('abre o log do pod pelo KubernetesService e só reabre enquanto a sala tem clientes', async () => {
+      const mockClient: any = { data: { user: testAdminUser }, join: jest.fn(), emit: jest.fn() };
+      const rooms = new Map<string, Set<string>>();
+      gateway.server = { ...mockSocketServer, sockets: { adapter: { rooms } } };
+
+      await gateway.handleJoinTerminal(mockClient, { serverId: testServer.id });
+      const [, , openStream, options] = mockLogStreamer.attachServerStream.mock.calls[0];
+
+      await openStream();
+      expect(mockK8sService.streamServerLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ id: testServer.id }),
+      );
+      expect(options.shouldRetry()).toBe(false);
+      rooms.set(testServer.id, new Set(['socket-1']));
+      expect(options.shouldRetry()).toBe(true);
     });
 
     it('should deny PLAYER without server access from joining terminal', async () => {

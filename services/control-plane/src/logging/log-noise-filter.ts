@@ -78,7 +78,8 @@ export class LogNoiseFilter {
       id: lineId || `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp,
       level,
-      message: cleanLine,
+      // The console shows the timestamp in its own column.
+      message: timestampMatch ? cleanLine.slice(timestampMatch[0].length).trim() : cleanLine,
       source: resolvedSource,
     };
   }

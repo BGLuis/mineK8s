@@ -15,6 +15,7 @@ import { ModpackTaskEntity } from '../src/database/entities/modpack-task.entity'
 import { Server } from '../src/database/entities/server.entity';
 import { ServerAuditLog } from '../src/database/entities/server-audit-log.entity';
 import { UserServerAccess } from '../src/database/entities/user-server-access.entity';
+import { KubernetesService } from '../src/k8s/k8s.service';
 import { K8sLogStreamerService } from '../src/logging/k8s-log-streamer.service';
 import { ServersStateGateway } from '../src/server-events/servers-state.gateway';
 import { TasksGateway } from '../src/tasks/tasks.gateway';
@@ -66,6 +67,7 @@ describe('Socket.IO namespaces: origin and handshake authentication (#92)', () =
         { provide: getRepositoryToken(ServerAuditLog), useValue: repo },
         { provide: CONSOLE_DRIVER_TOKEN, useValue: {} },
         { provide: K8sLogStreamerService, useValue: {} },
+        { provide: KubernetesService, useValue: {} },
       ],
     }).compile();
 
