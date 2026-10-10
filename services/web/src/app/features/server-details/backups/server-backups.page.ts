@@ -30,6 +30,7 @@ import {
   BackupTone,
   RETENTION_SUMMARY,
   backupDisplayPercent,
+  backupDownloadName,
   backupErrorMessage,
   backupTypeLabel,
   canRestore,
@@ -296,6 +297,7 @@ export class ServerBackupsPage {
   protected readonly loading = signal(true);
   protected readonly loadError = signal('');
   private readonly serverState = signal<ServerState | null>(null);
+  private readonly serverName = signal('');
 
   protected readonly operation = signal<Operation | null>(null);
   protected readonly operationError = signal('');
@@ -366,7 +368,10 @@ export class ServerBackupsPage {
       const id = this.id();
       untracked(() => {
         this.servers.get(id).subscribe({
-          next: (server) => this.serverState.set(server.state),
+          next: (server) => {
+            this.serverState.set(server.state);
+            this.serverName.set(server.name);
+          },
           error: () => this.serverState.set(null),
         });
         this.reload();
@@ -473,9 +478,13 @@ export class ServerBackupsPage {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = backup.filename;
+        link.download = backupDownloadName(this.serverName(), backup.createdAt);
+        // Attached and revoked later: some browsers ignore `download` on a detached link or a URL
+        // revoked right away, and save the file under the blob's UUID.
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(url);
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
       },
       error: (error) => {
         this.downloadingId.set(null);
