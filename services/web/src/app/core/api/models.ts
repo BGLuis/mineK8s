@@ -56,6 +56,8 @@ export interface MinecraftServerSettings {
   rcon_port: number;
   enforce_secure_chat: boolean;
   online_mode: boolean;
+  /** Language of the texts the gateway shows the Minecraft client of this world. */
+  language: string;
 }
 
 /** GET /api/servers/:id. */

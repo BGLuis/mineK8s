@@ -20,6 +20,7 @@ const SERVER_SETTINGS: MinecraftServerSettings = {
   rcon_port: 25575,
   enforce_secure_chat: false,
   online_mode: false,
+  language: 'pt-BR',
 };
 
 const INITIAL: WorldSettings = toWorldSettings(SERVER_SETTINGS);
@@ -38,6 +39,7 @@ describe('toWorldSettings', () => {
       simulationDistance: '10',
       enforceSecureChat: false,
       onlineMode: false,
+      language: 'pt-BR',
     });
   });
 });
@@ -82,8 +84,15 @@ describe('diffWorldSettings', () => {
       maxPlayers: '8',
       pvp: false,
       onlineMode: true,
+      language: 'en',
     });
 
-    expect(patch).toEqual({ motd: 'Bem-vindo', max_players: 8, pvp: false, online_mode: true });
+    expect(patch).toEqual({
+      motd: 'Bem-vindo',
+      max_players: 8,
+      pvp: false,
+      online_mode: true,
+      language: 'en',
+    });
   });
 });
