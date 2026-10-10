@@ -61,7 +61,17 @@ kubectl -n minekubernetes logs deploy/control-plane | grep INITIAL_BOOTSTRAP_TOK
 
 ## Atualizar
 
-Repita o passo 2 e reinicie:
+`k8s/update.sh` faz o `git pull --ff-only`, constrói as duas imagens, importa no containerd (com `sudo`, então rode num terminal), troca a imagem dos Deployments e espera o rollout. Se o rollout falhar, mostra o log do `migrate` e volta o Deployment para a versão anterior. `--no-pull` constrói o que já está no checkout; `check` só confere o ambiente.
+
+```bash
+k8s/update.sh
+```
+
+As imagens levam como tag os 12 primeiros dígitos do próprio ID, então o que não mudou não é reiniciado e `kubectl rollout undo` encontra a imagem anterior. Isso vale mesmo se o mesmo comando rodar de novo. O gateway só reinicia (e derruba as conexões abertas) quando a imagem dele muda; os mundos de Minecraft são Deployments à parte e continuam rodando. O control plane e o gateway usam `strategy: Recreate`, então o painel fica fora do ar por alguns instantes durante a troca.
+
+Uma migração que já foi aplicada não volta com o rollback; reverta-a à mão antes de voltar a versão se o código antigo não a entender.
+
+Sem o script, o equivalente é repetir o passo 2 e reiniciar:
 
 ```bash
 kubectl -n minekubernetes rollout restart deploy/control-plane deploy/gateway
