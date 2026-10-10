@@ -9,7 +9,7 @@ const BACKEND_PREFIXES = ['/api', '/socket.io', '/healthz'];
 
 /**
  * Helmet's default policy, adjusted for the Angular build in services/web: scripts only from this origin and never
- * inline, fonts self-hosted, images from this origin plus the player heads of mc-heads.net. Angular inserts component styles as `<style>` elements at runtime, so styles keep
+ * inline, fonts self-hosted, images from this origin (and `blob:`, for the icon preview) plus the player heads of mc-heads.net. Angular inserts component styles as `<style>` elements at runtime, so styles keep
  * 'unsafe-inline'. The panel is reached over plain HTTP inside the tailnet, where upgrade-insecure-requests would
  * rewrite every asset URL to an https:// origin that does not exist.
  */
@@ -17,7 +17,7 @@ export const SPA_HELMET_OPTIONS: HelmetOptions = {
   contentSecurityPolicy: {
     directives: {
       'font-src': ["'self'"],
-      'img-src': ["'self'", 'data:', 'https://mc-heads.net'],
+      'img-src': ["'self'", 'data:', 'blob:', 'https://mc-heads.net'],
       'style-src': ["'self'", "'unsafe-inline'"],
       'upgrade-insecure-requests': null,
     },
