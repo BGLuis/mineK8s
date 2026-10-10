@@ -15,6 +15,7 @@ describeWithDatabase('ServerStateSubscriber contra Postgres real', () => {
     dataSource.getRepository(Server).create({
       name: subdomain,
       subdomain,
+      resource_name: subdomain,
       server_type: 'PAPER',
       game_version: '1.20.4',
     });

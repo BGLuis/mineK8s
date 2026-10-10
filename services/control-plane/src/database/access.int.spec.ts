@@ -81,6 +81,7 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
         repo(Server).create({
           name,
           subdomain: name.toLowerCase(),
+          resource_name: name.toLowerCase(),
           server_type: 'PAPER',
           game_version: '1.20.4',
           access_policy,
