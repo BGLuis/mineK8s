@@ -186,4 +186,65 @@ describe('HealthBotProbeService (RF-ARQ-30, Milestone F9)', () => {
     expect(report.stage).toBe('failed');
     expect(report.error).toContain('Socket connection error');
   });
+  it('logs in with the protocol the server reports, not a fixed version', async () => {
+    const handshakes: { protocol: number; nextState: number }[] = [];
+    const statusJson = JSON.stringify({
+      version: { name: '26.3', protocol: 777 },
+      players: { online: 0, max: 20 },
+    });
+    server = net.createServer((socket) => {
+      socket.on('data', (chunk) => {
+        if (chunk.length < 3) return; // the empty Status Request frame, which may arrive on its own
+        let offset = probeService.decodeVarInt(chunk, 0).bytesRead; // frame length
+        offset += probeService.decodeVarInt(chunk, offset).bytesRead; // packet id
+        const protocol = probeService.decodeVarInt(chunk, offset);
+        offset += protocol.bytesRead;
+        offset += probeService.decodeString(chunk, offset).bytesRead + 2; // address, port
+        const nextState = probeService.decodeVarInt(chunk, offset).value;
+        handshakes.push({ protocol: protocol.value, nextState });
+
+        const respond = (payload: Buffer) =>
+          socket.write(Buffer.concat([probeService.encodeVarInt(payload.length), payload]));
+        if (nextState === 1) {
+          respond(
+            Buffer.concat([probeService.encodeVarInt(0x00), probeService.encodeString(statusJson)]),
+          );
+        } else if (protocol.value === 777) {
+          respond(
+            Buffer.concat([
+              probeService.encodeVarInt(0x02),
+              Buffer.alloc(16, 1),
+              probeService.encodeString('__healthbot__'),
+              probeService.encodeVarInt(0),
+            ]),
+          );
+        } else {
+          respond(
+            Buffer.concat([
+              probeService.encodeVarInt(0x00),
+              probeService.encodeString('{"translate":"multiplayer.disconnect.incompatible"}'),
+            ]),
+          );
+        }
+      });
+    });
+    await new Promise<void>((resolve) => {
+      server!.listen(0, '127.0.0.1', () => {
+        serverPort = (server!.address() as net.AddressInfo).port;
+        resolve();
+      });
+    });
+
+    const report = await probeService.probe({
+      serverId: 'srv-26',
+      subdomain: 'sekiro',
+      host: '127.0.0.1',
+      port: serverPort,
+      timeoutMs: 2000,
+    });
+
+    expect(report.error).toBeUndefined();
+    expect(report.healthy).toBe(true);
+    expect(handshakes).toContainEqual({ protocol: 777, nextState: 2 });
+  });
 });

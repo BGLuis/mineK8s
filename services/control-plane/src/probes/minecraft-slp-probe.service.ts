@@ -134,6 +134,7 @@ export class MinecraftSlpProbeService implements GameProbeProvider {
           finish({
             ready: true,
             version: parsed.version?.name || 'unknown',
+            protocol: parsed.version?.protocol,
             playersOnline: parsed.players?.online ?? 0,
             maxPlayers: parsed.players?.max ?? 0,
             latencyMs,
