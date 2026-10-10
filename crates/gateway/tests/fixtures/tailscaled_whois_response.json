@@ -1,0 +1,58 @@
+{
+  "Node": {
+    "ID": 1100000000000001,
+    "StableID": "nExAmPlE1CNTRL",
+    "Name": "alex-pc.example-tailnet.ts.net.",
+    "User": 2200000000000002,
+    "Key": "nodekey:0000000000000000000000000000000000000000000000000000000000000000",
+    "KeyExpiry": "2026-12-23T02:25:53Z",
+    "DiscoKey": "discokey:1111111111111111111111111111111111111111111111111111111111111111",
+    "Addresses": ["100.64.0.77/32", "fd7a:115c:a1e0::4d/128"],
+    "AllowedIPs": ["100.64.0.77/32", "fd7a:115c:a1e0::4d/128"],
+    "Endpoints": ["203.0.113.10:41641", "192.0.2.5:41641", "10.0.0.5:41641"],
+    "Hostinfo": {
+      "Hostname": "alex-pc",
+      "Services": [
+        {
+          "Proto": "peerapi4",
+          "Port": 58619
+        },
+        {
+          "Proto": "peerapi6",
+          "Port": 39923
+        },
+        {
+          "Proto": "peerapi-dns-proxy",
+          "Port": 1
+        }
+      ]
+    },
+    "Created": "2025-12-27T20:31:36.266096317Z",
+    "MachineAuthorized": true,
+    "CapMap": {
+      "default-auto-update": [true],
+      "funnel": [],
+      "https": [],
+      "https://tailscale.com/cap/file-sharing": [],
+      "https://tailscale.com/cap/funnel-ports?ports=443,8443,10000": [],
+      "https://tailscale.com/cap/is-admin": [],
+      "https://tailscale.com/cap/is-owner": [],
+      "https://tailscale.com/cap/ssh": [],
+      "https://tailscale.com/cap/tailnet-lock": [],
+      "probe-udp-lifetime": [],
+      "ssh-behavior-v1": [],
+      "ssh-env-vars": [],
+      "store-appc-routes": [],
+      "tailnet-display-name": ["alex@example.com"]
+    },
+    "ComputedName": "alex-pc",
+    "ComputedNameWithHost": "alex-pc"
+  },
+  "UserProfile": {
+    "ID": 2200000000000002,
+    "LoginName": "alex@example.com",
+    "DisplayName": "Alex Example",
+    "ProfilePicURL": "https://example.com/avatar.png"
+  },
+  "CapMap": null
+}

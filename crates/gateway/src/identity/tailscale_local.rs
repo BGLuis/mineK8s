@@ -174,16 +174,16 @@ impl TailscaleLocalWhoIs {
         stream.read_to_end(&mut response).await?;
 
         // 5. Separa headers do body HTTP
-        let resp_str = String::from_utf8_lossy(&response);
-        let parts: Vec<&str> = resp_str.splitn(2, "\r\n\r\n").collect();
-        if parts.len() < 2 {
+        let Some(header_end) = find_subslice(&response, b"\r\n\r\n") else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Resposta HTTP incompleta recebida da LocalAPI do Tailscale",
             ));
-        }
+        };
+        let head = String::from_utf8_lossy(&response[..header_end]);
+        let raw_body = &response[header_end + 4..];
 
-        let header_line = parts[0].lines().next().unwrap_or("");
+        let header_line = head.lines().next().unwrap_or("");
         if header_line.contains(" 404 ") {
             return Ok(None);
         }
@@ -195,8 +195,14 @@ impl TailscaleLocalWhoIs {
             ));
         }
 
-        let body = parts[1];
-        let whois: TailscaleWhoIsResponse = serde_json::from_str(body).map_err(|e| {
+        // O tailscaled responde em `Transfer-Encoding: chunked` (sem Content-Length): o corpo
+        // bruto começa pelo tamanho do primeiro chunk em hexadecimal e não é JSON válido.
+        let body = if is_chunked(&head) {
+            decode_chunked(raw_body)?
+        } else {
+            raw_body.to_vec()
+        };
+        let whois: TailscaleWhoIsResponse = serde_json::from_slice(&body).map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Falha no parser JSON do WhoIs: {}", e),
@@ -262,6 +268,52 @@ impl TailscaleLocalWhoIs {
         }
 
         None
+    }
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn is_chunked(head: &str) -> bool {
+    head.lines().skip(1).any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.trim().eq_ignore_ascii_case("transfer-encoding")
+                && value.to_ascii_lowercase().contains("chunked")
+        })
+    })
+}
+
+/// Decodifica um corpo HTTP/1.1 `Transfer-Encoding: chunked` (RFC 9112, seção 7.1): ignora
+/// extensões de chunk e para no chunk final de tamanho zero, descartando os trailers.
+fn decode_chunked(mut raw: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+    let invalid = |reason: &str| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Corpo chunked inválido na resposta da LocalAPI: {reason}"),
+        )
+    };
+
+    let mut body = Vec::new();
+    loop {
+        let line_end = find_subslice(raw, b"\r\n").ok_or_else(|| invalid("chunk truncado"))?;
+        let size_field = String::from_utf8_lossy(&raw[..line_end]);
+        let size_hex = size_field.split(';').next().unwrap_or("").trim();
+        let size = usize::from_str_radix(size_hex, 16)
+            .map_err(|_| invalid("tamanho de chunk não hexadecimal"))?;
+        raw = &raw[line_end + 2..];
+
+        if size == 0 {
+            return Ok(body);
+        }
+
+        let chunk = raw.get(..size).ok_or_else(|| invalid("chunk truncado"))?;
+        body.extend_from_slice(chunk);
+        raw = raw[size..]
+            .strip_prefix(b"\r\n")
+            .ok_or_else(|| invalid("chunk sem CRLF final"))?;
     }
 }
 
