@@ -6,6 +6,7 @@ export * from './no-api-tag/no-api-tag';
 export * from './text-field/text-field';
 export * from './panel/panel';
 export * from './meter/meter';
+export * from './player-head/player-head';
 export * from './progress/progress';
 export * from './ram-slider/ram-slider';
 export * from './sidebar/sidebar';
