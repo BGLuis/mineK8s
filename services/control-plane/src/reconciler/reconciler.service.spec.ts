@@ -250,6 +250,33 @@ describe('ReconcilerService (RF-ARQ-01..06, RF-ARQ-25 - Lifecycle & Reconciler L
       );
     });
 
+    it('começa a contar a inatividade na hora em que o servidor fica READY, não na última vez que teve jogador', async () => {
+      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+      const server = {
+        id: 'srv-smp-1',
+        name: 'Survival SMP',
+        subdomain: 'smp',
+        resource_name: 'smp',
+        state: 'STARTING',
+        restart_count: 0,
+        sleep_timeout_minutes: 15,
+        last_player_active_at: twentyMinutesAgo,
+      } as Server;
+      serversDb.set(server.id, server);
+      clusterDeployments.set('mc-smp', {
+        name: 'mc-smp',
+        replicas: 1,
+        status: { readyReplicas: 1 },
+      });
+      const before = Date.now();
+
+      await reconciler.reconcile();
+      await reconciler.reconcile();
+
+      expect(server.last_player_active_at!.getTime()).toBeGreaterThanOrEqual(before);
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+    });
+
     it('should remain in STARTING if pod is ready in K8s but SLP probe fails', async () => {
       const server: Server = {
         id: 'srv-smp-1',
