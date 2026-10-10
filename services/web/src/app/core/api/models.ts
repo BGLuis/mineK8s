@@ -591,6 +591,11 @@ export interface NodeMetrics {
   tailnet: { active: number; limit: number };
 }
 
+/** PATCH /api/servers/:id/settings: applied to server.properties on the next start. */
+export type UpdateServerSettingsRequest = Partial<
+  Omit<MinecraftServerSettings, 'enable_rcon' | 'rcon_port'>
+>;
+
 /** PATCH /api/servers/:id. INTERNET is not accepted here: publishing goes through /publish. */
 export interface UpdateServerRequest {
   /** A running server restarts to pick up the new heap. */

@@ -20,6 +20,11 @@ export const SERVER_DETAILS_ROUTES: Routes = [
           import('./console/server-console.page').then((m) => m.ServerConsolePage),
       },
       {
+        path: 'world',
+        title: 'Mundo · mineK8s',
+        loadComponent: () => import('./world/server-world.page').then((m) => m.ServerWorldPage),
+      },
+      {
         path: 'files',
         title: 'Arquivos · mineK8s',
         canDeactivate: [canDeactivateFiles],

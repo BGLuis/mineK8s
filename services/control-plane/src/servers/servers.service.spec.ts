@@ -587,6 +587,74 @@ describe('ServersService', () => {
     });
   });
 
+  describe('updateSettings (PATCH /api/servers/:id/settings)', () => {
+    const seed = (overrides: Partial<Server> = {}) => {
+      const settings = {
+        id: 'set-1',
+        server_id: 'srv-1',
+        motd: 'Antigo',
+        max_players: 20,
+        online_mode: false,
+        rcon_password: 'segredo-rcon',
+      };
+      const server = {
+        id: 'srv-1',
+        name: 'Hub',
+        subdomain: 'hub',
+        state: 'READY',
+        access_policy: 'GROUP',
+        minecraft_settings: settings,
+        ...overrides,
+      } as any;
+      serversDb.set('srv-1', server);
+      return { server, settings };
+    };
+
+    it('grava só os campos enviados e devolve o servidor com as configurações novas', async () => {
+      const { settings } = seed();
+
+      const detail = await service.updateSettings('srv-1', { motd: 'Novo', max_players: 8 });
+
+      expect(settings).toMatchObject({ motd: 'Novo', max_players: 8, online_mode: false });
+      expect(mockSettingsRepo.save).toHaveBeenCalledWith(settings);
+      expect(detail.settings).toMatchObject({ motd: 'Novo', max_players: 8 });
+    });
+
+    it('nunca devolve a senha do RCON', async () => {
+      seed();
+
+      const detail = await service.updateSettings('srv-1', { motd: 'Novo' });
+
+      expect(JSON.stringify(detail)).not.toContain('segredo-rcon');
+    });
+
+    it('recusa trocar a senha do RCON: o servidor em execução continuaria com a antiga', async () => {
+      seed();
+
+      await expect(
+        service.updateSettings('srv-1', { rcon_password: 'outra-senha' }),
+      ).rejects.toThrow(/RCON password/);
+    });
+
+    it('recusa corpo vazio', async () => {
+      seed();
+
+      await expect(service.updateSettings('srv-1', {})).rejects.toThrow(/at least one field/);
+    });
+
+    it('recusa desligar o online-mode de um servidor publicado na internet', async () => {
+      seed({ access_policy: 'INTERNET' });
+
+      await expect(service.updateSettings('srv-1', { online_mode: false })).rejects.toThrow(
+        /published/,
+      );
+    });
+
+    it('404 para servidor inexistente', async () => {
+      await expect(service.updateSettings('nope', { motd: 'x' })).rejects.toThrow(/not found/);
+    });
+  });
+
   describe('updateDomain', () => {
     it('should update subdomain when not taken', async () => {
       const server: Server = {

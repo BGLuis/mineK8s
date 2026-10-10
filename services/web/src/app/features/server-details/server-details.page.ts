@@ -162,6 +162,7 @@ export class ServerDetailsPage {
     return [
       { id: 'overview', label: 'Visão geral', link: base },
       { id: 'console', label: 'Console', link: [...base, 'console'] },
+      { id: 'world', label: 'Mundo', link: [...base, 'world'] },
       { id: 'files', label: 'Arquivos', link: [...base, 'files'] },
       { id: 'backups', label: 'Backups', link: [...base, 'backups'] },
       { id: 'access', label: 'Rede e acesso', link: ['/access'] },
