@@ -22,7 +22,9 @@ A StorageClass `local-nvme` cria cada PVC em `/var/lib/rancher/k3s/storage/minek
 
 ## Primeiro deploy
 
-Os passos com `sudo` precisam ser feitos por você.
+`k8s/bootstrap.sh` faz os passos abaixo (confere kernel, disco e portas, gera `k8s/site.env` com `DB_PASSWORD` e `JWT_SECRET`, constrói e importa as imagens, aplica e espera os rollouts). Ele chama `sudo` sozinho, então rode-o num terminal. `k8s/bootstrap.sh check` só confere o ambiente, sem mudar nada.
+
+Os passos manuais, caso prefira fazê-los um a um (os com `sudo` precisam ser feitos por você):
 
 ```bash
 # 1. Subir o k3s
