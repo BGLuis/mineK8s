@@ -194,6 +194,8 @@ export class ReconcilerService implements OnApplicationBootstrap, OnApplicationS
               );
               server.state = 'READY';
               server.restart_count = 0;
+              // A start after a manual stop leaves the old timestamp; hibernation counts from now.
+              server.last_player_active_at = new Date();
               await this.serverRepo.save(server);
               this.notifyGateway(server, 'READY');
               stateTransitions.push(`${server.subdomain}: STARTING -> READY`);
