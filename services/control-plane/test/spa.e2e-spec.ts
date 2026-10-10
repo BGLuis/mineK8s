@@ -56,6 +56,7 @@ describe('SPA served by the control plane (#94)', () => {
     expect(csp).toContain("script-src 'self';");
     expect(csp).toContain("script-src-attr 'none'");
     expect(csp).toContain("font-src 'self';");
+    expect(csp).toContain("img-src 'self' data: https://mc-heads.net;");
     expect(csp).not.toContain('upgrade-insecure-requests');
   });
 
