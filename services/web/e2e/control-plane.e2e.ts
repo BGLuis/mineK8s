@@ -66,6 +66,10 @@ test('criar servidor Vanilla e ligá-lo até READY', async () => {
 test('console: /list vai pelo RCON e a resposta volta por command_output', async () => {
   await page.goto(`${serverPath}/console`);
   await expect(page.getByRole('status').filter({ hasText: 'Conectado' })).toBeVisible();
+  await page
+    .getByRole('group', { name: 'Origem da saída' })
+    .getByRole('button', { name: 'RCON' })
+    .click();
 
   const input = page.getByPlaceholder('Digite um comando (↑/↓ histórico)');
   await input.fill('/list');
