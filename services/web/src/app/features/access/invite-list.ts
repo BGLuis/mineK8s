@@ -28,7 +28,7 @@ import {
       } @else if (invites.value(); as list) {
         @if (list.length === 0) {
           <p class="t-body-md text-text-muted">
-            Nenhum convite ainda. Gere o primeiro ao lado para chamar um amigo.
+            Nenhum convite ainda. Os que você gerar aparecem aqui.
           </p>
         } @else {
           <ul class="flex flex-col">

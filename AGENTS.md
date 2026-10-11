@@ -52,6 +52,7 @@ Na raiz: `npm run check` (Biome) e `npm run fix`. Os hooks (lefthook) formatam n
 - **`@kubernetes/client-node` 2.x** expõe o status HTTP em `err.code` (não `statusCode`).
 - **Todo comando RCON tem timeout, inclusive enquanto espera na fila** (`rcon-client.ts`): um cliente desconectado, como o de uma senha recusada, não pode travar quem o chamou (stop, restart, backup).
 - **O servidor de Minecraft roda `online-mode=false` e `white-list=false` atrás do gateway**; quem decide a entrada é o gateway. Mundo publicado na internet exige `online-mode=true`.
+- **Configuração editável no painel** (`services/control-plane/src/settings`): o valor efetivo é banco > variável de ambiente > padrão, e `AppConfigService.tailscale/access/cloudflare/healthBot` já o devolvem. Nova configuração entra em `settings.definitions.ts`; leia-a sob demanda (nunca no construtor) para valer sem reiniciar. Segredos são só de escrita (cifrados com chave derivada de `JWT_SECRET`) e nunca vão para log nem resposta.
 - **Estado em tempo real:** transições de estado saem de um subscriber do TypeORM; mudanças de jogadores, backups e estatísticas saem pelo `ServerActivityBus` como `serverActivity`. O painel só faz polling enquanto o socket está fora do ar.
 - **Rust:** compartilhar `CARGO_TARGET_DIR` entre worktrees gera artefatos velhos "frescos" (o hash e o `CARGO_MANIFEST_DIR` são do primeiro checkout). Use um alvo por worktree ou `cargo clean -p <crate>`.
 - **Ao trabalhar em worktrees**, os `node_modules` são por pasta (`/`, `services/control-plane`, `services/web`).

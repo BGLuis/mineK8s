@@ -607,3 +607,50 @@ export interface UpdateServerRequest {
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
 }
+
+export type SettingType = 'text' | 'url' | 'domain' | 'boolean' | 'integer' | 'secret';
+
+/** Where the effective value of a setting comes from: the database wins over the environment, then the default. */
+export type SettingSource = 'database' | 'environment' | 'default';
+
+/** settings.types.ts SettingView. Secrets never carry `value`: only `isSet`. */
+export interface SettingView {
+  key: string;
+  type: SettingType;
+  label: string;
+  description: string;
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  envName: string;
+  source: SettingSource;
+  value?: string | number | boolean;
+  defaultValue?: string | number | boolean;
+  isSet?: boolean;
+  updatedAt?: string;
+  updatedBy?: string | null;
+}
+
+export interface SettingSectionView {
+  id: string;
+  title: string;
+  description: string;
+  settings: SettingView[];
+}
+
+/** A value that only changes in the Kubernetes manifest and needs a restart to take effect. */
+export interface ReadOnlySettingView {
+  key: string;
+  label: string;
+  envName: string;
+  value: string;
+}
+
+/** GET and PATCH /api/settings (admin). */
+export interface SettingsSnapshot {
+  sections: SettingSectionView[];
+  readOnly: ReadOnlySettingView[];
+}
+
+/** PATCH /api/settings: null removes the saved value, so the environment (or the default) applies again. */
+export type SettingsChanges = Record<string, string | number | boolean | null>;

@@ -10,4 +10,5 @@ export * from './health.api';
 export * from './node.api';
 export * from './auth.api';
 export * from './tasks.api';
+export * from './settings.api';
 export * from './api-error';

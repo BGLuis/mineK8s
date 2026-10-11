@@ -7,13 +7,16 @@ export interface InviteErrorView {
   text: string;
   /** Network and server failures can be retried; a bad invite cannot. */
   retryable: boolean;
+  /** A feature switched off by the admin is a notice, not the visitor's mistake. */
+  notice?: boolean;
 }
 
 const ASK_FOR_NEW_LINK = 'Peça um link novo para quem convidou você.';
 
 /**
  * Maps the failure of GET /api/tailscale/invites/validate/:token to a friendly card.
- * Both revoked and expired are 400, so the backend error `code` tells them apart.
+ * Both revoked and expired are 400, so the backend error `code` tells them apart. 403 means the admin
+ * turned key invites off.
  */
 export function inviteErrorView(error: unknown): InviteErrorView {
   const http = asHttpError(error);
@@ -22,6 +25,14 @@ export function inviteErrorView(error: unknown): InviteErrorView {
       title: 'Não foi possível verificar o convite',
       text: 'O servidor não respondeu. Confira sua conexão e tente de novo.',
       retryable: true,
+    };
+  }
+  if (http.status === 403 && codeOf(http) === 'INVITE_KEY_DISABLED') {
+    return {
+      title: 'Convites por chave estão desativados',
+      text: 'Esta rede não usa mais convite com chave de acesso. Peça a quem administra a rede para liberar seu acesso pelo Tailscale.',
+      retryable: false,
+      notice: true,
     };
   }
   if (http.status === 409) {

@@ -78,6 +78,25 @@ describe('JoinPage', () => {
     expect(el.querySelector('form')).toBeNull();
   });
 
+  it('shows a warning instead of the form when key invites are turned off', async () => {
+    const { fixture, el } = await setup('tok');
+
+    http.expectOne('/api/tailscale/invites/validate/tok').flush(
+      {
+        code: 'INVITE_KEY_DISABLED',
+        message: 'Os convites com chave de acesso estão desativados.',
+      },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    await fixture.whenStable();
+
+    expect(el.querySelector('h1')?.textContent).toContain('Convites por chave estão desativados');
+    expect(el.querySelector('mc-banner')?.textContent).toContain('Convite indisponível');
+    expect(el.textContent).toContain('liberar seu acesso pelo Tailscale');
+    expect(el.querySelector('form')).toBeNull();
+    expect(el.querySelector('input')).toBeNull();
+  });
+
   it('shows the invite details and the remaining uses', async () => {
     const { fixture, el } = await setup('tok');
 
