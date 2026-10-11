@@ -148,4 +148,41 @@ describe('TailscaleCloudDriver (RF-TS-05, RF-TS-14)', () => {
     expect(devices).toEqual([]);
     expect(callCount).toBe(2);
   });
+
+  describe('credentials saved on the settings page', () => {
+    const okResponse = { ok: true, status: 200, json: async () => ({ devices: [] }) };
+
+    it('are read on every request, so a change applies without a restart', async () => {
+      const tailscale = { apiKey: 'tskey-api-FAKE-first', tailnetName: 'first.ts.net' };
+      const live = new TailscaleCloudDriver({ tailscale } as any);
+      global.fetch = jest.fn().mockResolvedValue(okResponse);
+
+      await live.getDevices();
+      tailscale.apiKey = 'tskey-api-FAKE-second';
+      tailscale.tailnetName = 'second.ts.net';
+      await live.getDevices();
+
+      const [[firstUrl, firstInit], [secondUrl, secondInit]] = (global.fetch as jest.Mock).mock
+        .calls;
+      expect(firstUrl).toContain('/tailnet/first.ts.net/devices');
+      expect(firstInit.headers.Authorization).toBe('Bearer tskey-api-FAKE-first');
+      expect(secondUrl).toContain('/tailnet/second.ts.net/devices');
+      expect(secondInit.headers.Authorization).toBe('Bearer tskey-api-FAKE-second');
+    });
+
+    it('use the tailnet name the posture service reads (TAILNET_NAME) when there is no settings object', async () => {
+      process.env.TAILNET_NAME = 'exemplo.ts.net';
+      try {
+        global.fetch = jest.fn().mockResolvedValue(okResponse);
+
+        await new TailscaleCloudDriver().getDevices();
+
+        expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain(
+          '/tailnet/exemplo.ts.net/devices',
+        );
+      } finally {
+        delete process.env.TAILNET_NAME;
+      }
+    });
+  });
 });

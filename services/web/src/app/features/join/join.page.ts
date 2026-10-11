@@ -88,7 +88,10 @@ function joinNames(names: readonly string[]): string {
               @if (errorView(); as view) {
                 <div class="flex flex-col gap-4">
                   <h1 class="t-title-md" tabindex="-1">{{ view.title }}</h1>
-                  <mc-banner tone="danger" title="Não foi possível usar este link">
+                  <mc-banner
+                    [tone]="view.notice ? 'warning' : 'danger'"
+                    [title]="view.notice ? 'Convite indisponível' : 'Não foi possível usar este link'"
+                  >
                     {{ view.text }}
                   </mc-banner>
                   @if (view.retryable) {

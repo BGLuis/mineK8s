@@ -5,19 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { v4 as uuidv4 } from 'uuid';
 import { AppConfigModule } from '../config/app-config.module';
 import { K8sLogStreamerService } from './k8s-log-streamer.service';
-
-// Sensitive keys that must be redacted from request/response bodies and logs
-const SENSITIVE_BODY_KEYS = new Set([
-  'password',
-  'rcon_password',
-  'rconpassword',
-  'secret',
-  'token',
-  'apikey',
-  'apikey',
-  'authorization',
-  'key',
-]);
+import { redactBody } from './redact';
 
 const SAFE_HEADERS = new Set([
   'host',
@@ -29,15 +17,6 @@ const SAFE_HEADERS = new Set([
   'x-correlation-id',
   'x-tailscale-user',
 ]);
-
-function redactBody(body: unknown): unknown {
-  if (!body || typeof body !== 'object') return body;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-    out[k] = SENSITIVE_BODY_KEYS.has(k.toLowerCase()) ? '[Redacted]' : v;
-  }
-  return out;
-}
 
 function pickHeaders(headers: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

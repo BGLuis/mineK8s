@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/auth/auth.guard';
+import { adminGuard, authGuard } from './core/auth/auth.guard';
 import { devRoutes } from './dev/dev-routes';
 
 export const routes: Routes = [
@@ -49,6 +49,13 @@ export const routes: Routes = [
         path: 'health',
         title: 'Saúde do sistema · mineK8s',
         loadComponent: () => import('./features/health/health.page').then((m) => m.HealthPage),
+      },
+      {
+        path: 'settings',
+        title: 'Configurações · mineK8s',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/settings/settings.page').then((m) => m.SettingsPage),
       },
     ],
   },

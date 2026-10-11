@@ -19,6 +19,7 @@ import {
   ServerBackupEntity,
   ModpackTaskEntity,
   CasObjectEntity,
+  AppSetting,
 } from './entities';
 import { migrations } from './migrations';
 
@@ -38,6 +39,7 @@ const entities = [
   ServerBackupEntity,
   ModpackTaskEntity,
   CasObjectEntity,
+  AppSetting,
 ];
 
 @Module({

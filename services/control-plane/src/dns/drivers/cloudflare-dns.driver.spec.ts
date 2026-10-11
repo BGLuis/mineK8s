@@ -352,4 +352,28 @@ describe('CloudflareDnsDriver (RF-TS-16, RF-CF-06, PR-13)', () => {
       /Cloudflare API retornou erro.*\[1004\] DNS Validation Error/,
     );
   });
+
+  it('lê token, zona e domínio raiz a cada requisição, sem reiniciar o pod', async () => {
+    const cloudflare: { apiToken?: string; zoneId?: string; rootDomain: string } = {
+      rootDomain: 'minek8s.net',
+    };
+    const live = new CloudflareDnsDriver({ cloudflare } as any);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, errors: [], messages: [], result: [] }),
+    });
+
+    await expect(live.listRecords()).rejects.toThrow(/not configured/);
+
+    cloudflare.apiToken = 'cf-token-FAKE-0000';
+    cloudflare.zoneId = 'zone-fake-1';
+    cloudflare.rootDomain = 'mine.example';
+    await live.listRecords();
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain('/zones/zone-fake-1/dns_records');
+    expect(init.headers.Authorization).toBe('Bearer cf-token-FAKE-0000');
+    expect(live.getRootDomain()).toBe('mine.example');
+  });
 });
