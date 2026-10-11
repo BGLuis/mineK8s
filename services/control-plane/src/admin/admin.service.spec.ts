@@ -291,6 +291,8 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockUserRepo.find.mockResolvedValue([
         {
           ...user,
+          email: 'lucas@example.com',
+          tailscale_user_id: 'ts-1',
           devices: [
             {
               id: 'dev-1',
@@ -310,6 +312,8 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         id: 'user-1',
         minecraftNick: 'LucasCraft',
         realName: 'Lucas',
+        email: 'lucas@example.com',
+        linked: true,
         role: 'PLAYER',
         devices: [{ id: 'dev-1', deviceName: 'PC', status: 'ACTIVE', lastSeenAt: null }],
         groupIds: ['grp-1'],

@@ -443,6 +443,94 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     });
   });
 
+  describe('Quem recebeu o nó compartilhado', () => {
+    const sharee = {
+      id: 'user-shared',
+      email: 'amigo@example.com',
+      minecraft_nick: 'Amigo',
+      role: 'PLAYER',
+      tailscale_user_id: null as string | null,
+    };
+    const request = { tailscale_user_id: 'ts-777', node_id: 'node-777', client_ip: '100.88.1.1' };
+    let identityProvider: { resolveIdentity: jest.Mock };
+    let saveUser: jest.Mock;
+
+    beforeEach(() => {
+      sharee.tailscale_user_id = null;
+      saveUser = jest.fn(async (u) => u);
+      identityProvider = {
+        resolveIdentity: jest.fn(async () => ({
+          userId: 'ts-777',
+          loginName: 'Amigo@Example.com',
+          displayName: 'Amigo',
+          nodeId: 'node-777',
+          nodeName: 'pc-do-amigo',
+          nodeIp: '100.88.1.1',
+          tags: [],
+          isOwner: true,
+        })),
+      };
+      mockUserRepo.findOne = jest.fn(async ({ where }: any) =>
+        where.email === 'amigo@example.com' ? sharee : null,
+      );
+      mockUserRepo.save = saveUser;
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+      );
+    });
+
+    it('o primeiro acesso casa o e-mail do login Tailscale com o cadastro e grava o ID da conta', async () => {
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp).toMatchObject({ found: true, user_id: 'user-shared', minecraft_nick: 'Amigo' });
+      expect(saveUser).toHaveBeenCalledWith(
+        expect.objectContaining({ tailscale_user_id: 'ts-777' }),
+      );
+    });
+
+    it('um e-mail sem cadastro segue não registrado', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'ts-888',
+        loginName: 'desconhecido@example.com',
+        nodeId: 'node-888',
+        tags: [],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('não troca a conta de um cadastro que já pertence a outra conta Tailscale', async () => {
+      sharee.tailscale_user_id = 'ts-outra-conta';
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('um nó com tag não tem dono: o e-mail dele não vale como identidade', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'tagged-devices',
+        loginName: 'amigo@example.com',
+        nodeId: 'node-777',
+        tags: ['tag:outra'],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Comandos de revogação enviados ao Gateway (Smart Kick, ban de rede)', () => {
     const request = {
       server_id: 'server-uuid-1',

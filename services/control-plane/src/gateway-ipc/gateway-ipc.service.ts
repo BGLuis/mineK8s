@@ -220,6 +220,9 @@ export class GatewayIpcService {
             user = await this.findUserByNodeId(netId.nodeId);
           }
           if (!user) {
+            user = await this.bindSharedUser(netId);
+          }
+          if (!user) {
             user = await this.bindPendingDevice(netId);
           }
         }
@@ -255,6 +258,32 @@ export class GatewayIpcService {
       is_active: true,
       is_mojang_verified: (user as any).is_mojang_verified || false,
     };
+  }
+
+  /**
+   * Quem recebeu o nó compartilhado entra com a própria conta Tailscale, então o e-mail do login (que o
+   * Tailscale já verificou) liga a conta ao cadastro feito pelo admin. O ID da conta fica gravado no
+   * primeiro acesso e as buscas seguintes usam só ele.
+   */
+  private async bindSharedUser(netId: NetworkIdentity): Promise<User | null> {
+    const email = netId.loginName?.trim().toLowerCase();
+    if (!email || !netId.userId || netId.tags?.length) {
+      return null;
+    }
+
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      return null;
+    }
+    if (user.tailscale_user_id && user.tailscale_user_id !== netId.userId) {
+      this.logger.warn(
+        `Cadastro de ${email} já pertence a outra conta Tailscale; acesso não vinculado`,
+      );
+      return null;
+    }
+
+    user.tailscale_user_id = netId.userId;
+    return this.userRepository.save(user);
   }
 
   /**
