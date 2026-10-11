@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { SharesService } from './shares.service';
 
@@ -11,6 +16,7 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
   let userGroupRepo: any;
   let userServerRepo: any;
   let gatewayIpc: { revokePlayerSession: jest.Mock };
+  let appConfig: { tailscale: { nodeSharingEnabled: boolean } };
 
   beforeEach(() => {
     users = [];
@@ -47,6 +53,7 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
       revokePlayerSession: jest.fn(async () => ({ terminated_connections_count: 1 })),
     };
 
+    appConfig = { tailscale: { nodeSharingEnabled: true } };
     service = new SharesService(
       userRepo,
       groupRepo,
@@ -54,6 +61,7 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
       userGroupRepo,
       userServerRepo,
       gatewayIpc as any,
+      appConfig as any,
     );
   });
 
@@ -83,6 +91,13 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
 
     expect(userGroupRepo.save).toHaveBeenCalledWith({ user_id: 'user-new', group_id: 'g1' });
     expect(userServerRepo.save).toHaveBeenCalledWith({ user_id: 'user-new', server_id: 's1' });
+  });
+
+  it('com o compartilhamento de nó desativado nas configurações, não cadastra ninguém', async () => {
+    appConfig.tailscale.nodeSharingEnabled = false;
+
+    await expect(service.register(input)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(userRepo.save).not.toHaveBeenCalled();
   });
 
   it('recusa um nickname fora do padrão do Minecraft', async () => {

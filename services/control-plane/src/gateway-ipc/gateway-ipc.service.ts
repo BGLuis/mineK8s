@@ -267,7 +267,12 @@ export class GatewayIpcService {
    */
   private async bindSharedUser(netId: NetworkIdentity): Promise<User | null> {
     const email = netId.loginName?.trim().toLowerCase();
-    if (!email || !netId.userId || netId.tags?.length) {
+    if (
+      this.configService?.tailscale?.nodeSharingEnabled === false ||
+      !email ||
+      !netId.userId ||
+      netId.tags?.length
+    ) {
       return null;
     }
 

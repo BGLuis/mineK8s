@@ -493,6 +493,25 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       );
     });
 
+    it('com o compartilhamento de nó desativado, o e-mail não liga conta nenhuma', async () => {
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        { tailscale: { nodeSharingEnabled: false } } as any,
+      );
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
     it('um e-mail sem cadastro segue não registrado', async () => {
       identityProvider.resolveIdentity.mockResolvedValue({
         userId: 'ts-888',

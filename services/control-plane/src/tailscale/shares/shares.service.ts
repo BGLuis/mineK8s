@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
+import { AppConfigService } from '@config/app-config.service';
 import { Group } from '../../database/entities/group.entity';
 import { Server } from '../../database/entities/server.entity';
 import { User } from '../../database/entities/user.entity';
@@ -41,9 +43,17 @@ export class SharesService {
     @InjectRepository(UserServerAccess)
     private readonly userServerAccessRepo: Repository<UserServerAccess>,
     private readonly gatewayIpcService: GatewayIpcService,
+    private readonly appConfig: AppConfigService,
   ) {}
 
   async register(dto: RegisterSharedPlayerDto): Promise<SharedPlayerSummary> {
+    if (!this.appConfig.tailscale.nodeSharingEnabled) {
+      throw new ForbiddenException({
+        code: 'NODE_SHARING_DISABLED',
+        message: 'O compartilhamento de nó do Tailscale está desativado nas configurações.',
+      });
+    }
+
     const email = dto.email.trim().toLowerCase();
     const groupIds = dto.groupIds ?? [];
     const serverIds = dto.serverIds ?? [];
