@@ -128,6 +128,14 @@ export function buildChanges(
   return changes;
 }
 
+/** Whether registering players who receive the shared gateway node is on (on by default). */
+export function nodeSharingEnabled(snapshot: SettingsSnapshot): boolean {
+  const setting = snapshot.sections
+    .flatMap((section) => section.settings)
+    .find((item) => item.key === 'tailscale.nodeSharingEnabled');
+  return setting?.value === true;
+}
+
 /** Whether invites that hand out a Tailscale access key are on (off by default). */
 export function inviteKeyEnabled(snapshot: SettingsSnapshot): boolean {
   const setting = snapshot.sections

@@ -9,7 +9,9 @@ import {
   DeviceGcResponse,
   InviteSummary,
   PostureAuditReport,
+  RegisterSharedPlayerRequest,
   RevokeDeviceResponse,
+  SharedPlayerSummary,
   TailscaleDevice,
 } from './models';
 
@@ -51,6 +53,14 @@ export class TailscaleApi {
 
   claim(dto: ClaimInviteRequest): Observable<ClaimResult> {
     return this.api.post('/api/tailscale/claim', dto);
+  }
+
+  registerSharedPlayer(dto: RegisterSharedPlayerRequest): Observable<SharedPlayerSummary> {
+    return this.api.post('/api/tailscale/shares', dto);
+  }
+
+  removeSharedPlayer(userId: string): Observable<void> {
+    return this.api.delete(`/api/tailscale/shares/${userId}`);
   }
 
   listDevices(): Observable<TailscaleDevice[]> {

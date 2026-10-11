@@ -3,6 +3,7 @@ import {
   buildChanges,
   currentText,
   inviteKeyEnabled,
+  nodeSharingEnabled,
   sourceDetail,
   validateDraft,
 } from './settings.logic';
@@ -157,5 +158,34 @@ describe('inviteKeyEnabled', () => {
   it('reads the switch from the settings', () => {
     expect(inviteKeyEnabled(snapshot(true))).toBe(true);
     expect(inviteKeyEnabled(snapshot(false))).toBe(false);
+  });
+});
+
+describe('nodeSharingEnabled', () => {
+  const snapshot = (value: boolean): SettingsSnapshot => ({
+    sections: [
+      {
+        id: 'tailscale',
+        title: 'Tailscale',
+        description: '',
+        settings: [
+          {
+            key: 'tailscale.nodeSharingEnabled',
+            type: 'boolean',
+            label: 'Compartilhamento de nó',
+            description: '',
+            envName: 'TAILSCALE_NODE_SHARING_ENABLED',
+            source: 'default',
+            value,
+          },
+        ],
+      },
+    ],
+    readOnly: [],
+  });
+
+  it('reflete o valor da configuração', () => {
+    expect(nodeSharingEnabled(snapshot(true))).toBe(true);
+    expect(nodeSharingEnabled(snapshot(false))).toBe(false);
   });
 });

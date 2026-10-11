@@ -7,11 +7,20 @@ import { DevicesPanel } from './devices-panel';
 import { GroupsPanel } from './groups-panel';
 import { InviteForm } from './invite-form';
 import { InviteList } from './invite-list';
+import { SharedPlayersPanel } from './shared-players-panel';
 
 @Component({
   selector: 'mc-access-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [InviteForm, InviteList, DevicesPanel, GroupsPanel, McBanner, RouterLink],
+  imports: [
+    InviteForm,
+    InviteList,
+    DevicesPanel,
+    GroupsPanel,
+    SharedPlayersPanel,
+    McBanner,
+    RouterLink,
+  ],
   providers: [AccessStore],
   template: `
     <div class="flex flex-col gap-8">
@@ -39,6 +48,10 @@ import { InviteList } from './invite-list';
         }
         <mc-invite-list />
       </div>
+
+      @if (store.nodeSharingEnabled() === true) {
+        <mc-shared-players-panel />
+      }
 
       <mc-devices-panel />
       <mc-groups-panel />

@@ -352,10 +352,32 @@ export interface User {
 }
 
 /** GET /api/admin/users. */
+export interface RegisterSharedPlayerRequest {
+  email: string;
+  minecraftNick: string;
+  realName?: string;
+  groupIds?: string[];
+  serverIds?: string[];
+}
+
+export interface SharedPlayerSummary {
+  id: string;
+  email: string;
+  minecraftNick: string;
+  realName: string | null;
+  groupIds: string[];
+  serverIds: string[];
+  linked: boolean;
+}
+
 export interface UserSummary {
   id: string;
   minecraftNick: string;
   realName: string | null;
+  /** Tailscale account e-mail of a player registered for node sharing. */
+  email: string | null;
+  /** The Tailscale account has already reached the gateway and been tied to this record. */
+  linked: boolean;
   role: UserRole;
   devices: {
     id: string;
