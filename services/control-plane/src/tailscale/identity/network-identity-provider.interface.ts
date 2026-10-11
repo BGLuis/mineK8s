@@ -22,6 +22,9 @@ export interface AclComplianceReport {
   auditedAt: Date;
 }
 
+/** Static tag of every invited player: the tailnet policy cannot declare one tag per player. */
+export const PLAYER_TAG = 'tag:mc-player';
+
 export const NETWORK_IDENTITY_PROVIDER = Symbol('NETWORK_IDENTITY_PROVIDER');
 
 export interface NetworkIdentityProvider {

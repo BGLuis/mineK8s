@@ -9,10 +9,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Observable, Subject } from 'rxjs';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { Server } from '@database/entities/server.entity';
 import { ServerGroup } from '@database/entities/server-group.entity';
+import { TailscaleDevice } from '@database/entities/tailscale-device.entity';
 import { User } from '@database/entities/user.entity';
 import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
@@ -21,7 +22,9 @@ import { AppConfigService } from '@config/app-config.service';
 import { ManifestBuilder } from '@k8s/manifest-builder';
 import {
   NETWORK_IDENTITY_PROVIDER,
+  NetworkIdentity,
   NetworkIdentityProvider,
+  PLAYER_TAG,
 } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
@@ -84,6 +87,9 @@ export class GatewayIpcService {
     private readonly configService?: AppConfigService,
     @Optional()
     private readonly icons?: ServerIconService,
+    @Optional()
+    @InjectRepository(TailscaleDevice)
+    private readonly deviceRepository?: Repository<TailscaleDevice>,
   ) {}
 
   /**
@@ -213,6 +219,9 @@ export class GatewayIpcService {
           if (!user && netId.nodeId) {
             user = await this.findUserByNodeId(netId.nodeId);
           }
+          if (!user) {
+            user = await this.bindPendingDevice(netId);
+          }
         }
       } catch (err: any) {
         this.logger.warn(
@@ -246,6 +255,40 @@ export class GatewayIpcService {
       is_active: true,
       is_mojang_verified: (user as any).is_mojang_verified || false,
     };
+  }
+
+  /**
+   * O convite entrega uma chave com a tag estática dos jogadores e nada diz qual nó a usou. Então o
+   * primeiro nó com essa tag que o Gateway apresenta fica com o convite pendente, desde que haja
+   * exatamente um: com vários, qualquer palpite daria a um jogador as permissões de outro.
+   */
+  private async bindPendingDevice(netId: NetworkIdentity): Promise<User | null> {
+    if (!this.deviceRepository || !netId.nodeId || !netId.tags?.includes(PLAYER_TAG)) {
+      return null;
+    }
+
+    const pending = await this.deviceRepository.find({
+      where: { status: 'PENDING', node_id: IsNull() },
+      relations: { user: true },
+    });
+    if (pending.length !== 1) {
+      this.logger.warn(
+        `Nó ${netId.nodeId} com a tag ${PLAYER_TAG} não foi vinculado: ${pending.length} convites pendentes`,
+      );
+      return null;
+    }
+
+    const [device] = pending;
+    device.node_id = netId.nodeId;
+    device.node_ip = netId.nodeIp || null;
+    device.device_name = netId.nodeName || null;
+    device.status = 'ACTIVE';
+    device.last_seen_at = new Date();
+    await this.deviceRepository.save(device);
+    this.logger.log(
+      `Nó ${netId.nodeId} vinculado ao convite resgatado por ${device.user.minecraft_nick}`,
+    );
+    return device.user;
   }
 
   /** O `where` tipado pela entidade faz o compilador acusar se a coluna do dispositivo mudar de nome. */

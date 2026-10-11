@@ -351,6 +351,98 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
     });
   });
 
+  describe('Vínculo do nó ao convite resgatado', () => {
+    const newcomer = { id: 'user-new', minecraft_nick: 'Novato', role: 'PLAYER' };
+    const request = {
+      tailscale_user_id: 'tagged-devices',
+      node_id: 'node-new',
+      client_ip: '100.99.1.1',
+    };
+    let deviceRepo: { find: jest.Mock; save: jest.Mock };
+    let identityProvider: { resolveIdentity: jest.Mock };
+    let pending: any[];
+
+    beforeEach(() => {
+      pending = [{ id: 'dev-1', user: newcomer, status: 'PENDING', node_id: null, node_ip: null }];
+      deviceRepo = {
+        find: jest.fn(async () => pending),
+        save: jest.fn(async (d: any) => d),
+      };
+      identityProvider = {
+        resolveIdentity: jest.fn(async () => ({
+          userId: 'tagged-devices',
+          loginName: 'tagged-devices',
+          displayName: 'tagged-devices',
+          nodeId: 'node-new',
+          nodeName: 'novato',
+          nodeIp: '100.99.1.1',
+          tags: ['tag:mc-player'],
+          isOwner: false,
+        })),
+      };
+      mockUserRepo.findOne = jest.fn(async () => null);
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        deviceRepo as any,
+      );
+    });
+
+    it('o primeiro contato de um nó com a tag de jogador o vincula ao único convite pendente', async () => {
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp).toMatchObject({ found: true, user_id: 'user-new', minecraft_nick: 'Novato' });
+      expect(deviceRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'dev-1',
+          node_id: 'node-new',
+          node_ip: '100.99.1.1',
+          status: 'ACTIVE',
+        }),
+      );
+    });
+
+    it('um nó sem a tag de jogador não herda convite nenhum', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'someone',
+        nodeId: 'node-new',
+        nodeIp: '100.99.1.1',
+        tags: [],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('com mais de um convite pendente não adivinha de quem é o nó', async () => {
+      pending.push({ id: 'dev-2', user: { id: 'user-other' }, status: 'PENDING', node_id: null });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('sem convite pendente o nó segue não registrado', async () => {
+      pending.length = 0;
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Comandos de revogação enviados ao Gateway (Smart Kick, ban de rede)', () => {
     const request = {
       server_id: 'server-uuid-1',

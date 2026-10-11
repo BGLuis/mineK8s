@@ -11,6 +11,7 @@ import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
 import { Invite } from '../../database/entities/invite.entity';
+import { PLAYER_TAG } from '../identity/network-identity-provider.interface';
 import { InviteGroup } from '../../database/entities/invite-group.entity';
 import { InviteServer } from '../../database/entities/invite-server.entity';
 import { Server } from '../../database/entities/server.entity';
@@ -342,10 +343,7 @@ export class InvitesService {
     let authKeyResult;
 
     try {
-      authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey(
-        ['tag:mc-player'],
-        86400 * 7,
-      );
+      authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey([PLAYER_TAG], 86400 * 7);
     } catch (cloudErr: any) {
       this.logger.error(
         `Falha ao gerar Pre-Auth Key na Tailscale Cloud API: ${cloudErr.message}. Executando compensação L-03...`,
