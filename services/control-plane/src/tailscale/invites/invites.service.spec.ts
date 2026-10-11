@@ -434,6 +434,10 @@ describe('InvitesService', () => {
       expect(result.minecraftNick).toBe('LucasCraft');
       expect(result.authKey).toBe('tskey-auth-mock-12345');
       expect(result.deepLinkUrl).toContain('tailscale://login?key=tskey-auth-mock-12345');
+      expect(mockTailscaleCloudDriver.generatePreAuthKey).toHaveBeenCalledWith(
+        ['tag:mc-player'],
+        expect.any(Number),
+      );
       expect(mockUserGroupRepo.save).toHaveBeenCalledTimes(1);
       expect(mockUserServerAccessRepo.save).toHaveBeenCalledTimes(1);
       expect(mockDeviceRepo.save).toHaveBeenCalledTimes(1);

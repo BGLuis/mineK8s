@@ -336,12 +336,14 @@ export class InvitesService {
     }
 
     // 5. Geração de AuthKey na Tailscale Cloud API (RF-TS-05, PR-11)
+    // The tailnet policy cannot declare a tag per player, so every key carries the one static tag;
+    // playerTag below is only the unique label of the device row.
     const playerTag = `tag:player-${user.id}`;
     let authKeyResult;
 
     try {
       authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey(
-        [playerTag, 'tag:player'],
+        ['tag:mc-player'],
         86400 * 7,
       );
     } catch (cloudErr: any) {
