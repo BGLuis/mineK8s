@@ -185,4 +185,62 @@ describe('HealthBotSchedulerService (RF-ARQ-30, Milestone F9)', () => {
     expect(overview.servers['srv-2'].uptimePercentage).toBe(0);
     expect(overview.servers['srv-2'].totalChecks).toBe(1);
   });
+
+  describe('follows the settings page without a restart', () => {
+    let changed: () => void;
+    let timed: HealthBotSchedulerService;
+    let config: { isTest: boolean; healthBot: { enabled: boolean; intervalMs: number } };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      config = { isTest: false, healthBot: { enabled: true, intervalMs: 1000 } };
+      timed = new HealthBotSchedulerService(
+        mockServerRepo as Repository<Server>,
+        mockProbeService as HealthBotProbeService,
+        config as AppConfigService,
+        { onChange: (listener: () => void) => (changed = listener) } as any,
+      );
+      (mockServerRepo.find as jest.Mock).mockResolvedValue([]);
+      timed.onApplicationBootstrap();
+    });
+
+    afterEach(() => {
+      timed.onModuleDestroy();
+      jest.useRealTimers();
+    });
+
+    const cycles = (ms: number) => {
+      (mockServerRepo.find as jest.Mock).mockClear();
+      jest.advanceTimersByTime(ms);
+      return (mockServerRepo.find as jest.Mock).mock.calls.length;
+    };
+
+    it('runs at the configured interval', () => {
+      expect(cycles(3000)).toBe(3);
+    });
+
+    it('adopts a new interval', () => {
+      config.healthBot.intervalMs = 500;
+      changed();
+
+      expect(cycles(3000)).toBe(6);
+    });
+
+    it('stops when disabled and starts again when re-enabled', () => {
+      config.healthBot.enabled = false;
+      changed();
+      expect(cycles(5000)).toBe(0);
+
+      config.healthBot.enabled = true;
+      changed();
+      expect(cycles(2000)).toBe(2);
+    });
+
+    it('keeps its rhythm when an unrelated setting changes', () => {
+      jest.advanceTimersByTime(900);
+      changed();
+
+      expect(cycles(100)).toBe(1);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -33,13 +33,14 @@ export interface RawTailscalePolicy {
 }
 
 @Injectable()
-export class TailscalePostureService implements OnModuleInit {
+export class TailscalePostureService implements OnApplicationBootstrap {
   private readonly logger = new Logger(TailscalePostureService.name);
   private latestReport: PostureAuditReport | null = null;
 
   constructor(private readonly configService: AppConfigService) {}
 
-  async onModuleInit(): Promise<void> {
+  /** Not onModuleInit: the API key may live in the database, which SettingsService only loads in its own onModuleInit. */
+  async onApplicationBootstrap(): Promise<void> {
     await this.auditBootPosture();
   }
 

@@ -1,9 +1,16 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Server } from '@database/entities/server.entity';
 import { AppConfigService } from '@config/app-config.service';
+import { SettingsService } from '../settings/settings.service';
 import { serverWorkloadName } from '@k8s/resource-names';
 
 import { HealthBotProbeService, HealthBotReport } from './health-bot-probe.service';
@@ -30,6 +37,7 @@ export interface HealthBotOverview {
 export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(HealthBotSchedulerService.name);
   private intervalTimer: NodeJS.Timeout | null = null;
+  private scheduledIntervalMs: number | null = null;
   private readonly maxReportsPerServer = 50;
 
   // In-memory circular buffer of reports per serverId
@@ -40,25 +48,44 @@ export class HealthBotSchedulerService implements OnApplicationBootstrap, OnModu
     private readonly serverRepo: Repository<Server>,
     private readonly probeService: HealthBotProbeService,
     private readonly configService: AppConfigService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   onApplicationBootstrap() {
-    const config = this.configService.healthBot;
-    if (config?.enabled && !this.configService.isTest) {
-      this.logger.log(`Starting Health Bot periodic scheduler (interval: ${config.intervalMs}ms)`);
-      this.intervalTimer = setInterval(() => {
-        this.runScheduledProbes().catch((err) => {
-          this.logger.error(`Error during scheduled health bot cycle: ${err.message}`, err.stack);
-        });
-      }, config.intervalMs);
-    }
+    this.schedule();
+    this.settings?.onChange(() => this.schedule());
   }
 
   onModuleDestroy() {
+    this.stop();
+  }
+
+  /** Follows the settings page: starts, stops or re-times the timer only when enabled or the interval changed. */
+  private schedule() {
+    const config = this.configService.healthBot;
+    const intervalMs = config?.enabled && !this.configService.isTest ? config.intervalMs : null;
+    if (intervalMs === this.scheduledIntervalMs) {
+      return;
+    }
+    this.stop();
+    if (intervalMs === null) {
+      return;
+    }
+    this.logger.log(`Starting Health Bot periodic scheduler (interval: ${intervalMs}ms)`);
+    this.scheduledIntervalMs = intervalMs;
+    this.intervalTimer = setInterval(() => {
+      this.runScheduledProbes().catch((err) => {
+        this.logger.error(`Error during scheduled health bot cycle: ${err.message}`, err.stack);
+      });
+    }, intervalMs);
+  }
+
+  private stop() {
     if (this.intervalTimer) {
       clearInterval(this.intervalTimer);
       this.intervalTimer = null;
     }
+    this.scheduledIntervalMs = null;
   }
 
   /**

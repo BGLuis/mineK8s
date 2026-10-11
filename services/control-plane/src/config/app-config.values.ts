@@ -35,6 +35,15 @@ export class TailscaleConfig {
     public readonly tailnetName?: string,
     public readonly trustedProxyIps: string[] = [],
     public readonly deviceLimit: number = 50,
+    public readonly inviteKeyEnabled: boolean = false,
+    public readonly nodeSharingEnabled: boolean = true,
+  ) {}
+}
+
+export class AccessConfig {
+  constructor(
+    public readonly publicUrl: string,
+    public readonly worldsDomain: string,
   ) {}
 }
 

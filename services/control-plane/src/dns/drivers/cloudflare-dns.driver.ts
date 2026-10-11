@@ -17,28 +17,43 @@ export interface CloudflareApiResponse<T> {
 @Injectable()
 export class CloudflareDnsDriver implements IDnsDriver {
   private readonly logger = new Logger(CloudflareDnsDriver.name);
-  private apiToken: string;
-  private zoneId: string;
-  private rootDomain: string;
+  private overrides: { apiToken?: string; zoneId?: string; rootDomain?: string } = {};
   private baseUrl: string;
 
   constructor(private readonly configService?: AppConfigService) {
-    this.apiToken =
-      process.env.CLOUDFLARE_API_TOKEN || this.configService?.cloudflare?.apiToken || '';
-    this.zoneId = process.env.CLOUDFLARE_ZONE_ID || this.configService?.cloudflare?.zoneId || '';
-    this.rootDomain =
-      process.env.CLOUDFLARE_ROOT_DOMAIN ||
-      this.configService?.cloudflare?.rootDomain ||
-      'minek8s.net';
     this.baseUrl = process.env.CLOUDFLARE_API_URL || 'https://api.cloudflare.com/client/v4';
   }
 
+  /** Read on every request, so values saved on the settings page apply without a restart. */
+  private get apiToken(): string {
+    return (
+      this.overrides.apiToken ??
+      this.configService?.cloudflare.apiToken ??
+      process.env.CLOUDFLARE_API_TOKEN ??
+      ''
+    );
+  }
+
+  private get zoneId(): string {
+    return (
+      this.overrides.zoneId ??
+      this.configService?.cloudflare.zoneId ??
+      process.env.CLOUDFLARE_ZONE_ID ??
+      ''
+    );
+  }
+
+  private get rootDomain(): string {
+    return (
+      this.overrides.rootDomain ??
+      this.configService?.cloudflare.rootDomain ??
+      process.env.CLOUDFLARE_ROOT_DOMAIN ??
+      'minek8s.net'
+    );
+  }
+
   public setConfig(apiToken: string, zoneId: string, rootDomain?: string, baseUrl?: string): void {
-    this.apiToken = apiToken;
-    this.zoneId = zoneId;
-    if (rootDomain) {
-      this.rootDomain = rootDomain;
-    }
+    this.overrides = { ...this.overrides, apiToken, zoneId, ...(rootDomain ? { rootDomain } : {}) };
     if (baseUrl) {
       this.baseUrl = baseUrl;
     }

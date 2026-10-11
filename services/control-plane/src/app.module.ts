@@ -23,6 +23,7 @@ import { DnsModule } from './dns/dns.module';
 import { ServerEventsModule } from './server-events/server-events.module';
 import { NodeModule } from './node/node.module';
 import { StatsModule } from './stats/stats.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { StatsModule } from './stats/stats.module';
     ServerEventsModule,
     NodeModule,
     StatsModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import type { EffectiveSettings } from '../settings/settings.types';
 import {
+  AccessConfig,
   DatabaseConfig,
   GrpcConfig,
   JwtConfig,
@@ -17,7 +19,17 @@ import {
 
 @Injectable()
 export class AppConfigService {
+  private settings?: EffectiveSettings;
+
   constructor(private readonly config: ConfigService) {}
+
+  /**
+   * Makes `tailscale`, `access`, `cloudflare` and `healthBot` follow the settings edited on the panel (database,
+   * then environment, then default). Attached by SettingsService, which depends on this class and cannot be injected.
+   */
+  attachSettings(settings: EffectiveSettings): void {
+    this.settings = settings;
+  }
 
   private parseCsv(value?: string): string[] {
     return (value || '')
@@ -107,13 +119,34 @@ export class AppConfigService {
   }
 
   get tailscale(): TailscaleConfig {
+    const settings = this.settings;
     return new TailscaleConfig(
       this.config.get<string>('TAILSCALE_SOCKET_PATH', '/run/tailscale/tailscaled.sock'),
       this.config.get<boolean>('TAILSCALE_AUTH_ENABLED', true),
-      this.config.get<string>('TAILSCALE_API_KEY'),
-      this.config.get<string>('TAILNET_NAME'),
+      settings
+        ? settings.getString('tailscale.apiKey') || undefined
+        : this.config.get<string>('TAILSCALE_API_KEY'),
+      settings ? settings.getString('tailscale.tailnet') : this.config.get<string>('TAILNET_NAME'),
       this.parseCsv(this.config.get<string>('TRUSTED_PROXY_IPS')),
       this.config.get<number>('TAILNET_DEVICE_LIMIT', 50),
+      settings
+        ? settings.getBoolean('tailscale.inviteKeyEnabled')
+        : this.config.get<boolean>('TAILSCALE_INVITE_KEY_ENABLED', false),
+      settings
+        ? settings.getBoolean('tailscale.nodeSharingEnabled')
+        : this.config.get<boolean>('TAILSCALE_NODE_SHARING_ENABLED', true),
+    );
+  }
+
+  get access(): AccessConfig {
+    const settings = this.settings;
+    return new AccessConfig(
+      settings
+        ? settings.getString('access.publicUrl')
+        : this.config.get<string>('PUBLIC_BASE_URL', 'http://localhost:3000'),
+      settings
+        ? settings.getString('access.worldsDomain')
+        : this.config.get<string>('WORLDS_BASE_DOMAIN', ''),
     );
   }
 
@@ -147,18 +180,32 @@ export class AppConfigService {
   }
 
   get cloudflare(): CloudflareConfig {
+    const settings = this.settings;
     return new CloudflareConfig(
-      this.config.get<string>('CLOUDFLARE_API_TOKEN'),
-      this.config.get<string>('CLOUDFLARE_ZONE_ID'),
-      this.config.get<string>('CLOUDFLARE_ROOT_DOMAIN', 'minek8s.net'),
+      settings
+        ? settings.getString('cloudflare.apiToken') || undefined
+        : this.config.get<string>('CLOUDFLARE_API_TOKEN'),
+      settings
+        ? settings.getString('cloudflare.zoneId') || undefined
+        : this.config.get<string>('CLOUDFLARE_ZONE_ID'),
+      settings
+        ? settings.getString('cloudflare.rootDomain')
+        : this.config.get<string>('CLOUDFLARE_ROOT_DOMAIN', 'minek8s.net'),
     );
   }
 
   get healthBot(): HealthBotConfig {
+    const settings = this.settings;
     return new HealthBotConfig(
-      this.config.get<boolean>('HEALTH_BOT_ENABLED', true),
-      this.config.get<number>('HEALTH_BOT_INTERVAL_MS', 300000),
-      this.config.get<number>('HEALTH_BOT_TIMEOUT_MS', 5000),
+      settings
+        ? settings.getBoolean('healthBot.enabled')
+        : this.config.get<boolean>('HEALTH_BOT_ENABLED', true),
+      settings
+        ? settings.getNumber('healthBot.intervalMs')
+        : this.config.get<number>('HEALTH_BOT_INTERVAL_MS', 300000),
+      settings
+        ? settings.getNumber('healthBot.timeoutMs')
+        : this.config.get<number>('HEALTH_BOT_TIMEOUT_MS', 5000),
     );
   }
 

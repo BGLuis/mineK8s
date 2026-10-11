@@ -10,6 +10,8 @@ export const appConfigSchema = Joi.object({
   GRPC_HOST: Joi.string().default('0.0.0.0'),
   API_URL: Joi.string().uri().default('http://localhost:3000'),
   APP_URL: Joi.string().uri().default('http://localhost:4200'),
+  PUBLIC_BASE_URL: Joi.string().uri().allow('').optional(),
+  WORLDS_BASE_DOMAIN: Joi.string().allow('').optional(),
   ALLOWED_ORIGINS: Joi.string().default('http://localhost:4200'),
   ENABLE_SWAGGER: Joi.boolean().default(true),
   WEB_DIST_DIR: Joi.string().optional(),
@@ -39,6 +41,8 @@ export const appConfigSchema = Joi.object({
   TAILSCALE_AUTH_ENABLED: Joi.boolean().default(true),
   TAILSCALE_API_KEY: Joi.string().allow('').optional(),
   TAILNET_NAME: Joi.string().allow('').optional(),
+  TAILSCALE_INVITE_KEY_ENABLED: Joi.boolean().default(false),
+  TAILSCALE_NODE_SHARING_ENABLED: Joi.boolean().default(true),
   TAILNET_DEVICE_LIMIT: Joi.number().integer().min(1).default(50),
   TRUSTED_PROXY_IPS: Joi.string().default('127.0.0.1/32,100.64.0.0/10'),
 
