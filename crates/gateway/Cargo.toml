@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["mineK8s team"]
 description = "High-performance L7 reverse proxy gateway for MineKubernetes"
 
+[lints]
+workspace = true
+
 [dependencies]
 minecraft-protocol = { path = "../minecraft-protocol" }
 tokio = { version = "1.38", features = ["full"] }

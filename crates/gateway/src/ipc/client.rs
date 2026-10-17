@@ -207,11 +207,13 @@ impl GatewayIpcClient {
         tailscale_user_id: &str,
         node_id: &str,
         client_ip: &str,
+        minecraft_nick: &str,
     ) -> Result<Option<ResolvePlayerResponse>, Status> {
         let req = ResolvePlayerRequest {
             tailscale_user_id: tailscale_user_id.to_string(),
             node_id: node_id.to_string(),
             client_ip: client_ip.to_string(),
+            minecraft_nick: minecraft_nick.to_string(),
         };
 
         let resp = self

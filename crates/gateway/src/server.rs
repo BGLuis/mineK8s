@@ -432,7 +432,10 @@ impl GatewayServer {
                         route.access_policy,
                         AccessPolicy::Public | AccessPolicy::Internet
                     );
-                    match identity.resolve(client_ip).await {
+                    match identity
+                        .resolve(client_ip, Some(&login_start.username))
+                        .await
+                    {
                         IdentityLookup::Resolved(player) => {
                             // Validação de Anti-Impersonation (< 50ms)
                             match AccessDecisionEngine::evaluate_nickname(

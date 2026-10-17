@@ -54,8 +54,9 @@ impl IdentityResolver {
         self
     }
 
-    pub async fn resolve(&self, client_ip: IpAddr) -> IdentityLookup {
+    pub async fn resolve(&self, client_ip: IpAddr, minecraft_nick: Option<&str>) -> IdentityLookup {
         let ip = client_ip.to_string();
+        let nick = minecraft_nick.unwrap_or("");
 
         let local = match &self.whois {
             Some(whois) => match whois.query_whois(&ip).await {
@@ -76,7 +77,7 @@ impl IdentityResolver {
             let mut client = client.clone();
             let lookup = tokio::time::timeout(
                 CONTROL_PLANE_TIMEOUT,
-                client.resolve_player_identity(tailscale_user_id, node_id, &ip),
+                client.resolve_player_identity(tailscale_user_id, node_id, &ip, nick),
             )
             .await;
             match lookup {

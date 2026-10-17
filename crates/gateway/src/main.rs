@@ -41,8 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "0.0.0.0:9090".into())
         .parse()?;
 
-    let mut config = GatewayConfig::default();
-    config.listen_addr = listen_addr;
+    let config = GatewayConfig {
+        listen_addr,
+        ..Default::default()
+    };
     let public_listen_addr = config.public_listen_addr;
 
     // Com CONTROL_PLANE_GRPC_URL o Gateway sincroniza rotas e publica sessões; sem ela roda isolado.
