@@ -18,6 +18,7 @@ export class AccessStore {
   readonly devices = rxResource({ stream: () => this.tailscale.listDevices() });
   /** Only the group editor needs it. */
   readonly users = rxResource({ stream: () => this.admin.listUsers() });
+  readonly unlinkedAttempts = rxResource({ stream: () => this.tailscale.listUnlinkedAttempts() });
   readonly settings = rxResource({ stream: () => this.settingsApi.get() });
   /** Same rule as keyInvitesEnabled: null while loading, enabled when the settings cannot be read. */
   readonly nodeSharingEnabled = computed<boolean | null>(() => {

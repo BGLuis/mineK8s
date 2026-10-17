@@ -353,7 +353,8 @@ export interface User {
 
 /** GET /api/admin/users. */
 export interface RegisterSharedPlayerRequest {
-  email: string;
+  email?: string;
+  github?: string;
   minecraftNick: string;
   realName?: string;
   groupIds?: string[];
@@ -362,12 +363,30 @@ export interface RegisterSharedPlayerRequest {
 
 export interface SharedPlayerSummary {
   id: string;
-  email: string;
+  email: string | null;
+  githubUsername?: string | null;
   minecraftNick: string;
   realName: string | null;
   groupIds: string[];
   serverIds: string[];
   linked: boolean;
+}
+
+export interface UnlinkedAttempt {
+  tailscaleUserId: string;
+  loginName: string;
+  displayName: string;
+  clientIp: string;
+  nodeId: string;
+  nodeName: string;
+  minecraftNick: string;
+  attemptedAt: string;
+}
+
+export interface LinkSharedPlayerRequest {
+  userId: string;
+  tailscaleUserId: string;
+  githubUsername?: string;
 }
 
 export interface UserSummary {
@@ -376,6 +395,8 @@ export interface UserSummary {
   realName: string | null;
   /** Tailscale account e-mail of a player registered for node sharing. */
   email: string | null;
+  /** GitHub username linked or declared for Tailscale SSO. */
+  githubUsername?: string | null;
   /** The Tailscale account has already reached the gateway and been tied to this record. */
   linked: boolean;
   role: UserRole;

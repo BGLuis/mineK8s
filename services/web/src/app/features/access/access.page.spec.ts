@@ -54,6 +54,7 @@ describe('AccessPage', () => {
       '/api/tailscale/invites',
       '/api/tailscale/devices',
       '/api/admin/users',
+      '/api/tailscale/shares/unlinked-attempts',
     ]) {
       for (const req of http.match((r) => r.url.startsWith(url))) {
         req.flush(url === '/api/admin/users' ? users : []);
