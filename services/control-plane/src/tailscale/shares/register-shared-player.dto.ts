@@ -10,16 +10,44 @@ import {
   MaxLength,
 } from 'class-validator';
 
+export function normalizeGithubUsername(raw?: string | null): string | null {
+  if (!raw) {
+    return null;
+  }
+  let clean = raw.trim().toLowerCase();
+  clean = clean.replace(/^https?:\/\/github\.com\//, '');
+  clean = clean.replace(/@\.?github(\.com)?$/, '');
+  clean = clean.replace(/^@/, '');
+  clean = clean.trim();
+  return clean || null;
+}
+
+export function isValidGithubUsername(username: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/i.test(username);
+}
+
 /** Cadastro de quem vai receber o nó compartilhado do Gateway pelo Tailscale. */
 export class RegisterSharedPlayerDto {
   @ApiProperty({
+    required: false,
     description:
       'E-mail da conta Tailscale que receberá o compartilhamento (o mesmo do login dela)',
     example: 'amigo@example.com',
   })
-  @IsEmail({}, { message: 'Tailscale account e-mail is invalid' })
+  @IsOptional()
+  @IsString()
   @MaxLength(255)
-  email: string;
+  email?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Usuário do GitHub da conta Tailscale (com ou sem @ ou @github)',
+    example: 'amigo',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  github?: string;
 
   @ApiProperty({
     description: 'Nickname do Minecraft (3-16 alfanuméricos ou underline)',

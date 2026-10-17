@@ -9,6 +9,7 @@ import { AddServerRuntime1710000000007 } from './1710000000007-AddServerRuntime'
 import { AddServerResourceName1710000000008 } from './1710000000008-AddServerResourceName';
 import { AddServerLanguage1710000000009 } from './1710000000009-AddServerLanguage';
 import { AddAppSettings1710000000010 } from './1710000000010-AddAppSettings';
+import { AddUserGithubUsername1710000000011 } from './1710000000011-AddUserGithubUsername';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -22,4 +23,5 @@ export const migrations = [
   AddServerResourceName1710000000008,
   AddServerLanguage1710000000009,
   AddAppSettings1710000000010,
+  AddUserGithubUsername1710000000011,
 ];

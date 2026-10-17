@@ -77,6 +77,7 @@ export interface ResolvePlayerRequest {
   tailscale_user_id: string;
   node_id: string;
   client_ip: string;
+  minecraft_nick?: string;
 }
 
 export interface ResolvePlayerResponse {

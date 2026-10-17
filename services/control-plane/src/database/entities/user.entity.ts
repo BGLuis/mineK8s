@@ -33,6 +33,10 @@ export class User {
   @Column({ type: 'varchar', length: 100, nullable: true })
   tailscale_user_id: string | null;
 
+  @Index('uq_users_github_username', { unique: true, where: '"github_username" IS NOT NULL' })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  github_username: string | null;
+
   @Column({ type: 'varchar', length: 20, default: 'PLAYER' })
   role: UserRole;
 

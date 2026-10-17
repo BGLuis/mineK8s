@@ -31,6 +31,13 @@ export class UserSummaryDto {
   })
   email: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    example: 'jaoppb',
+    description: 'Usuário do GitHub vinculado à conta Tailscale',
+  })
+  githubUsername: string | null;
+
   @ApiProperty({ description: 'A conta Tailscale já foi ligada ao cadastro no primeiro acesso' })
   linked: boolean;
 

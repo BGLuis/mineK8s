@@ -28,6 +28,7 @@ import {
 } from '../tailscale/identity/network-identity-provider.interface';
 import { KubernetesService } from '@k8s/k8s.service';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
+import { UnlinkedAttemptsService } from '../tailscale/shares/unlinked-attempts.service';
 import { ServerIconService } from '../servers/server-icon.service';
 import { PlayerSessionsService } from './player-sessions.service';
 import {
@@ -90,6 +91,8 @@ export class GatewayIpcService {
     @Optional()
     @InjectRepository(TailscaleDevice)
     private readonly deviceRepository?: Repository<TailscaleDevice>,
+    @Optional()
+    private readonly unlinkedAttempts?: UnlinkedAttemptsService,
   ) {}
 
   /**
@@ -196,6 +199,7 @@ export class GatewayIpcService {
     );
 
     let user: User | null = null;
+    let netId: NetworkIdentity | null = null;
 
     if (req.tailscale_user_id) {
       user = await this.userRepository.findOne({
@@ -209,7 +213,7 @@ export class GatewayIpcService {
 
     if (!user && req.client_ip && this.identityProvider) {
       try {
-        const netId = await this.identityProvider.resolveIdentity(req.client_ip);
+        netId = await this.identityProvider.resolveIdentity(req.client_ip);
         if (netId) {
           if (netId.userId) {
             user = await this.userRepository.findOne({
@@ -234,6 +238,16 @@ export class GatewayIpcService {
     }
 
     if (!user) {
+      this.unlinkedAttempts?.record({
+        tailscaleUserId: netId?.userId || req.tailscale_user_id || '',
+        loginName: netId?.loginName || '',
+        displayName: netId?.displayName || '',
+        clientIp: req.client_ip || '',
+        nodeId: netId?.nodeId || req.node_id || '',
+        nodeName: netId?.nodeName || '',
+        minecraftNick: req.minecraft_nick || '',
+      });
+
       return {
         found: false,
         user_id: '',
@@ -262,32 +276,45 @@ export class GatewayIpcService {
 
   /**
    * Quem recebeu o nó compartilhado entra com a própria conta Tailscale, então o e-mail do login (que o
-   * Tailscale já verificou) liga a conta ao cadastro feito pelo admin. O ID da conta fica gravado no
-   * primeiro acesso e as buscas seguintes usam só ele.
+   * Tailscale já verificou) ou usuário do GitHub liga a conta ao cadastro feito pelo admin. O ID da conta
+   * fica gravado no primeiro acesso e as buscas seguintes usam só ele.
    */
   private async bindSharedUser(netId: NetworkIdentity): Promise<User | null> {
-    const email = netId.loginName?.trim().toLowerCase();
+    const login = netId.loginName?.trim().toLowerCase();
     if (
       this.configService?.tailscale?.nodeSharingEnabled === false ||
-      !email ||
+      !login ||
       !netId.userId ||
       netId.tags?.length
     ) {
       return null;
     }
 
-    const user = await this.userRepository.findOne({ where: { email } });
+    const ghUser = login.endsWith('@github') ? login.slice(0, -7) : null;
+    let user: User | null = null;
+
+    if (ghUser) {
+      user = await this.userRepository.findOne({
+        where: [{ github_username: ghUser }, { email: login }],
+      });
+    } else {
+      user = await this.userRepository.findOne({ where: { email: login } });
+    }
+
     if (!user) {
       return null;
     }
     if (user.tailscale_user_id && user.tailscale_user_id !== netId.userId) {
       this.logger.warn(
-        `Cadastro de ${email} já pertence a outra conta Tailscale; acesso não vinculado`,
+        `Cadastro de ${login} já pertence a outra conta Tailscale; acesso não vinculado`,
       );
       return null;
     }
 
     user.tailscale_user_id = netId.userId;
+    if (ghUser && !user.github_username) {
+      user.github_username = ghUser;
+    }
     return this.userRepository.save(user);
   }
 
