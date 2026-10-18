@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 
 import { AppConfigService } from '@config/app-config.service';
 import { User } from '@database/entities/user.entity';
@@ -43,7 +43,9 @@ export class AuthService implements OnModuleInit {
       if (adminCount === 0) {
         const configuredToken = this.configService.jwt.initialBootstrapToken;
         this.activeBootstrapToken =
-          configuredToken && configuredToken.trim().length > 0 ? configuredToken.trim() : uuidv4();
+          configuredToken && configuredToken.trim().length > 0
+            ? configuredToken.trim()
+            : randomUUID();
 
         this.logger.warn(
           `[SECURITY ALERT] No administrator found! INITIAL_BOOTSTRAP_TOKEN is: ${this.activeBootstrapToken}`,

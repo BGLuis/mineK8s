@@ -93,7 +93,7 @@ export class HealthBotProbeService {
       let onlineMode = false;
       let loginSuccessReceived = false;
       let worldDetails: HealthBotWorldDetails | undefined;
-      let stage: HealthBotReport['stage'] = 'failed';
+      const stage: HealthBotReport['stage'] = 'failed';
 
       let connectTime = 0;
       let handshakeSentTime = 0;

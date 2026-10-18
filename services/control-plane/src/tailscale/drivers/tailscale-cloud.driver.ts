@@ -72,9 +72,7 @@ export class TailscaleCloudDriver {
 
       if (response.status === 429 && attempt < retries) {
         const retryAfterHeader = response.headers.get('retry-after');
-        const delaySeconds = retryAfterHeader
-          ? parseInt(retryAfterHeader, 10)
-          : Math.pow(2, attempt);
+        const delaySeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 2 ** attempt;
         this.logger.warn(
           `Tailscale Cloud API 429 Rate Limit atingido em ${endpoint}. Aguardando ${delaySeconds}s (tentativa ${attempt + 1}/${retries})...`,
         );

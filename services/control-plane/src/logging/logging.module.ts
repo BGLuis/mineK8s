@@ -2,7 +2,7 @@ import { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http'
 
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { AppConfigModule } from '../config/app-config.module';
 import { K8sLogStreamerService } from './k8s-log-streamer.service';
 import { redactBody } from './redact';
@@ -59,7 +59,7 @@ const isProduction = process.env.NODE_ENV === 'production';
           return (
             (headers['x-correlation-id'] as string) ||
             (headers['x-request-id'] as string) ||
-            uuidv4()
+            randomUUID()
           );
         },
         transport: isProduction

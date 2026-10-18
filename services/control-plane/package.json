@@ -44,7 +44,6 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.4",
     "typeorm": "^1.1.2",
-    "uuid": "^11.0.5",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
@@ -60,7 +59,6 @@
     "@types/node": "^24.19.1",
     "@types/pg": "^8.11.10",
     "@types/supertest": "^7.2.1",
-    "@types/uuid": "^10.0.0",
     "@types/yauzl": "^3.4.0",
     "jest": "^30.5.2",
     "pino-pretty": "^13.2.0",

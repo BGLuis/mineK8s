@@ -378,7 +378,7 @@ export class RconClient {
     const base = this.options.baseBackoffMs!;
     const max = this.options.maxBackoffMs!;
     const attempt = Math.min(this.reconnectAttempts, 6);
-    const exponential = Math.min(max, base * Math.pow(2, attempt));
+    const exponential = Math.min(max, base * 2 ** attempt);
 
     // Jitter: +/- 20%
     const jitter = (Math.random() * 0.4 - 0.2) * exponential;
