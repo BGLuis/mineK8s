@@ -49,13 +49,14 @@ describeWithDatabase('users.tailscale_user_id único contra Postgres real', () =
     while ((await applied()).length > 0) {
       await ds.undoLastMigration();
     }
-    await users.save([
-      users.create({ minecraft_nick: 'Steve', tailscale_user_id: '1001' }),
-      users.create({ minecraft_nick: 'Alex', tailscale_user_id: '1001' }),
-      users.create({ minecraft_nick: 'Notch', tailscale_user_id: '2002' }),
-      users.create({ minecraft_nick: 'Herobrine', tailscale_user_id: '2002' }),
-      users.create({ minecraft_nick: 'Jeb', tailscale_user_id: '3003' }),
-    ]);
+    await ds.query(
+      `INSERT INTO "users" ("minecraft_nick", "tailscale_user_id") VALUES
+        ('Steve', '1001'),
+        ('Alex', '1001'),
+        ('Notch', '2002'),
+        ('Herobrine', '2002'),
+        ('Jeb', '3003')`,
+    );
 
     await expect(ds.runMigrations()).rejects.toThrow(
       '  1001: Alex, Steve\n  2002: Herobrine, Notch',
