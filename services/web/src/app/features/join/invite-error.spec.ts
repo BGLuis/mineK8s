@@ -20,6 +20,15 @@ describe('inviteErrorView', () => {
     expect(inviteErrorView(failure(400, 'INVITE_EXPIRED')).title).toBe('Este convite expirou');
   });
 
+  it('explains that key invites were turned off (403) as a notice, not a bad link', () => {
+    const view = inviteErrorView(failure(403, 'INVITE_KEY_DISABLED'));
+
+    expect(view.title).toBe('Convites por chave estão desativados');
+    expect(view.notice).toBe(true);
+    expect(view.retryable).toBe(false);
+    expect(inviteErrorView(failure(403, 'FORBIDDEN')).notice).toBeUndefined();
+  });
+
   it('treats an unknown token (404) as not found', () => {
     const view = inviteErrorView(failure(404, 'INVITE_NOT_FOUND'));
     expect(view.title).toBe('Convite não encontrado');

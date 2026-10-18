@@ -184,6 +184,8 @@ pub struct ResolvePlayerRequest {
     pub node_id: String,
     #[prost(string, tag = "3")]
     pub client_ip: String,
+    #[prost(string, tag = "4")]
+    pub minecraft_nick: String,
 }
 
 #[derive(Clone, PartialEq, ::prost::Message)]

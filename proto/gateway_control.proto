@@ -95,6 +95,7 @@ message ResolvePlayerRequest {
   string tailscale_user_id = 1;
   string node_id = 2;
   string client_ip = 3;
+  string minecraft_nick = 4;
 }
 
 message ResolvePlayerResponse {

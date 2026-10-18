@@ -11,6 +11,7 @@ import {
 } from './gateway-ipc.interfaces';
 import { GatewayIpcService } from './gateway-ipc.service';
 import { PlayerSessionsService } from './player-sessions.service';
+import { UnlinkedAttemptsService } from '../tailscale/shares/unlinked-attempts.service';
 
 describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
   let service: GatewayIpcService;
@@ -348,6 +349,297 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       expect(resp.found).toBe(false);
       expect(resp.user_id).toBe('');
       expect(resp.minecraft_nick).toBe('');
+    });
+  });
+
+  describe('Vínculo do nó ao convite resgatado', () => {
+    const newcomer = { id: 'user-new', minecraft_nick: 'Novato', role: 'PLAYER' };
+    const request = {
+      tailscale_user_id: 'tagged-devices',
+      node_id: 'node-new',
+      client_ip: '100.99.1.1',
+    };
+    let deviceRepo: { find: jest.Mock; save: jest.Mock };
+    let identityProvider: { resolveIdentity: jest.Mock };
+    let pending: any[];
+
+    beforeEach(() => {
+      pending = [{ id: 'dev-1', user: newcomer, status: 'PENDING', node_id: null, node_ip: null }];
+      deviceRepo = {
+        find: jest.fn(async () => pending),
+        save: jest.fn(async (d: any) => d),
+      };
+      identityProvider = {
+        resolveIdentity: jest.fn(async () => ({
+          userId: 'tagged-devices',
+          loginName: 'tagged-devices',
+          displayName: 'tagged-devices',
+          nodeId: 'node-new',
+          nodeName: 'novato',
+          nodeIp: '100.99.1.1',
+          tags: ['tag:mc-player'],
+          isOwner: false,
+        })),
+      };
+      mockUserRepo.findOne = jest.fn(async () => null);
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        deviceRepo as any,
+      );
+    });
+
+    it('o primeiro contato de um nó com a tag de jogador o vincula ao único convite pendente', async () => {
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp).toMatchObject({ found: true, user_id: 'user-new', minecraft_nick: 'Novato' });
+      expect(deviceRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'dev-1',
+          node_id: 'node-new',
+          node_ip: '100.99.1.1',
+          status: 'ACTIVE',
+        }),
+      );
+    });
+
+    it('um nó sem a tag de jogador não herda convite nenhum', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'someone',
+        nodeId: 'node-new',
+        nodeIp: '100.99.1.1',
+        tags: [],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('com mais de um convite pendente não adivinha de quem é o nó', async () => {
+      pending.push({ id: 'dev-2', user: { id: 'user-other' }, status: 'PENDING', node_id: null });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('sem convite pendente o nó segue não registrado', async () => {
+      pending.length = 0;
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(deviceRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Quem recebeu o nó compartilhado', () => {
+    const sharee = {
+      id: 'user-shared',
+      email: 'amigo@example.com',
+      minecraft_nick: 'Amigo',
+      role: 'PLAYER',
+      tailscale_user_id: null as string | null,
+    };
+    const request = { tailscale_user_id: 'ts-777', node_id: 'node-777', client_ip: '100.88.1.1' };
+    let identityProvider: { resolveIdentity: jest.Mock };
+    let saveUser: jest.Mock;
+
+    beforeEach(() => {
+      sharee.tailscale_user_id = null;
+      saveUser = jest.fn(async (u) => u);
+      identityProvider = {
+        resolveIdentity: jest.fn(async () => ({
+          userId: 'ts-777',
+          loginName: 'Amigo@Example.com',
+          displayName: 'Amigo',
+          nodeId: 'node-777',
+          nodeName: 'pc-do-amigo',
+          nodeIp: '100.88.1.1',
+          tags: [],
+          isOwner: true,
+        })),
+      };
+      mockUserRepo.findOne = jest.fn(async ({ where }: any) =>
+        where.email === 'amigo@example.com' ? sharee : null,
+      );
+      mockUserRepo.save = saveUser;
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+      );
+    });
+
+    it('o primeiro acesso casa o e-mail do login Tailscale com o cadastro e grava o ID da conta', async () => {
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp).toMatchObject({ found: true, user_id: 'user-shared', minecraft_nick: 'Amigo' });
+      expect(saveUser).toHaveBeenCalledWith(
+        expect.objectContaining({ tailscale_user_id: 'ts-777' }),
+      );
+    });
+
+    it('com o compartilhamento de nó desativado, o e-mail não liga conta nenhuma', async () => {
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        { tailscale: { nodeSharingEnabled: false } } as any,
+      );
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('um e-mail sem cadastro segue não registrado', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'ts-888',
+        loginName: 'desconhecido@example.com',
+        nodeId: 'node-888',
+        tags: [],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('não troca a conta de um cadastro que já pertence a outra conta Tailscale', async () => {
+      sharee.tailscale_user_id = 'ts-outra-conta';
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('um nó com tag não tem dono: o e-mail dele não vale como identidade', async () => {
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'tagged-devices',
+        loginName: 'amigo@example.com',
+        nodeId: 'node-777',
+        tags: ['tag:outra'],
+      });
+
+      const resp = await service.resolvePlayerIdentity(request);
+
+      expect(resp.found).toBe(false);
+      expect(saveUser).not.toHaveBeenCalled();
+    });
+
+    it('quando o login Tailscale for SSO do GitHub (@github), casa com o github_username cadastrado e vincula a conta', async () => {
+      const ghUser = {
+        id: 'user-gh',
+        email: null,
+        github_username: 'jaoppb',
+        minecraft_nick: 'JaoPlayer',
+        role: 'PLAYER',
+        tailscale_user_id: null as string | null,
+      };
+
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'ts-gh-777',
+        loginName: 'jaoppb@github',
+        displayName: 'Joao Pedro',
+        nodeId: 'node-gh-1',
+        nodeName: 'laptop-gh',
+        tags: [],
+      });
+
+      mockUserRepo.findOne = jest.fn(async ({ where }: any) => {
+        if (Array.isArray(where)) {
+          for (const cond of where) {
+            if (cond.github_username === 'jaoppb') return ghUser;
+            if (cond.email === 'jaoppb@github') return ghUser;
+          }
+        }
+        return null;
+      });
+
+      const resp = await service.resolvePlayerIdentity({
+        tailscale_user_id: '',
+        node_id: 'node-gh-1',
+        client_ip: '100.88.1.5',
+        minecraft_nick: 'JaoPlayer',
+      });
+
+      expect(resp).toMatchObject({
+        found: true,
+        user_id: 'user-gh',
+        minecraft_nick: 'JaoPlayer',
+      });
+      expect(saveUser).toHaveBeenCalledWith(
+        expect.objectContaining({ tailscale_user_id: 'ts-gh-777', github_username: 'jaoppb' }),
+      );
+    });
+
+    it('grava tentativa não vinculada em unlinkedAttempts quando a resolução de identidade não encontra usuário', async () => {
+      const unlinked = new UnlinkedAttemptsService();
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        unlinked,
+      );
+
+      identityProvider.resolveIdentity.mockResolvedValue({
+        userId: 'ts-anon-999',
+        loginName: 'desconhecido@github',
+        displayName: 'Anonimo',
+        nodeId: 'node-anon',
+        nodeName: 'desktop-anon',
+        tags: [],
+      });
+
+      mockUserRepo.findOne = jest.fn(async () => null);
+
+      const resp = await service.resolvePlayerIdentity({
+        tailscale_user_id: '',
+        node_id: 'node-anon',
+        client_ip: '100.88.1.99',
+        minecraft_nick: 'AnonNick',
+      });
+
+      expect(resp.found).toBe(false);
+      const attempts = unlinked.list();
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toMatchObject({
+        tailscaleUserId: 'ts-anon-999',
+        loginName: 'desconhecido@github',
+        clientIp: '100.88.1.99',
+        minecraftNick: 'AnonNick',
+      });
     });
   });
 

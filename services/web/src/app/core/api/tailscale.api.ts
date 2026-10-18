@@ -8,9 +8,13 @@ import {
   CreateInviteRequest,
   DeviceGcResponse,
   InviteSummary,
+  LinkSharedPlayerRequest,
   PostureAuditReport,
+  RegisterSharedPlayerRequest,
   RevokeDeviceResponse,
+  SharedPlayerSummary,
   TailscaleDevice,
+  UnlinkedAttempt,
 } from './models';
 
 /** tailscale.controller.ts, `api/tailscale`. validateInvite and claim are public (/join). */
@@ -51,6 +55,28 @@ export class TailscaleApi {
 
   claim(dto: ClaimInviteRequest): Observable<ClaimResult> {
     return this.api.post('/api/tailscale/claim', dto);
+  }
+
+  registerSharedPlayer(dto: RegisterSharedPlayerRequest): Observable<SharedPlayerSummary> {
+    return this.api.post('/api/tailscale/shares', dto);
+  }
+
+  removeSharedPlayer(userId: string): Observable<void> {
+    return this.api.delete(`/api/tailscale/shares/${userId}`);
+  }
+
+  listUnlinkedAttempts(): Observable<UnlinkedAttempt[]> {
+    return this.api.get('/api/tailscale/shares/unlinked-attempts');
+  }
+
+  linkSharedPlayer(dto: LinkSharedPlayerRequest): Observable<SharedPlayerSummary> {
+    return this.api.post('/api/tailscale/shares/link', dto);
+  }
+
+  dismissUnlinkedAttempt(tailscaleUserId: string): Observable<void> {
+    return this.api.delete(
+      `/api/tailscale/shares/unlinked-attempts/${encodeURIComponent(tailscaleUserId)}`,
+    );
   }
 
   listDevices(): Observable<TailscaleDevice[]> {

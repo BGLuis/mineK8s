@@ -22,6 +22,9 @@ import { AccessDecisionEngineService } from './decision/access-decision-engine.s
 import { TailscalePostureService } from './posture/tailscale-posture.service';
 import { InvitesService } from './invites/invites.service';
 import { DevicesService } from './devices/devices.service';
+import { SharesService } from './shares/shares.service';
+import { UnlinkedAttemptsService } from './shares/unlinked-attempts.service';
+import { SharesController } from './shares/shares.controller';
 import { TailscaleController } from './tailscale.controller';
 
 @Module({
@@ -40,7 +43,7 @@ import { TailscaleController } from './tailscale.controller';
     ConsoleModule,
     forwardRef(() => GatewayIpcModule),
   ],
-  controllers: [TailscaleController],
+  controllers: [TailscaleController, SharesController],
   providers: [
     TailscalePostureService,
     TailscaleLocalDriver,
@@ -49,6 +52,8 @@ import { TailscaleController } from './tailscale.controller';
     AccessDecisionEngineService,
     InvitesService,
     DevicesService,
+    SharesService,
+    UnlinkedAttemptsService,
     {
       provide: NETWORK_IDENTITY_PROVIDER,
       useExisting: TailscaleCompositeProvider,
@@ -62,6 +67,8 @@ import { TailscaleController } from './tailscale.controller';
     AccessDecisionEngineService,
     InvitesService,
     DevicesService,
+    SharesService,
+    UnlinkedAttemptsService,
     NETWORK_IDENTITY_PROVIDER,
   ],
 })

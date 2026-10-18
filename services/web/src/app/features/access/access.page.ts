@@ -1,15 +1,26 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
+import { McBanner } from '../../ui';
 import { AccessStore } from './access.store';
 import { DevicesPanel } from './devices-panel';
 import { GroupsPanel } from './groups-panel';
 import { InviteForm } from './invite-form';
 import { InviteList } from './invite-list';
+import { SharedPlayersPanel } from './shared-players-panel';
 
 @Component({
   selector: 'mc-access-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [InviteForm, InviteList, DevicesPanel, GroupsPanel],
+  imports: [
+    InviteForm,
+    InviteList,
+    DevicesPanel,
+    GroupsPanel,
+    SharedPlayersPanel,
+    McBanner,
+    RouterLink,
+  ],
   providers: [AccessStore],
   template: `
     <div class="flex flex-col gap-8">
@@ -20,14 +31,33 @@ import { InviteList } from './invite-list';
         </p>
       </header>
 
-      <div class="grid items-start gap-6 lg:grid-cols-2">
-        <mc-invite-form />
+      @if (store.keyInvitesEnabled() === false) {
+        <mc-banner tone="info" title="Convites com chave de acesso desativados">
+          Os apps do Tailscale com interface não aceitam chave de acesso, então não dá para criar
+          convites novos. Os convites antigos continuam na lista para você revogar. Para reativar,
+          abra as <a class="underline" routerLink="/settings">Configurações</a>.
+        </mc-banner>
+      }
+
+      <div
+        class="grid items-start gap-6"
+        [class.lg:grid-cols-2]="store.keyInvitesEnabled() === true"
+      >
+        @if (store.keyInvitesEnabled() === true) {
+          <mc-invite-form />
+        }
         <mc-invite-list />
       </div>
+
+      @if (store.nodeSharingEnabled() === true) {
+        <mc-shared-players-panel />
+      }
 
       <mc-devices-panel />
       <mc-groups-panel />
     </div>
   `,
 })
-export class AccessPage {}
+export class AccessPage {
+  protected readonly store = inject(AccessStore);
+}

@@ -17,28 +17,35 @@ export interface TailscaleCloudDevice {
 @Injectable()
 export class TailscaleCloudDriver {
   private readonly logger = new Logger(TailscaleCloudDriver.name);
-  private apiToken: string;
-  private tailnet: string;
+  private overrides: { apiToken?: string; tailnet?: string } = {};
   private baseUrl: string;
 
   constructor(private readonly configService?: AppConfigService) {
-    this.apiToken =
-      process.env.TAILSCALE_API_KEY ||
-      (this.configService as any)?.get?.('TAILSCALE_API_KEY') ||
-      '';
-    this.tailnet =
-      process.env.TAILSCALE_TAILNET ||
-      (this.configService as any)?.get?.('TAILSCALE_TAILNET') ||
-      '-';
-    this.baseUrl =
-      process.env.TAILSCALE_API_URL ||
-      (this.configService as any)?.get?.('TAILSCALE_API_URL') ||
-      'https://api.tailscale.com';
+    this.baseUrl = process.env.TAILSCALE_API_URL || 'https://api.tailscale.com';
+  }
+
+  /** Read on every request, so a key or tailnet saved on the settings page applies without a restart. */
+  private get apiToken(): string {
+    return (
+      this.overrides.apiToken ??
+      this.configService?.tailscale.apiKey ??
+      process.env.TAILSCALE_API_KEY ??
+      ''
+    );
+  }
+
+  private get tailnet(): string {
+    return (
+      this.overrides.tailnet ??
+      this.configService?.tailscale.tailnetName ??
+      process.env.TAILNET_NAME ??
+      process.env.TAILSCALE_TAILNET ??
+      '-'
+    );
   }
 
   public setConfig(token: string, tailnet: string, baseUrl?: string): void {
-    this.apiToken = token;
-    this.tailnet = tailnet;
+    this.overrides = { apiToken: token, tailnet };
     if (baseUrl) {
       this.baseUrl = baseUrl;
     }

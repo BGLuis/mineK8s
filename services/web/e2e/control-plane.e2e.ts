@@ -1,6 +1,6 @@
 import { Page, expect, test } from '@playwright/test';
 
-import { BOOTSTRAP_TOKEN } from './env';
+import { BOOTSTRAP_TOKEN, SPA_URL } from './env';
 import { LIST_REPLY } from './fakes/minecraft';
 
 const ADMIN_NICK = 'AdminE2E';
@@ -14,6 +14,7 @@ test.describe.configure({ mode: 'serial' });
 let page: Page;
 let serverPath = '';
 let joinUrl = '';
+let linkWithConfiguredBase = '';
 
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
@@ -88,6 +89,21 @@ test('backup a quente com o servidor ligado aparece na lista', async () => {
   await expect(page.getByRole('row', { name: /Agendado · quente .* Concluído/ })).toBeVisible();
 });
 
+test('configurações: o convite com chave começa desligado e a página o liga', async () => {
+  await page.goto('/access');
+  await expect(page.getByText('Convites com chave de acesso desativados')).toBeVisible();
+  await expect(page.getByLabel('Nome do convite')).toHaveCount(0);
+
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: 'Configurações', level: 1 })).toBeVisible();
+  await page.getByRole('switch', { name: 'Convite com chave de acesso' }).click();
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByText('Configurações salvas.')).toBeVisible();
+
+  await page.goto('/access');
+  await expect(page.getByLabel('Nome do convite')).toBeVisible();
+});
+
 test('criar convite para o servidor e validá-lo pelo link', async ({ browser }) => {
   await page.goto('/access');
   await page.getByLabel('Nome do convite').fill(INVITE_NAME);
@@ -121,4 +137,51 @@ test('/join: o convidado faz o claim e recebe a chave do Tailscale', async ({ br
   await expect(page.getByText(INVITE_NAME)).toBeVisible();
   await expect(page.getByText(/^1\/5 usos/)).toBeVisible();
   await expect(page.getByRole('row', { name: /LucasCraft/ })).toBeVisible();
+});
+
+test('configurações: a URL pública vira a base do link e o segredo nunca volta', async () => {
+  const CLOUDFLARE_TOKEN = 'cf-token-FAKE-e2e-0000';
+  await page.goto('/settings');
+  await page.getByLabel('URL pública do painel').fill('https://painel.e2e.test');
+  await page.getByLabel('Token da Cloudflare').fill(CLOUDFLARE_TOKEN);
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByText('Configurações salvas.')).toBeVisible();
+
+  const reload = page.waitForResponse(
+    (response) => response.url().endsWith('/api/settings') && response.request().method() === 'GET',
+  );
+  await page.reload();
+  expect(await (await reload).text()).not.toContain(CLOUDFLARE_TOKEN);
+  await expect(page.getByLabel('URL pública do painel')).toHaveValue('https://painel.e2e.test');
+  await expect(page.getByLabel('Token da Cloudflare')).toHaveValue('');
+
+  await page.goto('/access');
+  await page.getByLabel('Nome do convite').fill('Convite com a URL nova');
+  await page.getByRole('button', { name: 'Gerar convite' }).click();
+  await expect(page.getByLabel('Link do convite')).toHaveValue(
+    /^https:\/\/painel\.e2e\.test\/join\?token=/,
+  );
+  linkWithConfiguredBase = await page.getByLabel('Link do convite').inputValue();
+});
+
+test('configurações: desligar o convite com chave bloqueia o /join e a criação', async ({
+  browser,
+}) => {
+  await page.goto('/settings');
+  await page.getByRole('switch', { name: 'Convite com chave de acesso' }).click();
+  await page.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByText('Configurações salvas.')).toBeVisible();
+
+  const guest = await browser.newPage();
+  // The configured host is fictional here; the same path and token resolve on the SPA under test.
+  await guest.goto(`${SPA_URL}/join${new URL(linkWithConfiguredBase).search}`);
+  await expect(
+    guest.getByRole('heading', { name: 'Convites por chave estão desativados' }),
+  ).toBeVisible();
+  await expect(guest.getByLabel('Seu nome')).toHaveCount(0);
+  await guest.close();
+
+  await page.goto('/access');
+  await expect(page.getByText('Convites com chave de acesso desativados')).toBeVisible();
+  await expect(page.getByLabel('Nome do convite')).toHaveCount(0);
 });

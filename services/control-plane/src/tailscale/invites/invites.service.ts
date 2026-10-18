@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,7 +11,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
+import { AppConfigService } from '@config/app-config.service';
+
 import { Invite } from '../../database/entities/invite.entity';
+import { PLAYER_TAG } from '../identity/network-identity-provider.interface';
 import { InviteGroup } from '../../database/entities/invite-group.entity';
 import { InviteServer } from '../../database/entities/invite-server.entity';
 import { Server } from '../../database/entities/server.entity';
@@ -31,7 +35,6 @@ import {
 @Injectable()
 export class InvitesService {
   private readonly logger = new Logger(InvitesService.name);
-  private baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
 
   constructor(
     @InjectRepository(Invite)
@@ -51,16 +54,25 @@ export class InvitesService {
     private readonly tailscaleCloudDriver: TailscaleCloudDriver,
     @InjectRepository(Server)
     private readonly serverRepo: Repository<Server>,
+    private readonly appConfig: AppConfigService,
   ) {}
 
-  public setBaseUrl(url: string): void {
-    this.baseUrl = url;
+  /** Key-based invites stay in the code but are off by default (see the `tailscale.inviteKeyEnabled` setting). */
+  private assertInviteKeyEnabled(): void {
+    if (!this.appConfig.tailscale.inviteKeyEnabled) {
+      throw new ForbiddenException({
+        code: 'INVITE_KEY_DISABLED',
+        message:
+          'Os convites com chave de acesso estão desativados. Peça a quem administra a rede para liberar seu acesso pelo Tailscale.',
+      });
+    }
   }
 
   /**
    * Emite um novo convite multi-uso com permissões pré-vinculadas (RF-TS-03, RF-TS-06).
    */
   async createInvite(dto: CreateInviteDto, createdBy?: string): Promise<InviteSummaryDto> {
+    this.assertInviteKeyEnabled();
     const token = crypto.randomBytes(16).toString('hex');
     const maxUses = dto.maxUses ?? 1;
     const expiresInDays = dto.expiresInDays ?? 7;
@@ -177,6 +189,7 @@ export class InvitesService {
    * Valida se um token é resgatável antes do preenchimento do formulário no portal /join.
    */
   async validateToken(token: string): Promise<InviteSummaryDto> {
+    this.assertInviteKeyEnabled();
     const invite = await this.inviteRepo.findOne({
       where: { token },
       relations: {
@@ -229,6 +242,7 @@ export class InvitesService {
    * Critério de Concorrência: 10 claims simultâneos em maxUses=1 garantem exatamente 1 sucesso e 9 conflitos.
    */
   async claimInvite(dto: ClaimInviteDto): Promise<ClaimResultDto> {
+    this.assertInviteKeyEnabled();
     // 1. Validação estrita do Nickname Vanilla (RF-ARQ-21, GW:430-432)
     const nickValidation = validateNicknameFormat(dto.minecraftNick);
     if (!nickValidation.valid) {
@@ -336,14 +350,13 @@ export class InvitesService {
     }
 
     // 5. Geração de AuthKey na Tailscale Cloud API (RF-TS-05, PR-11)
+    // The tailnet policy cannot declare a tag per player, so every key carries the one static tag;
+    // playerTag below is only the unique label of the device row.
     const playerTag = `tag:player-${user.id}`;
     let authKeyResult;
 
     try {
-      authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey(
-        [playerTag, 'tag:player'],
-        86400 * 7,
-      );
+      authKeyResult = await this.tailscaleCloudDriver.generatePreAuthKey([PLAYER_TAG], 86400 * 7);
     } catch (cloudErr: any) {
       this.logger.error(
         `Falha ao gerar Pre-Auth Key na Tailscale Cloud API: ${cloudErr.message}. Executando compensação L-03...`,
@@ -374,6 +387,9 @@ export class InvitesService {
     await this.deviceRepo.save(device);
 
     const deepLinkUrl = `tailscale://login?key=${authKeyResult.key}`;
+    const worldAddress = await this.exampleWorldAddress(
+      (invite.invite_servers || []).map((s) => s.server_id),
+    );
 
     return {
       userId: user.id,
@@ -381,15 +397,27 @@ export class InvitesService {
       minecraftNick: user.minecraft_nick,
       authKey: authKeyResult.key,
       deepLinkUrl,
-      tailcatTunnel: {
-        serverAddress: 'survival.mine.lan:25565',
-        instructions:
-          'Users without Administrator privileges must run the tailcat executable to connect via 127.0.0.1:25565.',
-      },
+      tailcatTunnel: worldAddress
+        ? {
+            serverAddress: worldAddress,
+            instructions:
+              'Users without Administrator privileges must run the tailcat executable to connect via 127.0.0.1:25565.',
+          }
+        : undefined,
       expiresAt: authKeyResult.expires
         ? authKeyResult.expires.toISOString()
         : new Date(Date.now() + 86400000 * 7).toISOString(),
     };
+  }
+
+  /** What the player types in Minecraft for one of the invited worlds; unknown until the worlds domain is set. */
+  private async exampleWorldAddress(serverIds: string[]): Promise<string | null> {
+    const { worldsDomain } = this.appConfig.access;
+    if (!worldsDomain || serverIds.length === 0) {
+      return null;
+    }
+    const [server] = await this.serverRepo.find({ where: { id: In(serverIds) }, take: 1 });
+    return server ? `${server.subdomain}.${worldsDomain}` : null;
   }
 
   private toSummaryDto(invite: Invite, groupIds: string[], serverIds: string[]): InviteSummaryDto {
@@ -402,7 +430,7 @@ export class InvitesService {
       usedCount: invite.used_count,
       expiresAt: invite.expires_at,
       status,
-      joinUrl: `${this.baseUrl}/join?token=${invite.token}`,
+      joinUrl: `${this.appConfig.access.publicUrl}/join?token=${invite.token}`,
       groupIds,
       serverIds,
       createdBy: invite.created_by,

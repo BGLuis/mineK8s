@@ -85,7 +85,7 @@ async fn test_grpc_live_e2e_snapshot_identity_and_stream() {
 
     // 3. Testar resolução de identidade (WhoIs -> Minecraft Nick)
     let identity = client
-        .resolve_player_identity("user-e2e-123", "node-1", "100.64.0.1")
+        .resolve_player_identity("user-e2e-123", "node-1", "100.64.0.1", "E2EPlayer")
         .await
         .expect("resolve_player_identity deve ter sucesso");
     assert!(identity.is_some(), "Identidade deve ser encontrada");
@@ -99,7 +99,7 @@ async fn test_grpc_live_e2e_snapshot_identity_and_stream() {
 
     // Consulta para usuário inexistente deve retornar None
     let not_found = client
-        .resolve_player_identity("unknown-user", "node-1", "100.64.0.2")
+        .resolve_player_identity("unknown-user", "node-1", "100.64.0.2", "Unknown")
         .await
         .expect("resolve_player_identity para desconhecido deve ter sucesso");
     assert!(not_found.is_none());

@@ -352,10 +352,53 @@ export interface User {
 }
 
 /** GET /api/admin/users. */
+export interface RegisterSharedPlayerRequest {
+  email?: string;
+  github?: string;
+  minecraftNick: string;
+  realName?: string;
+  groupIds?: string[];
+  serverIds?: string[];
+}
+
+export interface SharedPlayerSummary {
+  id: string;
+  email: string | null;
+  githubUsername?: string | null;
+  minecraftNick: string;
+  realName: string | null;
+  groupIds: string[];
+  serverIds: string[];
+  linked: boolean;
+}
+
+export interface UnlinkedAttempt {
+  tailscaleUserId: string;
+  loginName: string;
+  displayName: string;
+  clientIp: string;
+  nodeId: string;
+  nodeName: string;
+  minecraftNick: string;
+  attemptedAt: string;
+}
+
+export interface LinkSharedPlayerRequest {
+  userId: string;
+  tailscaleUserId: string;
+  githubUsername?: string;
+}
+
 export interface UserSummary {
   id: string;
   minecraftNick: string;
   realName: string | null;
+  /** Tailscale account e-mail of a player registered for node sharing. */
+  email: string | null;
+  /** GitHub username linked or declared for Tailscale SSO. */
+  githubUsername?: string | null;
+  /** The Tailscale account has already reached the gateway and been tied to this record. */
+  linked: boolean;
   role: UserRole;
   devices: {
     id: string;
@@ -607,3 +650,50 @@ export interface UpdateServerRequest {
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
 }
+
+export type SettingType = 'text' | 'url' | 'domain' | 'boolean' | 'integer' | 'secret';
+
+/** Where the effective value of a setting comes from: the database wins over the environment, then the default. */
+export type SettingSource = 'database' | 'environment' | 'default';
+
+/** settings.types.ts SettingView. Secrets never carry `value`: only `isSet`. */
+export interface SettingView {
+  key: string;
+  type: SettingType;
+  label: string;
+  description: string;
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  envName: string;
+  source: SettingSource;
+  value?: string | number | boolean;
+  defaultValue?: string | number | boolean;
+  isSet?: boolean;
+  updatedAt?: string;
+  updatedBy?: string | null;
+}
+
+export interface SettingSectionView {
+  id: string;
+  title: string;
+  description: string;
+  settings: SettingView[];
+}
+
+/** A value that only changes in the Kubernetes manifest and needs a restart to take effect. */
+export interface ReadOnlySettingView {
+  key: string;
+  label: string;
+  envName: string;
+  value: string;
+}
+
+/** GET and PATCH /api/settings (admin). */
+export interface SettingsSnapshot {
+  sections: SettingSectionView[];
+  readOnly: ReadOnlySettingView[];
+}
+
+/** PATCH /api/settings: null removes the saved value, so the environment (or the default) applies again. */
+export type SettingsChanges = Record<string, string | number | boolean | null>;

@@ -24,6 +24,23 @@ export class UserSummaryDto {
   @ApiProperty({ nullable: true, example: 'Lucas Henrique' })
   realName: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    example: 'lucas@example.com',
+    description: 'E-mail da conta Tailscale',
+  })
+  email: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    example: 'jaoppb',
+    description: 'Usuário do GitHub vinculado à conta Tailscale',
+  })
+  githubUsername: string | null;
+
+  @ApiProperty({ description: 'A conta Tailscale já foi ligada ao cadastro no primeiro acesso' })
+  linked: boolean;
+
   @ApiProperty({ enum: ['ADMIN', 'PLAYER'], example: 'PLAYER' })
   role: string;
 

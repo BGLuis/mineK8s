@@ -11,7 +11,7 @@ use prost::Message;
 /// Acceptance Criterion: "Gateway reinicia e reconstrói rotas pelo snapshot inicial" (RF-GW-16, RF-MG-04).
 #[test]
 fn test_route_table_rebuild_from_snapshot() {
-    let initial_events = vec![
+    let initial_events = [
         RouteUpdateEvent {
             action: RouteAction::Upsert as i32,
             server_id: "srv-survival".into(),
@@ -313,6 +313,7 @@ fn test_protobuf_codec_roundtrips() {
         tailscale_user_id: "user-ts-123".into(),
         node_id: "node-456".into(),
         client_ip: "100.64.0.10".into(),
+        minecraft_nick: "Alex".into(),
     };
     buf.clear();
     resolve_req.encode(&mut buf).unwrap();

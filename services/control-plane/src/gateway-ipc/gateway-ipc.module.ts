@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Server } from '@database/entities/server.entity';
 import { ServerGroup } from '@database/entities/server-group.entity';
+import { TailscaleDevice } from '@database/entities/tailscale-device.entity';
 import { User } from '@database/entities/user.entity';
 import { UserGroup } from '@database/entities/user-group.entity';
 import { UserServerAccess } from '@database/entities/user-server-access.entity';
@@ -19,7 +20,14 @@ import { PlayerSessionsService } from './player-sessions.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Server, User, ServerGroup, UserGroup, UserServerAccess]),
+    TypeOrmModule.forFeature([
+      Server,
+      User,
+      ServerGroup,
+      UserGroup,
+      UserServerAccess,
+      TailscaleDevice,
+    ]),
     KubernetesModule,
     ServerActivityModule,
     ServerIconModule,

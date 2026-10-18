@@ -70,6 +70,9 @@ export class AdminService {
       id: user.id,
       minecraftNick: user.minecraft_nick,
       realName: user.real_name,
+      email: user.email,
+      githubUsername: user.github_username,
+      linked: Boolean(user.tailscale_user_id),
       role: user.role,
       devices: (user.devices || []).map((device) => ({
         id: device.id,

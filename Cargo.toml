@@ -5,3 +5,7 @@ members = [
     "crates/gateway-test-support",
 ]
 resolver = "2"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+field_reassign_with_default = "allow"

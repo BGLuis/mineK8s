@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   BadGatewayException,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ describe('InvitesService', () => {
   let mockDeviceRepo: any;
   let mockTailscaleCloudDriver: any;
   let mockServerRepo: any;
+  let mockAppConfig: any;
 
   beforeEach(() => {
     mockInviteRepo = {
@@ -71,6 +73,11 @@ describe('InvitesService', () => {
 
     mockServerRepo = { find: jest.fn(async () => []) };
 
+    mockAppConfig = {
+      tailscale: { inviteKeyEnabled: true },
+      access: { publicUrl: 'https://mine.example.ts.net:3001', worldsDomain: 'mine.internal' },
+    };
+
     service = new InvitesService(
       mockInviteRepo,
       mockInviteGroupRepo,
@@ -81,8 +88,8 @@ describe('InvitesService', () => {
       mockDeviceRepo,
       mockTailscaleCloudDriver,
       mockServerRepo,
+      mockAppConfig,
     );
-    service.setBaseUrl('https://mine.example.ts.net:3001');
   });
 
   describe('Ciclo de Vida do Convite (RF-TS-06: computeInviteStatus)', () => {
@@ -143,9 +150,17 @@ describe('InvitesService', () => {
       expect(result.maxUses).toBe(10);
       expect(result.token).toHaveLength(32);
       expect(result.status).toBe('Active');
-      expect(result.joinUrl).toContain(`/join?token=${result.token}`);
+      expect(result.joinUrl).toBe(`https://mine.example.ts.net:3001/join?token=${result.token}`);
       expect(mockInviteGroupRepo.save).toHaveBeenCalledTimes(1);
       expect(mockInviteServerRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('monta o joinUrl com a URL pública configurada, não com um endereço fixo', async () => {
+      mockAppConfig.access.publicUrl = 'https://painel.mine.internal';
+
+      const result = await service.createInvite({ name: 'Turma do Discord' });
+
+      expect(result.joinUrl).toBe(`https://painel.mine.internal/join?token=${result.token}`);
     });
 
     it('deve registrar o nickname do administrador que emitiu o convite', async () => {
@@ -434,9 +449,103 @@ describe('InvitesService', () => {
       expect(result.minecraftNick).toBe('LucasCraft');
       expect(result.authKey).toBe('tskey-auth-mock-12345');
       expect(result.deepLinkUrl).toContain('tailscale://login?key=tskey-auth-mock-12345');
+      expect(mockTailscaleCloudDriver.generatePreAuthKey).toHaveBeenCalledWith(
+        ['tag:mc-player'],
+        expect.any(Number),
+      );
       expect(mockUserGroupRepo.save).toHaveBeenCalledTimes(1);
       expect(mockUserServerAccessRepo.save).toHaveBeenCalledTimes(1);
       expect(mockDeviceRepo.save).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('convite com chave de acesso desativado (tailscale.inviteKeyEnabled)', () => {
+    beforeEach(() => {
+      mockAppConfig.tailscale.inviteKeyEnabled = false;
+    });
+
+    async function expectDisabled(call: () => Promise<unknown>) {
+      const error = await call().then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toEqual(
+        expect.objectContaining({
+          code: 'INVITE_KEY_DISABLED',
+          message: expect.stringContaining('desativados'),
+        }),
+      );
+    }
+
+    it('não cria convites', async () => {
+      await expectDisabled(() => service.createInvite({ name: 'Turma do Discord' }));
+      expect(mockInviteRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('não valida token na tela /join', async () => {
+      await expectDisabled(() => service.validateToken('qualquer-token'));
+      expect(mockInviteRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('não resgata convite nem gera chave na Tailscale', async () => {
+      await expectDisabled(() =>
+        service.claimInvite({
+          token: 'qualquer-token',
+          realName: 'Lucas Henrique',
+          minecraftNick: 'LucasCraft',
+        }),
+      );
+      expect(mockInviteRepo.createQueryBuilder).not.toHaveBeenCalled();
+      expect(mockTailscaleCloudDriver.generatePreAuthKey).not.toHaveBeenCalled();
+      expect(mockUserRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('continua permitindo listar e revogar convites antigos', async () => {
+      await expect(service.listInvites()).resolves.toEqual([]);
+    });
+  });
+
+  describe('endereço do mundo nas instruções do /join', () => {
+    async function claimWithServers(serverIds: string[]) {
+      mockInviteRepo.createQueryBuilder.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      });
+      mockInviteRepo.findOne.mockResolvedValue({
+        id: 'inv-1',
+        token: 'tok',
+        is_active: true,
+        used_count: 0,
+        max_uses: 5,
+        expires_at: new Date(Date.now() + 100000),
+        invite_groups: [],
+        invite_servers: serverIds.map((server_id) => ({ server_id })),
+      });
+      return service.claimInvite({
+        token: 'tok',
+        realName: 'Lucas Henrique',
+        minecraftNick: 'LucasCraft',
+      });
+    }
+
+    it('combina o subdomínio do mundo com o domínio base configurado', async () => {
+      mockServerRepo.find.mockResolvedValue([{ id: 'srv-1', subdomain: 'sekiro' }]);
+
+      const result = await claimWithServers(['srv-1']);
+
+      expect(result.tailcatTunnel?.serverAddress).toBe('sekiro.mine.internal');
+    });
+
+    it('não inventa um endereço sem o domínio base ou sem mundo no convite', async () => {
+      mockAppConfig.access.worldsDomain = '';
+      expect((await claimWithServers(['srv-1'])).tailcatTunnel).toBeUndefined();
+
+      mockAppConfig.access.worldsDomain = 'mine.internal';
+      expect((await claimWithServers([])).tailcatTunnel).toBeUndefined();
     });
   });
 });

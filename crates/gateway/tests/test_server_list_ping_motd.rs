@@ -298,7 +298,7 @@ async fn send_status_ping(gateway_addr: std::net::SocketAddr, host: &str) {
     let mut buf = BytesMut::with_capacity(1024);
     loop {
         let mut cursor = &buf[..];
-        if let Ok(_) = RawPacket::decode_prelogin(&mut cursor) {
+        if RawPacket::decode_prelogin(&mut cursor).is_ok() {
             break;
         }
         let n = stream.read_buf(&mut buf).await.unwrap();

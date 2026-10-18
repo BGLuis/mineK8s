@@ -189,10 +189,10 @@ impl TailscaleLocalWhoIs {
         }
 
         if !header_line.contains(" 200 ") {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("LocalAPI retornou status HTTP inesperado: {}", header_line),
-            ));
+            return Err(std::io::Error::other(format!(
+                "LocalAPI retornou status HTTP inesperado: {}",
+                header_line
+            )));
         }
 
         // O tailscaled responde em `Transfer-Encoding: chunked` (sem Content-Length): o corpo
@@ -253,7 +253,7 @@ impl TailscaleLocalWhoIs {
 
         // 2. Se falhar ou socket não existir (ENOENT), aciona fallback IPC gRPC se disponível
         if let Some(client) = ipc_client {
-            if let Ok(Some(resp)) = client.resolve_player_identity("", "", clean_ip).await {
+            if let Ok(Some(resp)) = client.resolve_player_identity("", "", clean_ip, "").await {
                 let id = WhoIsIdentity {
                     user_id: resp.user_id,
                     login_name: resp.minecraft_nick.clone(),

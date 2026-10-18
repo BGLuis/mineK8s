@@ -58,6 +58,13 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     icon: 'stats',
     isActive: (url) => path(url).startsWith('/health'),
   },
+  {
+    label: 'Configurações',
+    short: 'Ajustes',
+    link: '/settings',
+    icon: 'settings',
+    isActive: (url) => path(url).startsWith('/settings'),
+  },
 ];
 
 const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 'Jogador' };
@@ -163,7 +170,7 @@ const ROLE_LABELS: Record<UserRole, string> = { ADMIN: 'Administrador', PLAYER: 
       class="fixed inset-x-0 bottom-0 z-30 border-t-2 border-border-strong bg-surface-default md:hidden"
       aria-label="Seções"
     >
-      <ul class="grid grid-cols-4">
+      <ul class="grid grid-cols-5">
         @for (entry of entries; track entry.link) {
           <li>
             <a
