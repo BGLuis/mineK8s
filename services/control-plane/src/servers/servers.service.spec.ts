@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import {
   BadRequestException,
@@ -8,8 +11,10 @@ import {
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServersService } from './servers.service';
+import { ServersBackupService } from './servers-backup.service';
 import { ServerType } from './dto/create-server.dto';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
+import { serverDataDirectory } from '@k8s/server-data-volume';
 
 describe('ServersService', () => {
   let service: ServersService;
@@ -1120,6 +1125,168 @@ describe('ServersService', () => {
       });
 
       expect(mockBackupService.purgeModsDirectory).not.toHaveBeenCalled();
+    });
+
+    it('creates a protected PRE_UPDATE backup record with 14-day retention and leaves nothing in <serverDir>/.backups (#201)', async () => {
+      const tempStorageRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-data-srv-'),
+      );
+      const tempBackupsRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-backups-srv-'),
+      );
+
+      try {
+        const serverDir = path.join(tempStorageRoot, serverDataDirectory('survival'));
+        await fs.promises.mkdir(path.join(serverDir, 'world'), { recursive: true });
+        await fs.promises.writeFile(path.join(serverDir, 'world', 'level.dat'), 'seed=123');
+        await fs.promises.writeFile(path.join(serverDir, 'server.properties'), 'motd=Test');
+
+        const inMemBackups: any[] = [];
+        const testBackupRepo: any = {
+          create: jest.fn((dto) => ({
+            id: `bk-${inMemBackups.length + 1}`,
+            createdAt: new Date(),
+            ...dto,
+          })),
+          save: jest.fn(async (e) => {
+            inMemBackups.push(e);
+            return e;
+          }),
+          find: jest.fn(async () => inMemBackups),
+        };
+
+        const realBackupService = new ServersBackupService(
+          { storage: { serversDataRoot: tempStorageRoot, backupsPath: tempBackupsRoot } } as any,
+          mockK8sService,
+          mockConsoleDriver,
+          undefined,
+          testBackupRepo,
+        );
+
+        const customService = new ServersService(
+          mockServerRepo as any,
+          mockSettingsRepo as any,
+          mockAuditRepo as any,
+          mockK8sService,
+          mockConsoleDriver,
+          mockLogStreamer,
+          mockRuntimeResolver,
+          realBackupService,
+          mockGatewayIpcService,
+          mockSlpProbeService,
+          mockDnsDriver,
+          undefined,
+          undefined,
+          undefined,
+          { isTest: true } as any,
+        );
+
+        await customService.updateVersion('srv-update-1', { game_version: '1.20.5' });
+
+        expect(inMemBackups).toHaveLength(1);
+        const record = inMemBackups[0];
+        expect(record.backupType).toBe('PRE_UPDATE');
+        expect(record.isProtected).toBe(true);
+        expect(fs.existsSync(record.storagePath)).toBe(true);
+        expect(record.storagePath.endsWith('.tar.gz')).toBe(true);
+        expect(fs.existsSync(`${record.storagePath}.sha256`)).toBe(true);
+        expect(fs.existsSync(path.join(serverDir, '.backups'))).toBe(false);
+
+        const diffDays = (record.retentionExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        expect(diffDays).toBeGreaterThan(13.9);
+        expect(diffDays).toBeLessThanOrEqual(14.1);
+
+        const backupsList = await realBackupService.listBackups('srv-update-1');
+        expect(backupsList).toHaveLength(1);
+        expect(backupsList[0].id).toBe(record.id);
+      } finally {
+        await fs.promises.rm(tempStorageRoot, { recursive: true, force: true });
+        await fs.promises.rm(tempBackupsRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('restores from the pre-update archive record during rollback (#201)', async () => {
+      const tempStorageRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-data-srv-rb-'),
+      );
+      const tempBackupsRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-backups-srv-rb-'),
+      );
+
+      try {
+        const serverDir = path.join(tempStorageRoot, serverDataDirectory('survival'));
+        await fs.promises.mkdir(path.join(serverDir, 'world'), { recursive: true });
+        await fs.promises.writeFile(
+          path.join(serverDir, 'world', 'level.dat'),
+          'seed=original-world',
+        );
+        await fs.promises.writeFile(path.join(serverDir, 'server.properties'), 'motd=OriginalMOTD');
+
+        const inMemBackups: any[] = [];
+        const testBackupRepo: any = {
+          create: jest.fn((dto) => ({
+            id: `bk-${inMemBackups.length + 1}`,
+            createdAt: new Date(),
+            ...dto,
+          })),
+          save: jest.fn(async (e) => {
+            inMemBackups.push(e);
+            return e;
+          }),
+          find: jest.fn(async () => inMemBackups),
+        };
+
+        const realBackupService = new ServersBackupService(
+          { storage: { serversDataRoot: tempStorageRoot, backupsPath: tempBackupsRoot } } as any,
+          mockK8sService,
+          mockConsoleDriver,
+          undefined,
+          testBackupRepo,
+        );
+
+        mockSlpProbeService.probe.mockResolvedValue({ ready: false });
+
+        const customService = new ServersService(
+          mockServerRepo as any,
+          mockSettingsRepo as any,
+          mockAuditRepo as any,
+          mockK8sService,
+          mockConsoleDriver,
+          mockLogStreamer,
+          mockRuntimeResolver,
+          realBackupService,
+          mockGatewayIpcService,
+          mockSlpProbeService,
+          mockDnsDriver,
+          undefined,
+          undefined,
+          undefined,
+          { isTest: true } as any,
+        );
+
+        mockK8sService.startServer.mockImplementationOnce(async () => {
+          await fs.promises.writeFile(
+            path.join(serverDir, 'server.properties'),
+            'motd=BrokenAfterUpdate',
+          );
+        });
+
+        const result = await customService.updateVersion('srv-update-1', {
+          game_version: '1.21.0',
+        });
+
+        expect(result.rolledBack).toBe(true);
+        expect(result.version).toBe('1.20.4');
+
+        const restoredMotd = await fs.promises.readFile(
+          path.join(serverDir, 'server.properties'),
+          'utf-8',
+        );
+        expect(restoredMotd).toBe('motd=OriginalMOTD');
+      } finally {
+        await fs.promises.rm(tempStorageRoot, { recursive: true, force: true });
+        await fs.promises.rm(tempBackupsRoot, { recursive: true, force: true });
+      }
     });
   });
 

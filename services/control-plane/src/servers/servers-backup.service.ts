@@ -791,67 +791,93 @@ export class ServersBackupService {
   }
 
   /**
-   * Cria backup preventivo obrigatório (pre-update) antes de mutações de versão (RF-STO-13).
-   * Retorna o caminho absoluto do diretório de backup gerado.
+   * Cria backup preventivo formal pre-update antes de mutações de versão (RF-STO-13, RF-STO-15).
+   * Gera arquivo .tar.gz em /backups, calcula SHA-256 e registra no banco como PRE_UPDATE com 14 dias de retenção.
+   * Retorna o caminho absoluto do arquivo de backup gerado.
    */
   async createPreUpdateBackup(server: Server): Promise<string> {
-    const serverDir = this.getServerDataDir(server);
-    const backupsDir = path.join(serverDir, '.backups');
     const timestamp = Date.now();
-    const targetBackupDir = path.join(backupsDir, `pre-update-${timestamp}`);
+    const filename = `${server.resource_name}_pre-update_${timestamp}.tar.gz`;
+    const backupsDir = this.getBackupsDir();
+    const targetArchive = path.join(backupsDir, filename);
+    const serverDir = this.getServerDataDir(server);
 
     this.logger.log(
-      `Criando backup preventivo pre-update para servidor [${server.subdomain}] em: ${targetBackupDir}`,
+      `Criando backup preventivo pre-update para servidor [${server.subdomain}] em: ${targetArchive}`,
     );
 
-    await fs.promises.mkdir(targetBackupDir, { recursive: true });
+    await this.ensureBackupArchive(serverDir, targetArchive);
+    const stat = await fs.promises.stat(targetArchive);
+    const sha256Checksum = await this.calculateSha256(targetArchive);
+    await fs.promises.writeFile(`${targetArchive}.sha256`, `${sha256Checksum}  ${filename}\n`);
 
-    // Copia recursiva de todos os itens em serverDir, exceto a pasta .backups
-    const entries = await fs.promises.readdir(serverDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name === '.backups') {
-        continue;
-      }
-      const srcPath = path.join(serverDir, entry.name);
-      const destPath = path.join(targetBackupDir, entry.name);
-
-      await this.copyRecursive(srcPath, destPath);
+    if (this.backupRepo) {
+      await this.persistBackupRecord({
+        serverId: server.id,
+        filename,
+        storagePath: targetArchive,
+        sizeBytes: stat.size,
+        sha256Checksum,
+        backupType: BackupType.PRE_UPDATE,
+        status: BackupStatus.COMPLETED,
+        isProtected: true,
+        minecraftVersion: server.game_version || 'unknown',
+        modpackVersion: server.modpack_id ?? null,
+        retentionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Retenção obrigatória de 14 dias (RF-STO-15)
+      });
     }
 
     this.logger.log(`Backup pre-update concluído com sucesso para [${server.subdomain}].`);
-    return targetBackupDir;
+    return targetArchive;
   }
 
   /**
    * Restaura o backup pre-update em caso de falha no boot ou health check (RF-STO-13).
+   * Suporta arquivo de backup (.tar.gz) com restauração transacional ou diretório de fallback.
    */
-  async restorePreUpdateBackup(server: Server, backupDir: string): Promise<void> {
+  async restorePreUpdateBackup(server: Server, backupFileOrDir: string): Promise<void> {
     const serverDir = this.getServerDataDir(server);
 
     this.logger.warn(
-      `Restaurando backup pre-update para servidor [${server.subdomain}] de ${backupDir}...`,
+      `Restaurando backup pre-update para servidor [${server.subdomain}] de ${backupFileOrDir}...`,
     );
 
-    if (!fs.existsSync(backupDir)) {
-      throw new Error(`Pre-update backup directory not found: ${backupDir}`);
+    if (!fs.existsSync(backupFileOrDir)) {
+      throw new Error(`Pre-update backup not found: ${backupFileOrDir}`);
     }
 
-    // Remove arquivos atuais do servidor (exceto .backups)
-    const currentEntries = await fs.promises.readdir(serverDir, { withFileTypes: true });
-    for (const entry of currentEntries) {
-      if (entry.name === '.backups') {
-        continue;
+    const stat = await fs.promises.stat(backupFileOrDir);
+    if (stat.isDirectory()) {
+      // Remove arquivos atuais do servidor (exceto .backups)
+      const currentEntries = await fs.promises.readdir(serverDir, { withFileTypes: true });
+      for (const entry of currentEntries) {
+        if (entry.name === '.backups') {
+          continue;
+        }
+        const itemPath = path.join(serverDir, entry.name);
+        await fs.promises.rm(itemPath, { recursive: true, force: true });
       }
-      const itemPath = path.join(serverDir, entry.name);
-      await fs.promises.rm(itemPath, { recursive: true, force: true });
-    }
 
-    // Copia os arquivos do backup de volta para o diretório do servidor
-    const backupEntries = await fs.promises.readdir(backupDir, { withFileTypes: true });
-    for (const entry of backupEntries) {
-      const srcPath = path.join(backupDir, entry.name);
-      const destPath = path.join(serverDir, entry.name);
-      await this.copyRecursive(srcPath, destPath);
+      // Copia os arquivos do backup de volta para o diretório do servidor
+      const backupEntries = await fs.promises.readdir(backupFileOrDir, { withFileTypes: true });
+      for (const entry of backupEntries) {
+        const srcPath = path.join(backupFileOrDir, entry.name);
+        const destPath = path.join(serverDir, entry.name);
+        await this.copyRecursive(srcPath, destPath);
+      }
+    } else {
+      let expectedSha: string | undefined;
+      const adjacentShaFile = `${backupFileOrDir}.sha256`;
+      if (fs.existsSync(adjacentShaFile)) {
+        try {
+          const content = await fs.promises.readFile(adjacentShaFile, 'utf-8');
+          expectedSha = content.trim().split(/\s+/)[0];
+        } catch {
+          // ignore error reading sha file
+        }
+      }
+
+      await this.executeTransactionalRestore(server, serverDir, backupFileOrDir, expectedSha);
     }
 
     this.logger.log(`Rollback de arquivos concluído com sucesso para [${server.subdomain}].`);

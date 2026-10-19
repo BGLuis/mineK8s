@@ -111,6 +111,30 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     expect(result[0].id).toBe('backup-123');
   });
 
+  it('GET :id/backups deve listar backups do tipo PRE_UPDATE após atualização (#201)', async () => {
+    mockBackupService.listBackups.mockResolvedValueOnce([
+      {
+        id: 'backup-pre-update-1',
+        serverId: 'srv-1',
+        filename: 'survival_pre-update_12345.tar.gz',
+        sizeBytes: 2048,
+        sha256Checksum: 'abcdef123456',
+        backupType: 'PRE_UPDATE',
+        status: 'COMPLETED',
+        isProtected: true,
+        retentionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+      },
+    ]);
+
+    const result = await controller.listBackups('srv-1');
+
+    expect(mockBackupService.listBackups).toHaveBeenCalledWith('srv-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].backupType).toBe('PRE_UPDATE');
+    expect(result[0].isProtected).toBe(true);
+  });
+
   it('DELETE :id/backups/:backupId deve repassar flag force e remover backup (RF-STO-17)', async () => {
     const result = await controller.deleteBackup('srv-1', 'backup-123', 'true');
 
