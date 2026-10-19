@@ -44,6 +44,7 @@ import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.r
 import { ServerIconService } from './server-icon.service';
 import { MinecraftVersionsService } from './minecraft-versions.service';
 import { ServerShutdownWarningService } from './server-shutdown-warning.service';
+import { ServersBackupSchedulerService } from './servers-backup-scheduler.service';
 import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
@@ -84,6 +85,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly versionsService?: MinecraftVersionsService,
     @Optional()
     private readonly shutdownWarningService?: ServerShutdownWarningService,
+    @Optional()
+    private readonly backupSchedulerService?: ServersBackupSchedulerService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -244,6 +247,14 @@ export class ServersService implements OnApplicationBootstrap {
         auto_wake: s.auto_wake,
         sleep_timeout_minutes: s.sleep_timeout_minutes,
         stop_warning_minutes: s.stop_warning_minutes,
+        backup_schedule_mode: s.backup_schedule_mode,
+        backup_interval_hours: s.backup_interval_hours,
+        backup_daily_time: s.backup_daily_time,
+        backup_window_start: s.backup_window_start,
+        backup_window_end: s.backup_window_end,
+        backup_timezone: s.backup_timezone,
+        backup_retention_count: s.backup_retention_count,
+        backup_next_run_at: s.backup_next_run_at,
         created_at: s.created_at,
         updated_at: s.updated_at,
         replicas: dep?.replicas ?? 0,
@@ -292,6 +303,14 @@ export class ServersService implements OnApplicationBootstrap {
       auto_wake: server.auto_wake,
       sleep_timeout_minutes: server.sleep_timeout_minutes,
       stop_warning_minutes: server.stop_warning_minutes,
+      backup_schedule_mode: server.backup_schedule_mode,
+      backup_interval_hours: server.backup_interval_hours,
+      backup_daily_time: server.backup_daily_time,
+      backup_window_start: server.backup_window_start,
+      backup_window_end: server.backup_window_end,
+      backup_timezone: server.backup_timezone,
+      backup_retention_count: server.backup_retention_count,
+      backup_next_run_at: server.backup_next_run_at,
       created_at: server.created_at,
       updated_at: server.updated_at,
       replicas: dep?.replicas ?? 0,
@@ -488,6 +507,19 @@ export class ServersService implements OnApplicationBootstrap {
     }
 
     Object.assign(server, Object.fromEntries(changes));
+
+    const scheduleChanged =
+      dto.backup_schedule_mode !== undefined ||
+      dto.backup_interval_hours !== undefined ||
+      dto.backup_daily_time !== undefined ||
+      dto.backup_window_start !== undefined ||
+      dto.backup_window_end !== undefined ||
+      dto.backup_timezone !== undefined;
+
+    if (scheduleChanged) {
+      server.backup_next_run_at = this.backupSchedulerService?.calculateNextRun(server) ?? null;
+    }
+
     await this.serverRepo.save(server);
 
     if (memoryChanged) {

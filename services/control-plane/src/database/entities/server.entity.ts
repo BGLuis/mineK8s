@@ -26,6 +26,8 @@ export type ServerState =
 
 export type ServerAccessPolicy = 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET';
 
+export type BackupScheduleMode = 'OFF' | 'INTERVAL' | 'DAILY';
+
 @Entity('servers')
 export class Server {
   @PrimaryGeneratedColumn('uuid')
@@ -109,6 +111,30 @@ export class Server {
 
   @Column({ type: 'timestamptz', nullable: true })
   last_player_active_at: Date | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'OFF' })
+  backup_schedule_mode: BackupScheduleMode;
+
+  @Column({ type: 'int', nullable: true })
+  backup_interval_hours: number | null;
+
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  backup_daily_time: string | null;
+
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  backup_window_start: string | null;
+
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  backup_window_end: string | null;
+
+  @Column({ type: 'varchar', length: 50, default: 'America/Sao_Paulo' })
+  backup_timezone: string;
+
+  @Column({ type: 'int', default: 5 })
+  backup_retention_count: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  backup_next_run_at: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

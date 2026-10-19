@@ -346,8 +346,8 @@ export class ServersBackupService {
           backupId = record.id;
         }
 
-        // Aplica política de retenção FIFO N=5 para backups rotineiros (RF-STO-15)
-        await this.applyRetentionPolicy(server.id);
+        // Aplica política de retenção FIFO para backups rotineiros (RF-STO-15)
+        await this.applyRetentionPolicy(server.id, server.backup_retention_count ?? 5);
       }
 
       if (options?.taskId) {
@@ -976,11 +976,18 @@ export class ServersBackupService {
    */
   async applyRetentionPolicy(
     serverId: string,
-    maxRoutine: number = 5,
+    maxRoutine?: number,
   ): Promise<{ removedBackups: string[] }> {
     if (!this.backupRepo) {
       return { removedBackups: [] };
     }
+
+    let retentionCount = maxRoutine;
+    if (retentionCount === undefined && this.serverRepo) {
+      const server = await this.serverRepo.findOne({ where: { id: serverId } });
+      retentionCount = server?.backup_retention_count;
+    }
+    const max = retentionCount ?? 5;
 
     const allBackups = await this.backupRepo.find({
       where: { serverId },
@@ -1005,8 +1012,8 @@ export class ServersBackupService {
 
     const removedBackups: string[] = [];
 
-    if (routineBackups.length > maxRoutine) {
-      const toRemove = routineBackups.slice(maxRoutine);
+    if (routineBackups.length > max) {
+      const toRemove = routineBackups.slice(max);
       for (const backup of toRemove) {
         try {
           if (fs.existsSync(backup.storagePath)) {

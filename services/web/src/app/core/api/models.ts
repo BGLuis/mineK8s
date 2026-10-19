@@ -36,6 +36,14 @@ export interface ServerSummary {
   auto_wake: boolean;
   sleep_timeout_minutes: number;
   stop_warning_minutes?: number;
+  backup_schedule_mode?: 'OFF' | 'INTERVAL' | 'DAILY';
+  backup_interval_hours?: number | null;
+  backup_daily_time?: string | null;
+  backup_window_start?: string | null;
+  backup_window_end?: string | null;
+  backup_timezone?: string;
+  backup_retention_count?: number;
+  backup_next_run_at?: string | null;
   created_at: string;
   updated_at: string;
   replicas?: number;
@@ -666,6 +674,13 @@ export interface UpdateServerRequest {
   auto_wake?: boolean;
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
+  backup_schedule_mode?: 'OFF' | 'INTERVAL' | 'DAILY';
+  backup_interval_hours?: number;
+  backup_daily_time?: string;
+  backup_window_start?: string;
+  backup_window_end?: string;
+  backup_timezone?: string;
+  backup_retention_count?: number;
 }
 
 export type SettingType = 'text' | 'url' | 'domain' | 'boolean' | 'integer' | 'secret';

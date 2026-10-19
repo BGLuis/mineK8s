@@ -33,4 +33,25 @@ describe('UpdateServerDto', () => {
   it('não deixa INTERNET passar por aqui, pois publicar exige DNS e online-mode', async () => {
     expect(await invalidFields({ access_policy: 'INTERNET' })).toEqual(['access_policy']);
   });
+
+  it('valida campos de agendamento de backup (#205)', async () => {
+    expect(
+      await invalidFields({
+        backup_schedule_mode: 'DAILY',
+        backup_daily_time: '04:00',
+        backup_interval_hours: 12,
+        backup_window_start: '02:00',
+        backup_window_end: '06:00',
+        backup_retention_count: 5,
+        backup_timezone: 'America/Sao_Paulo',
+      }),
+    ).toEqual([]);
+
+    expect(await invalidFields({ backup_schedule_mode: 'INVALID' })).toEqual([
+      'backup_schedule_mode',
+    ]);
+    expect(await invalidFields({ backup_daily_time: '25:00' })).toEqual(['backup_daily_time']);
+    expect(await invalidFields({ backup_interval_hours: 0 })).toEqual(['backup_interval_hours']);
+    expect(await invalidFields({ backup_retention_count: 0 })).toEqual(['backup_retention_count']);
+  });
 });

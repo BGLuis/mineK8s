@@ -27,10 +27,21 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     server.server_type = 'PAPER';
     server.game_version = '1.20.4';
 
+    server.backup_schedule_mode = 'DAILY';
+    server.backup_interval_hours = 12;
+    server.backup_daily_time = '04:00';
+    server.backup_timezone = 'America/Sao_Paulo';
+    server.backup_retention_count = 5;
+
     expect(server.name).toBe('Survival World');
     expect(server.subdomain).toBe('survival');
     expect(server.server_type).toBe('PAPER');
     expect(server.game_version).toBe('1.20.4');
+    expect(server.backup_schedule_mode).toBe('DAILY');
+    expect(server.backup_interval_hours).toBe(12);
+    expect(server.backup_daily_time).toBe('04:00');
+    expect(server.backup_timezone).toBe('America/Sao_Paulo');
+    expect(server.backup_retention_count).toBe(5);
   });
 
   it('should instantiate MinecraftServerSettings with canonical defaults', () => {

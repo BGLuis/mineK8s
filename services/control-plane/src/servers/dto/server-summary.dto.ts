@@ -17,6 +17,14 @@ export class ServerSummaryDto {
   auto_wake: boolean;
   sleep_timeout_minutes: number;
   stop_warning_minutes: number;
+  backup_schedule_mode?: string;
+  backup_interval_hours?: number | null;
+  backup_daily_time?: string | null;
+  backup_window_start?: string | null;
+  backup_window_end?: string | null;
+  backup_timezone?: string;
+  backup_retention_count?: number;
+  backup_next_run_at?: Date | null;
   created_at: Date;
   updated_at: Date;
   replicas?: number;

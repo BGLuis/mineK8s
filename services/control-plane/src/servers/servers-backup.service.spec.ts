@@ -786,6 +786,34 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(inMemoryBackups.length).toBe(6);
     });
 
+    it('com backup_retention_count = 3, o quarto backup de rotina apaga o mais antigo (#205)', async () => {
+      const serverId = sampleServer.id;
+      const routineBackups: any[] = [];
+      for (let i = 1; i <= 4; i++) {
+        const filePath = path.join(tempBackupsRoot, `custom-routine-${i}.tar.gz`);
+        await fs.promises.writeFile(filePath, `routine-${i}`);
+        const b = await service.persistBackupRecord({
+          serverId,
+          filename: `custom-routine-${i}.tar.gz`,
+          storagePath: filePath,
+          sizeBytes: 100,
+          sha256Checksum: `dummy-sha-${i}`,
+          backupType: 'HOT_SCHEDULED' as any,
+          status: 'COMPLETED' as any,
+          isProtected: false,
+          minecraftVersion: '1.20.4',
+        });
+        b!.createdAt = new Date(Date.now() - (5 - i) * 60000);
+        routineBackups.push(b);
+      }
+
+      // Aplica com maxRoutine = 3
+      const { removedBackups } = await service.applyRetentionPolicy(serverId, 3);
+      expect(removedBackups).toHaveLength(1);
+      expect(removedBackups[0]).toBe(routineBackups[0].id);
+      expect(fs.existsSync(routineBackups[0].storagePath)).toBe(false);
+    });
+
     it('deve proteger backups PRE_RESTORE por no mínimo 48 horas contra exclusão e rotação', async () => {
       const serverId = sampleServer.id;
       const preRestorePath = path.join(tempBackupsRoot, 'pre-restore.tar.gz');

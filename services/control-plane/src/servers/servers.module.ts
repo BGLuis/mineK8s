@@ -28,6 +28,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { MinecraftVersionsController } from './minecraft-versions.controller';
 import { MinecraftVersionsService } from './minecraft-versions.service';
 import { ServerShutdownWarningService } from './server-shutdown-warning.service';
+import { ServersBackupSchedulerService } from './servers-backup-scheduler.service';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { ServerShutdownWarningService } from './server-shutdown-warning.service'
     ServerRuntimeResolver,
     MinecraftVersionsService,
     ServerShutdownWarningService,
+    ServersBackupSchedulerService,
   ],
   exports: [
     ServersService,
@@ -69,6 +71,7 @@ import { ServerShutdownWarningService } from './server-shutdown-warning.service'
     GameStorageProviderRegistry,
     MinecraftVersionsService,
     ServerShutdownWarningService,
+    ServersBackupSchedulerService,
   ],
 })
 export class ServersModule {}

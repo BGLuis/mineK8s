@@ -11,6 +11,7 @@ import { AddServerLanguage1710000000009 } from './1710000000009-AddServerLanguag
 import { AddAppSettings1710000000010 } from './1710000000010-AddAppSettings';
 import { AddUserGithubUsername1710000000011 } from './1710000000011-AddUserGithubUsername';
 import { AddServerStopWarningMinutes1710000000012 } from './1710000000012-AddServerStopWarningMinutes';
+import { AddServerBackupSchedule1710000000013 } from './1710000000013-AddServerBackupSchedule';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -26,4 +27,5 @@ export const migrations = [
   AddAppSettings1710000000010,
   AddUserGithubUsername1710000000011,
   AddServerStopWarningMinutes1710000000012,
+  AddServerBackupSchedule1710000000013,
 ];
