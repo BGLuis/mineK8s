@@ -41,4 +41,12 @@ export class UpdateVersionDto {
   @IsBoolean()
   @IsOptional()
   confirm_downgrade?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Tempo em minutos de aviso aos jogadores antes de parar para atualizar (0 = agora) (#204)',
+    default: 10,
+  })
+  @IsOptional()
+  warning_minutes?: number;
 }

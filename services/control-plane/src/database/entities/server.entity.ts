@@ -98,6 +98,9 @@ export class Server {
   @Column({ type: 'int', default: 15 })
   sleep_timeout_minutes: number;
 
+  @Column({ type: 'int', default: 10 })
+  stop_warning_minutes: number;
+
   @Column({ type: 'int', default: 0 })
   restart_count: number;
 

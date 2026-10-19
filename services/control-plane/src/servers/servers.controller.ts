@@ -22,7 +22,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '@auth/roles.decorator';
-import { UserRole } from '@database/entities/user.entity';
 
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
@@ -36,6 +35,7 @@ import { MAX_SERVER_ICON_BYTES } from './server-icon.service';
 import { CreateDirectoryDto } from './dto/create-directory.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
+import { StopServerDto } from './dto/stop-server.dto';
 import { CreateBackupDto } from './dto/create-backup.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
 
@@ -102,22 +102,34 @@ export class ServersController {
   }
 
   @Post(':id/stop')
-  @ApiOperation({ summary: 'Stop a server (scale Kubernetes deployment replicas to 0)' })
+  @ApiOperation({ summary: 'Stop a server with optional player warning countdown (#204)' })
   @ApiResponse({ status: 200, description: 'Server stop initiated' })
   @ApiResponse({ status: 404, description: 'Server not found' })
-  async stop(@Param('id') id: string) {
-    return this.serversService.stop(id);
+  async stop(@Param('id') id: string, @Body() dto?: StopServerDto) {
+    return this.serversService.stop(id, dto);
   }
 
   @Post(':id/restart')
   @ApiOperation({
-    summary: 'Restart a running server with graceful shutdown (save-all, stop, start)',
+    summary:
+      'Restart a running server with graceful shutdown and optional player warning countdown (#204)',
   })
   @ApiResponse({ status: 200, description: 'Server restart initiated' })
   @ApiResponse({ status: 404, description: 'Server not found' })
   @ApiResponse({ status: 409, description: 'Server is not running' })
-  async restart(@Param('id') id: string) {
-    return this.serversService.restart(id);
+  async restart(@Param('id') id: string, @Body() dto?: StopServerDto) {
+    return this.serversService.restart(id, dto);
+  }
+
+  @Post(':id/cancel-stop')
+  @ApiOperation({
+    summary: 'Cancel an active stop, restart or update countdown for this server (#204)',
+  })
+  @ApiResponse({ status: 200, description: 'Countdown cancelled' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  @ApiResponse({ status: 409, description: 'No countdown active for this server' })
+  async cancelStop(@Param('id') id: string) {
+    return this.serversService.cancelStop(id);
   }
 
   @Patch(':id')

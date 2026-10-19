@@ -3,12 +3,14 @@ import {
   diffSettings,
   hasChanges,
   validateSleepMinutes,
+  validateStopWarningMinutes,
   validateSubdomain,
 } from './quick-settings';
 
 const INITIAL: QuickSettings = {
   memoryMb: 4096,
   sleepMinutes: '15',
+  stopWarningMinutes: '10',
   subdomain: 'survival',
   maintenance: false,
   autoWake: true,
@@ -45,6 +47,17 @@ describe('validateSleepMinutes', () => {
   });
 });
 
+describe('validateStopWarningMinutes (#204)', () => {
+  it('accepts 0 (warning off) up to 1440', () => {
+    expect(validateStopWarningMinutes('0')).toBeNull();
+    expect(validateStopWarningMinutes('1440')).toBeNull();
+  });
+
+  it.each(['', '1441', '-1', '1.5', 'abc'])('rejects "%s"', (value) => {
+    expect(validateStopWarningMinutes(value)).not.toBeNull();
+  });
+});
+
 describe('diffSettings', () => {
   it('reports nothing when nothing changed', () => {
     expect(hasChanges(diffSettings(INITIAL, { ...INITIAL }))).toBe(false);
@@ -54,6 +67,7 @@ describe('diffSettings', () => {
     const changes = diffSettings(INITIAL, {
       memoryMb: 6144,
       sleepMinutes: '30',
+      stopWarningMinutes: '5',
       subdomain: 'novo',
       maintenance: true,
       autoWake: false,
@@ -63,6 +77,7 @@ describe('diffSettings', () => {
     expect(changes.patch).toEqual({
       allocated_memory_mb: 6144,
       sleep_timeout_minutes: 30,
+      stop_warning_minutes: 5,
       is_maintenance: true,
       auto_wake: false,
     });

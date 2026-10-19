@@ -27,6 +27,7 @@ import { GameStorageProviderRegistry } from './providers/game-storage-provider.r
 import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { MinecraftVersionsController } from './minecraft-versions.controller';
 import { MinecraftVersionsService } from './minecraft-versions.service';
+import { ServerShutdownWarningService } from './server-shutdown-warning.service';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { MinecraftVersionsService } from './minecraft-versions.service';
     GameStorageProviderRegistry,
     ServerRuntimeResolver,
     MinecraftVersionsService,
+    ServerShutdownWarningService,
   ],
   exports: [
     ServersService,
@@ -66,6 +68,7 @@ import { MinecraftVersionsService } from './minecraft-versions.service';
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
     MinecraftVersionsService,
+    ServerShutdownWarningService,
   ],
 })
 export class ServersModule {}

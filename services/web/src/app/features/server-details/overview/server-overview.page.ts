@@ -37,6 +37,7 @@ import {
   hasChanges,
   policyLabel,
   validateSleepMinutes,
+  validateStopWarningMinutes,
   validateSubdomain,
 } from './quick-settings';
 
@@ -201,6 +202,17 @@ function avatarColor(nick: string): string {
                 />
               </div>
 
+              <div>
+                <mc-text-field
+                  label="Aviso antes de parar (minutos)"
+                  inputmode="numeric"
+                  helpText="Tempo em minutos para avisar jogadores antes de desligar ou reiniciar (0 desliga o aviso)."
+                  [errorText]="stopWarningError() ?? ''"
+                  [ngModel]="stopWarning()"
+                  (ngModelChange)="stopWarning.set($event)"
+                />
+              </div>
+
               <mc-text-field
                 label="Subdomínio"
                 autocomplete="off"
@@ -311,6 +323,7 @@ export class ServerOverviewPage {
 
   protected readonly memory = signal(4096);
   protected readonly sleep = signal('');
+  protected readonly stopWarning = signal('10');
   protected readonly subdomain = signal('');
   protected readonly maintenance = signal(false);
   protected readonly autoWake = signal(true);
@@ -322,11 +335,15 @@ export class ServerOverviewPage {
   private readonly current = computed<QuickSettings>(() => ({
     memoryMb: this.memory(),
     sleepMinutes: this.sleep(),
+    stopWarningMinutes: this.stopWarning(),
     subdomain: this.subdomain(),
     maintenance: this.maintenance(),
     autoWake: this.autoWake(),
   }));
   protected readonly sleepError = computed(() => validateSleepMinutes(this.sleep()));
+  protected readonly stopWarningError = computed(() =>
+    validateStopWarningMinutes(this.stopWarning()),
+  );
   protected readonly subdomainError = computed(
     () => this.domainConflict() ?? validateSubdomain(this.subdomain()),
   );
@@ -341,6 +358,7 @@ export class ServerOverviewPage {
       hasChanges(changes) &&
       !this.saving() &&
       this.sleepError() === null &&
+      this.stopWarningError() === null &&
       this.subdomainError() === null
     );
   });
@@ -481,8 +499,8 @@ export class ServerOverviewPage {
   }
 
   private patchedFields(): Partial<QuickSettings> {
-    const { memoryMb, sleepMinutes, maintenance, autoWake } = this.current();
-    return { memoryMb, sleepMinutes, maintenance, autoWake };
+    const { memoryMb, sleepMinutes, stopWarningMinutes, maintenance, autoWake } = this.current();
+    return { memoryMb, sleepMinutes, stopWarningMinutes, maintenance, autoWake };
   }
 
   private resetForm(server: NonNullable<ReturnType<typeof this.store.server>>): void {
@@ -490,6 +508,7 @@ export class ServerOverviewPage {
     const settings: QuickSettings = {
       memoryMb: server.allocated_memory_mb,
       sleepMinutes: String(server.sleep_timeout_minutes),
+      stopWarningMinutes: String(server.stop_warning_minutes ?? 10),
       subdomain: server.subdomain,
       maintenance: server.is_maintenance,
       autoWake: server.auto_wake,
@@ -497,6 +516,7 @@ export class ServerOverviewPage {
     this.initial.set(settings);
     this.memory.set(settings.memoryMb);
     this.sleep.set(settings.sleepMinutes);
+    this.stopWarning.set(settings.stopWarningMinutes);
     this.subdomain.set(settings.subdomain);
     this.maintenance.set(settings.maintenance);
     this.autoWake.set(settings.autoWake);

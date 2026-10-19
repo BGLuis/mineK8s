@@ -16,6 +16,7 @@ export class ServerSummaryDto {
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
+  stop_warning_minutes: number;
   created_at: Date;
   updated_at: Date;
   replicas?: number;

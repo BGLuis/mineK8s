@@ -14,6 +14,7 @@ import {
   ServerPlayers,
   ServerRuntimeStats,
   ServerSummary,
+  StopServerRequest,
   UpdateServerRequest,
   UpdateServerSettingsRequest,
   UpdateVersionRequest,
@@ -45,12 +46,16 @@ export class ServersApi {
     return this.api.post(`/api/servers/${id}/start`);
   }
 
-  stop(id: string): Observable<MessageResponse> {
-    return this.api.post(`/api/servers/${id}/stop`);
+  stop(id: string, dto?: StopServerRequest): Observable<MessageResponse & { taskId?: string }> {
+    return this.api.post(`/api/servers/${id}/stop`, dto ?? {});
   }
 
-  restart(id: string): Observable<MessageResponse> {
-    return this.api.post(`/api/servers/${id}/restart`);
+  restart(id: string, dto?: StopServerRequest): Observable<MessageResponse & { taskId?: string }> {
+    return this.api.post(`/api/servers/${id}/restart`, dto ?? {});
+  }
+
+  cancelStop(id: string): Observable<MessageResponse> {
+    return this.api.post(`/api/servers/${id}/cancel-stop`);
   }
 
   update(id: string, patch: UpdateServerRequest): Observable<ServerDetail> {

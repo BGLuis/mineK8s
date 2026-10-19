@@ -15,6 +15,7 @@ import { ServersBackupService } from './servers-backup.service';
 import { ServerType } from './dto/create-server.dto';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
 import { serverDataDirectory } from '@k8s/server-data-volume';
+import { ServerShutdownWarningService } from './server-shutdown-warning.service';
 
 describe('ServersService', () => {
   let service: ServersService;
@@ -1442,6 +1443,188 @@ describe('ServersService', () => {
       expect(result.access_policy).toBe('GROUP');
       expect(server.access_policy).toBe('GROUP');
       expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
+    });
+  });
+
+  describe('aviso aos jogadores antes de parar o servidor (#204)', () => {
+    let warningService: ServerShutdownWarningService;
+    let customService: ServersService;
+    let mockTaskService: any;
+
+    beforeEach(() => {
+      mockTaskService = {
+        register: jest.fn(),
+        update: jest.fn(),
+        registerCancelHandler: jest.fn(),
+      };
+      warningService = new ServerShutdownWarningService(
+        mockConsoleDriver as any,
+        mockTaskService as any,
+        mockSettingsRepo as any,
+      );
+      customService = new ServersService(
+        mockServerRepo as any,
+        mockSettingsRepo as any,
+        mockAuditRepo as any,
+        mockK8sService as any,
+        mockConsoleDriver as any,
+        mockLogStreamer as any,
+        mockRuntimeResolver as any,
+        mockBackupService as any,
+        mockGatewayIpcService as any,
+        mockSlpProbeService as any,
+        mockDnsDriver as any,
+        playerSessions,
+        mockNodeMetrics as any,
+        mockIconService as any,
+        undefined,
+        mockVersionsService,
+        warningService,
+      );
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('Teste com relógio falso: stop com 10 min e um jogador online envia tellraw aos 10, 5 e 1 min, aos 30 s e aos 10 s, e só então chama stopServer (#204)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-stop-warn-1',
+        subdomain: 'survival',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const res = await customService.stop('srv-stop-warn-1', { warning_minutes: 10 });
+      expect(res.message).toBe('Instance stopping');
+      expect(res.taskId).toBeDefined();
+
+      // Marco 10 min
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('10 minutos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 5 min restantes
+      await jest.advanceTimersByTimeAsync(300_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('5 minutos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 1 min restante
+      await jest.advanceTimersByTimeAsync(240_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('1 minuto'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 30 s restantes
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('30 segundos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 10 s restantes
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('10 segundos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 0 s restantes -> chama stopServer
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+      expect(server.state).toBe('STOPPED');
+    });
+
+    it('Teste: sem jogadores online, stop chama stopServer sem esperar (#204)', async () => {
+      const server = {
+        id: 'srv-stop-warn-2',
+        subdomain: 'survival2',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-2', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue([]);
+
+      const res = await customService.stop('srv-stop-warn-2', { warning_minutes: 10 });
+      expect(res.message).toBe('Instance stopping');
+      expect(res.taskId).toBeUndefined();
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+      expect(server.state).toBe('STOPPED');
+    });
+
+    it('Teste: cancelar durante a contagem não chama stopServer e envia a mensagem de cancelamento (#204)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-stop-warn-3',
+        subdomain: 'survival3',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-3', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      await customService.stop('srv-stop-warn-3', { warning_minutes: 10 });
+      await jest.advanceTimersByTimeAsync(300_000);
+
+      const cancelRes = await customService.cancelStop('srv-stop-warn-3');
+      expect(cancelRes.message).toBe('Stop countdown cancelled');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('A parada do servidor foi cancelada.'),
+      );
+
+      await jest.advanceTimersByTimeAsync(600_000);
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(server.state).toBe('READY');
+    });
+
+    it('Teste: stop_warning_minutes = 0 no servidor para na hora; warning_minutes: 3 na ação começa a contagem em 3 min (#204)', async () => {
+      const server = {
+        id: 'srv-stop-warn-4',
+        subdomain: 'survival4',
+        state: 'READY',
+        stop_warning_minutes: 0,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-4', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      // stop_warning_minutes = 0 -> para na hora
+      await customService.stop('srv-stop-warn-4');
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+
+      mockK8sService.stopServer.mockClear();
+      mockConsoleDriver.sendCommand.mockClear();
+
+      // Reset state for second test
+      server.state = 'READY';
+
+      // warning_minutes = 3 -> começa contagem em 3 min
+      jest.useFakeTimers();
+      await customService.stop('srv-stop-warn-4', { warning_minutes: 3 });
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('3 minutos'),
+      );
+
+      await jest.advanceTimersByTimeAsync(180_000);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
     });
   });
 });

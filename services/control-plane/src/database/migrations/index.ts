@@ -10,6 +10,7 @@ import { AddServerResourceName1710000000008 } from './1710000000008-AddServerRes
 import { AddServerLanguage1710000000009 } from './1710000000009-AddServerLanguage';
 import { AddAppSettings1710000000010 } from './1710000000010-AddAppSettings';
 import { AddUserGithubUsername1710000000011 } from './1710000000011-AddUserGithubUsername';
+import { AddServerStopWarningMinutes1710000000012 } from './1710000000012-AddServerStopWarningMinutes';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -24,4 +25,5 @@ export const migrations = [
   AddServerLanguage1710000000009,
   AddAppSettings1710000000010,
   AddUserGithubUsername1710000000011,
+  AddServerStopWarningMinutes1710000000012,
 ];

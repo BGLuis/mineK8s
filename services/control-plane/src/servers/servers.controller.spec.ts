@@ -33,6 +33,7 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       sendCommand: jest.fn(),
       publishServer: jest.fn(),
       unpublishServer: jest.fn(),
+      cancelStop: jest.fn(),
     };
 
     mockFilesService = {
@@ -262,6 +263,27 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
 
       expect(mockServersService.unpublishServer).toHaveBeenCalledWith('srv-1');
       expect(result).toEqual(mockResult);
+    });
+
+    it('POST :id/stop deve delegar para serversService.stop com dto (#204)', async () => {
+      mockServersService.stop.mockResolvedValue({ message: 'Instance stopping', taskId: 'task-1' });
+      const result = await controller.stop('srv-1', { warning_minutes: 5 });
+      expect(mockServersService.stop).toHaveBeenCalledWith('srv-1', { warning_minutes: 5 });
+      expect(result).toEqual({ message: 'Instance stopping', taskId: 'task-1' });
+    });
+
+    it('POST :id/restart deve delegar para serversService.restart com dto (#204)', async () => {
+      mockServersService.restart.mockResolvedValue({ message: 'Instance restarting' });
+      const result = await controller.restart('srv-1', { warning_minutes: 0 });
+      expect(mockServersService.restart).toHaveBeenCalledWith('srv-1', { warning_minutes: 0 });
+      expect(result).toEqual({ message: 'Instance restarting' });
+    });
+
+    it('POST :id/cancel-stop deve delegar para serversService.cancelStop (#204)', async () => {
+      mockServersService.cancelStop.mockResolvedValue({ message: 'Stop countdown cancelled' });
+      const result = await controller.cancelStop('srv-1');
+      expect(mockServersService.cancelStop).toHaveBeenCalledWith('srv-1');
+      expect(result).toEqual({ message: 'Stop countdown cancelled' });
     });
   });
 });

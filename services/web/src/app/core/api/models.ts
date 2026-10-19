@@ -35,6 +35,7 @@ export interface ServerSummary {
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
+  stop_warning_minutes?: number;
   created_at: string;
   updated_at: string;
   replicas?: number;
@@ -96,8 +97,13 @@ export interface CreateServerRequest {
   allocated_memory_mb?: number;
   auto_wake?: boolean;
   sleep_timeout_minutes?: number;
+  stop_warning_minutes?: number;
   access_policy?: ServerAccessPolicy;
   minecraft_settings?: MinecraftSettingsInput;
+}
+
+export interface StopServerRequest {
+  warning_minutes?: number;
 }
 
 export interface CreateServerResponse {
@@ -113,6 +119,7 @@ export interface UpdateVersionRequest {
   modpack_id?: string;
   purge_mods?: boolean;
   confirm_downgrade?: boolean;
+  warning_minutes?: number;
 }
 
 export interface UpdateVersionResponse {
@@ -653,6 +660,7 @@ export interface UpdateServerRequest {
   /** A running server restarts to pick up the new heap. */
   allocated_memory_mb?: number;
   sleep_timeout_minutes?: number;
+  stop_warning_minutes?: number;
   auto_wake?: boolean;
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;

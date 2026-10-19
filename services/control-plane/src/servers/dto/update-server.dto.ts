@@ -15,6 +15,12 @@ export class UpdateServerDto {
   sleep_timeout_minutes?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1440)
+  stop_warning_minutes?: number;
+
+  @IsOptional()
   @IsBoolean()
   auto_wake?: boolean;
 
