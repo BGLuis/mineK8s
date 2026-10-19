@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { CONSOLE_DRIVER_TOKEN, ConsoleDriver } from '@console/console-driver.interface';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { Server } from '@database/entities/server.entity';
+import { ServerActivityBus } from '../server-events/server-activity.bus';
+import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { TaskExecutionService } from '../tasks/task-execution.service';
 import {
   DEFAULT_SERVER_LANGUAGE,
@@ -35,6 +37,7 @@ interface ActiveCountdown {
   server: Server;
   language: ServerLanguage;
   cancel: () => Promise<void>;
+  wakeEarly?: () => void;
 }
 
 /**
@@ -64,10 +67,21 @@ export class ServerShutdownWarningService {
     @InjectRepository(MinecraftServerSettings)
     @Optional()
     private readonly settingsRepo?: Repository<MinecraftServerSettings>,
+    @Optional()
+    private readonly activityBus?: ServerActivityBus,
+    @Optional()
+    private readonly playerSessions?: PlayerSessionsService,
   ) {}
 
   public hasActiveCountdown(serverId: string): boolean {
     return this.activeCountdowns.has(serverId);
+  }
+
+  public wakeEarly(serverId: string): boolean {
+    const active = this.activeCountdowns.get(serverId);
+    if (!active?.wakeEarly) return false;
+    active.wakeEarly();
+    return true;
   }
 
   public getActiveCountdown(serverId: string): { taskId: string; action: ShutdownAction } | null {
@@ -132,7 +146,22 @@ export class ServerShutdownWarningService {
     });
 
     let timerHandle: NodeJS.Timeout | null = null;
+    let cancelResolve: (() => void) | null = null;
     let isCancelled = false;
+    let earlyExitRequested = false;
+
+    const wakeWaitEarly = () => {
+      earlyExitRequested = true;
+      if (timerHandle) {
+        clearTimeout(timerHandle);
+        timerHandle = null;
+      }
+      if (cancelResolve) {
+        const r = cancelResolve;
+        cancelResolve = null;
+        r();
+      }
+    };
 
     const cancel = async () => {
       if (isCancelled) return;
@@ -141,7 +170,13 @@ export class ServerShutdownWarningService {
         clearTimeout(timerHandle);
         timerHandle = null;
       }
+      if (cancelResolve) {
+        const r = cancelResolve;
+        cancelResolve = null;
+        r();
+      }
       this.activeCountdowns.delete(options.server.id);
+      this.taskExecutionService?.unregisterCancelHandler?.(taskId);
 
       // Envia tellraw com cancelamento aos jogadores
       try {
@@ -170,8 +205,18 @@ export class ServerShutdownWarningService {
       server: options.server,
       language,
       cancel,
+      wakeEarly: wakeWaitEarly,
     };
     this.activeCountdowns.set(options.server.id, countdownRecord);
+
+    const activitySub = this.activityBus?.events$.subscribe((event) => {
+      if (event.id === options.server.id && event.kind === 'players') {
+        const count = this.playerSessions?.count(options.server.id) ?? 0;
+        if (count === 0) {
+          wakeWaitEarly();
+        }
+      }
+    });
 
     const milestones = calculateMilestones(totalSeconds);
 
@@ -205,9 +250,11 @@ export class ServerShutdownWarningService {
           const nextSeconds = i + 1 < milestones.length ? milestones[i + 1] : 0;
           const waitMs = (currentSeconds - nextSeconds) * 1000;
 
-          if (waitMs > 0) {
+          if (waitMs > 0 && !earlyExitRequested) {
             await new Promise<void>((resolve) => {
+              cancelResolve = resolve;
               timerHandle = setTimeout(() => {
+                cancelResolve = null;
                 timerHandle = null;
                 resolve();
               }, waitMs);
@@ -233,6 +280,7 @@ export class ServerShutdownWarningService {
         if (isCancelled) return;
 
         this.activeCountdowns.delete(options.server.id);
+        this.taskExecutionService?.unregisterCancelHandler?.(taskId);
 
         this.taskExecutionService?.update(taskId, {
           progressPercent: 99,
@@ -256,6 +304,9 @@ export class ServerShutdownWarningService {
           errorMessage: (err as Error).message,
         });
         this.activeCountdowns.delete(options.server.id);
+        this.taskExecutionService?.unregisterCancelHandler?.(taskId);
+      } finally {
+        activitySub?.unsubscribe();
       }
     };
 

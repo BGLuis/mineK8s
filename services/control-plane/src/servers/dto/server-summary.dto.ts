@@ -22,6 +22,7 @@ export class ServerSummaryDto {
   replicas?: number;
   ready_replicas?: number;
   players_online: number;
+  active_countdown?: { taskId: string; action: string } | null;
 }
 
 /** Settings exposed to the panel: an explicit allow-list, so a new entity column is never leaked by default. */

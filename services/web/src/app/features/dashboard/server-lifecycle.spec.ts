@@ -134,4 +134,19 @@ describe('ServerLifecycle', () => {
     const [last] = toast.toasts().slice(-1);
     expect(last.tone).toBe('success');
   });
+
+  it('tracks task via public trackTask and deduplicates existing subscriptions (#204)', () => {
+    lifecycle.trackTask('s2', 'task-update-1', 'update-version');
+    expect(lifecycle.activeTaskFor('s2')).toEqual({
+      serverId: 's2',
+      taskId: 'task-update-1',
+      action: 'update-version',
+      step: 'Aguardando contagem regressiva…',
+      progressPercent: 0,
+    });
+
+    // Calling again does not overwrite or create duplicate subscription
+    lifecycle.trackTask('s2', 'task-update-1', 'update-version');
+    expect(lifecycle.activeTaskFor('s2')?.taskId).toBe('task-update-1');
+  });
 });

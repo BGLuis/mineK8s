@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { MinecraftVersionItem, ServerDetail } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
+import { ServerLifecycle } from '../dashboard/server-lifecycle';
 import { ServerDetailStore } from './server-detail.store';
 import { McUpdateVersionDialog } from './update-version-dialog';
 
@@ -55,11 +56,16 @@ describe('McUpdateVersionDialog (#203)', () => {
     refresh: vi.fn(),
   };
 
+  const mockLifecycle = {
+    trackTask: vi.fn(),
+  };
+
   async function open() {
     TestBed.configureTestingModule({
       providers: [
         { provide: ServersApi, useValue: api },
         { provide: ServerDetailStore, useValue: store },
+        { provide: ServerLifecycle, useValue: mockLifecycle },
       ],
     });
     const fixture = TestBed.createComponent(McUpdateVersionDialog);
@@ -158,5 +164,37 @@ describe('McUpdateVersionDialog (#203)', () => {
     // Result dialog displays rollback info
     expect(el.textContent).toContain('Rollback executado');
     expect(el.textContent).toContain('26.3');
+  });
+
+  it('schedules version update and tracks task via ServerLifecycle when taskId is present (#204)', async () => {
+    const { fixture, el, component } = await open();
+
+    component.setTargetVersion('26.4-snapshot-4');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const confirmButton = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Atualizar versão'),
+    ) as HTMLButtonElement;
+
+    api.updateVersion.mockReturnValue(
+      of({
+        message: 'Scheduled',
+        version: '26.4-snapshot-4',
+        rolledBack: false,
+        taskId: 'update-task-1',
+      }),
+    );
+    confirmButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(mockLifecycle.trackTask).toHaveBeenCalledWith(
+      'srv-1',
+      'update-task-1',
+      'update-version',
+    );
   });
 });

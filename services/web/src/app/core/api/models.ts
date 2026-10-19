@@ -40,6 +40,7 @@ export interface ServerSummary {
   updated_at: string;
   replicas?: number;
   ready_replicas?: number;
+  active_countdown?: { taskId: string; action: string } | null;
 }
 
 /** ServerSettingsDto (servers/dto/server-summary.dto.ts). The RCON password is never sent. */
@@ -126,6 +127,7 @@ export interface UpdateVersionResponse {
   message: string;
   version: string;
   rolledBack: boolean;
+  taskId?: string;
 }
 
 export interface MinecraftVersionItem {

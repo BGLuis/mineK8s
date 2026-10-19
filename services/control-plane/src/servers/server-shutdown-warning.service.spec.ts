@@ -107,6 +107,9 @@ describe('ServerShutdownWarningService (#204)', () => {
     let mockSettingsRepo: any;
     let server: Server;
 
+    let mockActivityBus: any;
+    let mockPlayerSessions: any;
+
     beforeEach(() => {
       jest.useFakeTimers();
 
@@ -119,16 +122,33 @@ describe('ServerShutdownWarningService (#204)', () => {
         register: jest.fn(),
         update: jest.fn(),
         registerCancelHandler: jest.fn(),
+        unregisterCancelHandler: jest.fn(),
       };
 
       mockSettingsRepo = {
         findOne: jest.fn().mockResolvedValue({ language: 'pt-BR' }),
       };
 
+      mockActivityBus = {
+        publish: jest.fn(),
+        events$: {
+          subscribe: jest.fn((cb) => {
+            mockActivityBus._cb = cb;
+            return { unsubscribe: jest.fn() };
+          }),
+        },
+      };
+
+      mockPlayerSessions = {
+        count: jest.fn().mockReturnValue(2),
+      };
+
       service = new ServerShutdownWarningService(
         mockConsoleDriver,
         mockTaskExecutionService,
         mockSettingsRepo,
+        mockActivityBus,
+        mockPlayerSessions,
       );
 
       server = {
@@ -260,10 +280,51 @@ describe('ServerShutdownWarningService (#204)', () => {
         server,
         expect.stringContaining('A parada do servidor foi cancelada.'),
       );
+      expect(mockTaskExecutionService.unregisterCancelHandler).toHaveBeenCalled();
 
       // Avança o restante do tempo
       await jest.advanceTimersByTimeAsync(600_000);
       expect(onExecute).not.toHaveBeenCalled();
+      expect(service.hasActiveCountdown('srv-1')).toBe(false);
+    });
+
+    it('se todos os jogadores saírem nos primeiros 30 segundos, acorda imediatamente via ServerActivityBus (#204)', async () => {
+      const onExecute = jest.fn().mockResolvedValue(undefined);
+
+      await service.scheduleCountdown({
+        server,
+        action: 'stop',
+        warningMinutes: 10,
+        onExecute,
+      });
+
+      // Passam apenas 30 segundos (não 300 segundos)
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(onExecute).not.toHaveBeenCalled();
+
+      // Jogadores saem aos 30 segundos
+      mockPlayerSessions.count.mockReturnValue(0);
+      mockConsoleDriver.listPlayers.mockResolvedValue([]);
+      mockActivityBus._cb({ id: 'srv-1', kind: 'players' });
+
+      // O timer é acordado imediatamente sem precisar esperar os 4.5 minutos restantes
+      await jest.advanceTimersByTimeAsync(100);
+      expect(onExecute).toHaveBeenCalledTimes(1);
+      expect(service.hasActiveCountdown('srv-1')).toBe(false);
+    });
+
+    it('cancela contagem via taskId com cancelTask (#204)', async () => {
+      const onExecute = jest.fn();
+      const res = await service.scheduleCountdown({
+        server,
+        action: 'stop',
+        warningMinutes: 10,
+        onExecute,
+      });
+
+      expect(res.taskId).toBeDefined();
+      const cancelled = await service.cancelTask(res.taskId!);
+      expect(cancelled).toBe(true);
       expect(service.hasActiveCountdown('srv-1')).toBe(false);
     });
 

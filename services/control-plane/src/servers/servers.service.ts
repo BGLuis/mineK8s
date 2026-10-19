@@ -249,6 +249,7 @@ export class ServersService implements OnApplicationBootstrap {
         replicas: dep?.replicas ?? 0,
         ready_replicas: dep?.status?.readyReplicas ?? 0,
         players_online: this.playerSessions?.count(s.id) ?? 0,
+        active_countdown: this.shutdownWarningService?.getActiveCountdown(s.id) ?? null,
       };
     });
   }
@@ -296,6 +297,7 @@ export class ServersService implements OnApplicationBootstrap {
       replicas: dep?.replicas ?? 0,
       ready_replicas: dep?.status?.readyReplicas ?? 0,
       players_online: this.playerSessions?.count(server.id) ?? 0,
+      active_countdown: this.shutdownWarningService?.getActiveCountdown(server.id) ?? null,
       settings: server.minecraft_settings
         ? toServerSettingsDto(server.minecraft_settings)
         : undefined,
@@ -358,7 +360,10 @@ export class ServersService implements OnApplicationBootstrap {
         action: 'stop',
         warningMinutes: dto?.warning_minutes,
         onExecute: async () => {
-          const freshServer = await this.serverRepo.findOne({ where: { id } });
+          const freshServer = await this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          });
           if (!freshServer) return;
           const previousState = freshServer.state;
           await this.k8sService.stopServer(freshServer, previousState);
@@ -404,7 +409,10 @@ export class ServersService implements OnApplicationBootstrap {
         action: 'restart',
         warningMinutes: dto?.warning_minutes,
         onExecute: async () => {
-          const freshServer = await this.serverRepo.findOne({ where: { id } });
+          const freshServer = await this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          });
           if (!freshServer) return;
           freshServer.state = 'STOPPING';
           await this.serverRepo.save(freshServer);
@@ -508,6 +516,10 @@ export class ServersService implements OnApplicationBootstrap {
     const server = await this.serverRepo.findOne({ where: { id } });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    if (this.shutdownWarningService?.hasActiveCountdown(id)) {
+      await this.shutdownWarningService.cancelCountdown(id);
     }
 
     await this.k8sService.deprovisionServer(server);
@@ -656,7 +668,7 @@ export class ServersService implements OnApplicationBootstrap {
   async updateVersion(
     id: string,
     dto: UpdateVersionDto,
-  ): Promise<{ message: string; version: string; rolledBack: boolean }> {
+  ): Promise<{ message: string; version: string; rolledBack: boolean; taskId?: string }> {
     const server = await this.serverRepo.findOne({
       where: { id },
       relations: {
@@ -744,6 +756,7 @@ export class ServersService implements OnApplicationBootstrap {
           message: 'Version update scheduled with player warning countdown',
           version: dto.game_version,
           rolledBack: false,
+          taskId: scheduled.taskId,
         };
       }
     }

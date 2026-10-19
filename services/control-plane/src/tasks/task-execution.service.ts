@@ -25,6 +25,10 @@ export class TaskExecutionService {
     this.cancelHandlers.set(taskId, handler);
   }
 
+  public unregisterCancelHandler(taskId: string): void {
+    this.cancelHandlers.delete(taskId);
+  }
+
   public async cancelTask(taskId: string): Promise<boolean> {
     const handler = this.cancelHandlers.get(taskId);
     if (handler) {

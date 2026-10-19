@@ -1456,6 +1456,7 @@ describe('ServersService', () => {
         register: jest.fn(),
         update: jest.fn(),
         registerCancelHandler: jest.fn(),
+        unregisterCancelHandler: jest.fn(),
       };
       warningService = new ServerShutdownWarningService(
         mockConsoleDriver as any,
@@ -1625,6 +1626,91 @@ describe('ServersService', () => {
 
       await jest.advanceTimersByTimeAsync(180_000);
       expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+    });
+
+    it('updateVersion com jogadores online agenda contagem e devolve taskId (#204)', async () => {
+      const server = {
+        id: 'srv-update-warn-1',
+        subdomain: 'survival-up',
+        state: 'READY',
+        game_version: '1.20.1',
+        server_type: 'VANILLA',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-update-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const res = await customService.updateVersion('srv-update-warn-1', {
+        game_version: '1.20.2',
+        warning_minutes: 5,
+      });
+
+      expect(res.message).toBe('Version update scheduled with player warning countdown');
+      expect(res.version).toBe('1.20.2');
+      expect(res.taskId).toBeDefined();
+      expect(res.rolledBack).toBe(false);
+      expect(warningService.hasActiveCountdown('srv-update-warn-1')).toBe(true);
+    });
+
+    it('delete cancela contagem ativa de parada antes de desprovisionar (#204)', async () => {
+      const server = {
+        id: 'srv-del-warn-1',
+        resource_name: 'del-warn-1',
+        subdomain: 'del-warn-1',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-del-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      await customService.stop('srv-del-warn-1', { warning_minutes: 10 });
+      expect(warningService.hasActiveCountdown('srv-del-warn-1')).toBe(true);
+
+      const delRes = await customService.delete('srv-del-warn-1');
+      expect(delRes.message).toBe('Instance removed');
+      expect(warningService.hasActiveCountdown('srv-del-warn-1')).toBe(false);
+    });
+
+    it('findOne e findAll incluem active_countdown (#204)', async () => {
+      const server = {
+        id: 'srv-find-warn-1',
+        name: 'Survival',
+        resource_name: 'find-warn-1',
+        subdomain: 'find-warn-1',
+        game_type: 'minecraft',
+        routing_model: 'subdomain',
+        server_type: 'VANILLA',
+        game_version: '1.20.1',
+        allocated_memory_mb: 4096,
+        allocated_port: null,
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+        auto_wake: true,
+        sleep_timeout_minutes: 15,
+        stop_warning_minutes: 10,
+        created_at: new Date(),
+        updated_at: new Date(),
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-find-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const stopRes = await customService.stop('srv-find-warn-1', { warning_minutes: 10 });
+      const found = await customService.findOne('srv-find-warn-1');
+      expect(found.active_countdown).toEqual({
+        taskId: stopRes.taskId,
+        action: 'stop',
+      });
+
+      const list = await customService.findAll();
+      const listed = list.find((s) => s.id === 'srv-find-warn-1');
+      expect(listed?.active_countdown).toEqual({
+        taskId: stopRes.taskId,
+        action: 'stop',
+      });
     });
   });
 });

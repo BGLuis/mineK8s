@@ -126,14 +126,14 @@ import { ServerLifecycle } from '../dashboard/server-lifecycle';
       <mc-publish-dialog #publish [serverName]="s.name" />
       <p class="sr-only" role="status">Estado do servidor: {{ announcement() }}</p>
       @if (activeTask(); as task) {
-        <mc-banner class="mb-4" tone="warning" title="Parada do servidor programada">
+        <mc-banner class="mb-4" tone="warning" [title]="bannerTitle(task.action)">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p class="t-body-md">{{ task.step }}</p>
               <p class="t-caption text-text-muted">Progresso: {{ task.progressPercent }}%</p>
             </div>
             <mc-button size="sm" variant="danger" (click)="lifecycle.cancel(s.id)">
-              Cancelar parada
+              {{ cancelLabel(task.action) }}
             </mc-button>
           </div>
         </mc-banner>
@@ -172,6 +172,18 @@ export class ServerDetailsPage {
 
   readonly id = input.required<string>();
   protected readonly activeTask = computed(() => this.lifecycle.activeTaskFor(this.id()));
+
+  protected bannerTitle(action: string): string {
+    if (action === 'restart') return 'Reinício do servidor programado';
+    if (action === 'update-version') return 'Atualização do servidor programada';
+    return 'Parada do servidor programada';
+  }
+
+  protected cancelLabel(action: string): string {
+    if (action === 'restart') return 'Cancelar reinício';
+    if (action === 'update-version') return 'Cancelar atualização';
+    return 'Cancelar parada';
+  }
 
   protected readonly tabs = computed<McTabItem[]>(() => {
     const base = ['/servers', this.id()];

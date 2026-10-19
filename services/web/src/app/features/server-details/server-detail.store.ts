@@ -94,6 +94,13 @@ export class ServerDetailStore {
         this.loadState.set('ready');
         this.accessPolicy.set(server.access_policy);
         this.syncStats(id, server);
+        if (server.active_countdown) {
+          this.lifecycle.trackTask(
+            server.id,
+            server.active_countdown.taskId,
+            server.active_countdown.action as LifecycleAction,
+          );
+        }
       }),
       catchError((error: unknown) => {
         if (error instanceof HttpErrorResponse && error.status === 404) {

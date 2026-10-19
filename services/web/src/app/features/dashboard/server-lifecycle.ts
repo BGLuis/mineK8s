@@ -6,7 +6,7 @@ import { errorReason } from '../../core/api/api-error';
 import { TasksSocket } from '../../core/realtime/tasks-socket';
 import { ToastService } from '../../ui';
 
-export type LifecycleAction = 'start' | 'stop' | 'restart';
+export type LifecycleAction = 'start' | 'stop' | 'restart' | 'update-version';
 
 export interface ActiveServerTask {
   serverId: string;
@@ -20,6 +20,7 @@ const MESSAGES: Record<LifecycleAction, { progress: string; failure: string }> =
   start: { progress: 'Ligando', failure: 'ligar' },
   stop: { progress: 'Parando', failure: 'parar' },
   restart: { progress: 'Reiniciando', failure: 'reiniciar' },
+  'update-version': { progress: 'Atualizando versão de', failure: 'atualizar versão de' },
 };
 
 export { errorReason };
@@ -96,7 +97,11 @@ export class ServerLifecycle {
     }
   }
 
-  private trackTask(serverId: string, taskId: string, action: LifecycleAction): void {
+  trackTask(serverId: string, taskId: string, action: LifecycleAction): void {
+    const existing = this._activeTasks().get(serverId);
+    if (existing && existing.taskId === taskId) {
+      return;
+    }
     const initial: ActiveServerTask = {
       serverId,
       taskId,

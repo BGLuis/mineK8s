@@ -4,7 +4,7 @@ import { catchError, firstValueFrom, of } from 'rxjs';
 import { MinecraftVersionItem, UpdateVersionResponse } from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { McDialog, McVersionSelector, ToastService } from '../../ui';
-import { errorReason } from '../dashboard/server-lifecycle';
+import { ServerLifecycle, errorReason } from '../dashboard/server-lifecycle';
 import { ServerDetailStore } from './server-detail.store';
 
 type Step = 'confirm' | 'result' | null;
@@ -115,6 +115,7 @@ export class McUpdateVersionDialog {
   private readonly api = inject(ServersApi);
   protected readonly store = inject(ServerDetailStore);
   private readonly toast = inject(ToastService);
+  private readonly lifecycle = inject(ServerLifecycle);
 
   protected readonly step = signal<Step>(null);
   protected readonly targetVersion = signal('');
@@ -188,11 +189,19 @@ export class McUpdateVersionDialog {
       );
       this.updateResult.set(response);
       this.store.refresh();
-      this.step.set('result');
-      if (response.rolledBack) {
-        this.toast.error('Rollback executado: nova versão falhou ao iniciar.');
+      if (response.taskId) {
+        this.lifecycle.trackTask(serverId, response.taskId, 'update-version');
+        this.toast.success(
+          `Atualização agendada com aviso aos jogadores (versão ${response.version}).`,
+        );
+        this.close();
       } else {
-        this.toast.success(`Versão atualizada para ${response.version}.`);
+        this.step.set('result');
+        if (response.rolledBack) {
+          this.toast.error('Rollback executado: nova versão falhou ao iniciar.');
+        } else {
+          this.toast.success(`Versão atualizada para ${response.version}.`);
+        }
       }
     } catch (error: unknown) {
       this.toast.error(`Falha ao atualizar versão: ${errorReason(error)}`);
