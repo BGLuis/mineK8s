@@ -28,6 +28,11 @@ describe('McUpdateVersionDialog (#203)', () => {
   const api = {
     updateVersion: vi.fn(),
     listMinecraftVersions: vi.fn().mockReturnValue(of(mockVersions)),
+    previewUpdateVersion: vi
+      .fn()
+      .mockReturnValue(
+        of({ canUpdate: true, targetGameVersion: '', targetServerType: '', items: [] }),
+      ),
   };
 
   const store = {
@@ -196,5 +201,95 @@ describe('McUpdateVersionDialog (#203)', () => {
       'update-task-1',
       'update-version',
     );
+  });
+
+  it('loads compatibility preview and renders items with status badges and default actions (#207)', async () => {
+    api.previewUpdateVersion.mockReturnValue(
+      of({
+        canUpdate: true,
+        targetGameVersion: '26.4-snapshot-4',
+        targetServerType: 'VANILLA',
+        items: [
+          {
+            path: 'mods/fabric-api.jar',
+            name: 'fabric-api.jar',
+            origin: 'MANUAL',
+            source: 'MODRINTH',
+            projectId: 'fabric-api',
+            currentVersionId: 'v1',
+            status: 'UPDATE_AVAILABLE',
+            statusMessage: 'Atualiza para 0.100.0',
+            targetVersionId: 'v2',
+            targetDownloadUrl: 'https://cdn.modrinth.com/fabric-api-2.jar',
+          },
+          {
+            path: 'mods/old-mod.jar',
+            name: 'old-mod.jar',
+            origin: 'MANUAL',
+            source: 'MODRINTH',
+            projectId: 'old-mod',
+            currentVersionId: 'v1',
+            status: 'INCOMPATIBLE',
+            statusMessage: 'Sem versão compatível',
+          },
+        ],
+      }),
+    );
+
+    const { fixture, el, component } = await open();
+    component.setTargetVersion('26.4-snapshot-4');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.previewUpdateVersion).toHaveBeenCalledWith('srv-1', {
+      game_version: '26.4-snapshot-4',
+      server_type: 'VANILLA',
+    });
+
+    expect(el.textContent).toContain('Compatibilidade de Mods e Plugins');
+    expect(el.textContent).toContain('fabric-api.jar');
+    expect(el.textContent).toContain('Atualiza para 0.100.0');
+    expect(el.textContent).toContain('old-mod.jar');
+    expect(el.textContent).toContain('Sem versão compatível');
+
+    api.updateVersion.mockReturnValue(
+      of({
+        message: 'Atualizado',
+        version: '26.4-snapshot-4',
+        rolledBack: false,
+      }),
+    );
+
+    const confirmButton = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Atualizar versão'),
+    ) as HTMLButtonElement;
+    confirmButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.updateVersion).toHaveBeenCalledWith('srv-1', {
+      game_version: '26.4-snapshot-4',
+      confirm_downgrade: false,
+      content_actions: [
+        {
+          path: 'mods/fabric-api.jar',
+          action: 'UPDATE',
+          targetVersionId: 'v2',
+          targetDownloadUrl: 'https://cdn.modrinth.com/fabric-api-2.jar',
+          targetFileName: undefined,
+          targetHashes: undefined,
+        },
+        {
+          path: 'mods/old-mod.jar',
+          action: 'REMOVE',
+          targetVersionId: undefined,
+          targetDownloadUrl: undefined,
+          targetFileName: undefined,
+          targetHashes: undefined,
+        },
+      ],
+    });
   });
 });

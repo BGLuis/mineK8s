@@ -122,6 +122,53 @@ export interface CreateServerResponse {
   status: ServerState;
 }
 
+export interface ContentActionRequest {
+  path: string;
+  action: 'UPDATE' | 'REMOVE' | 'KEEP';
+  targetVersionId?: string;
+  targetDownloadUrl?: string;
+  targetFileName?: string;
+  targetHashes?: { sha1?: string; sha512?: string; sha256?: string };
+}
+
+export interface ContentPreviewItem {
+  path: string;
+  name: string;
+  origin: 'MANUAL' | 'MODPACK';
+  source: 'MODRINTH' | 'CURSEFORGE' | 'MANUAL' | null;
+  projectId: string | null;
+  currentVersionId: string | null;
+  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED';
+  statusMessage: string;
+  targetVersionId?: string;
+  targetVersionName?: string;
+  targetDownloadUrl?: string;
+  targetFileName?: string;
+  targetHashes?: { sha1?: string; sha512?: string; sha256?: string };
+}
+
+export interface CompatibilityPreviewResponse {
+  canUpdate: boolean;
+  targetGameVersion: string;
+  targetServerType: string;
+  items: ContentPreviewItem[];
+}
+
+export interface ServerContentItem {
+  id: string;
+  serverId: string;
+  path: string;
+  sha1?: string | null;
+  sha512?: string | null;
+  origin: 'MANUAL' | 'MODPACK';
+  source?: 'MODRINTH' | 'CURSEFORGE' | 'MANUAL' | null;
+  projectId?: string | null;
+  versionId?: string | null;
+  loaders?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UpdateVersionRequest {
   game_version: string;
   server_type?: string;
@@ -129,6 +176,7 @@ export interface UpdateVersionRequest {
   purge_mods?: boolean;
   confirm_downgrade?: boolean;
   warning_minutes?: number;
+  content_actions?: ContentActionRequest[];
 }
 
 export interface UpdateVersionResponse {

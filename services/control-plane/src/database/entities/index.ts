@@ -14,3 +14,4 @@ export * from './server-backup.entity';
 export * from './modpack-task.entity';
 export * from './cas-object.entity';
 export * from './app-setting.entity';
+export * from './server-content.entity';

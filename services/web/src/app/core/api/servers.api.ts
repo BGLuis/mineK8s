@@ -19,6 +19,8 @@ import {
   UpdateServerSettingsRequest,
   UpdateVersionRequest,
   UpdateVersionResponse,
+  CompatibilityPreviewResponse,
+  ServerContentItem,
 } from './models';
 
 /** servers.controller.ts, `api/servers`. */
@@ -64,6 +66,26 @@ export class ServersApi {
 
   updateVersion(id: string, dto: UpdateVersionRequest): Observable<UpdateVersionResponse> {
     return this.api.post(`/api/servers/${id}/update-version`, dto);
+  }
+
+  previewUpdateVersion(
+    id: string,
+    dto: {
+      game_version: string;
+      server_type?: string;
+      modpack_id?: string;
+      modpack_version_id?: string;
+    },
+  ): Observable<CompatibilityPreviewResponse> {
+    return this.api.post(`/api/servers/${id}/update-version/preview`, dto);
+  }
+
+  identifyContent(id: string): Observable<ServerContentItem[]> {
+    return this.api.post(`/api/servers/${id}/content/identify`);
+  }
+
+  listContent(id: string): Observable<ServerContentItem[]> {
+    return this.api.get(`/api/servers/${id}/content`);
   }
 
   delete(id: string): Observable<MessageResponse> {

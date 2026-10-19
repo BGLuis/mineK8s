@@ -43,6 +43,7 @@ import { ServersBackupService } from './servers-backup.service';
 import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { ServerIconService } from './server-icon.service';
 import { MinecraftVersionsService } from './minecraft-versions.service';
+import { ServersContentService } from './servers-content.service';
 import { ServerShutdownWarningService } from './server-shutdown-warning.service';
 import { ServersBackupSchedulerService } from './servers-backup-scheduler.service';
 import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
@@ -87,6 +88,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly shutdownWarningService?: ServerShutdownWarningService,
     @Optional()
     private readonly backupSchedulerService?: ServersBackupSchedulerService,
+    @Optional()
+    private readonly serversContentService?: ServersContentService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -718,15 +721,6 @@ export class ServersService implements OnApplicationBootstrap {
       );
     }
 
-    const currentOrTargetType = (server.server_type || dto.server_type)?.toUpperCase();
-    if (
-      currentOrTargetType === 'FABRIC' ||
-      currentOrTargetType === 'FORGE' ||
-      currentOrTargetType === 'NEOFORGE'
-    ) {
-      throw new ConflictException('Troca de versão de servidor com loader ainda não é suportada');
-    }
-
     // Resolved before the server is touched, so a version that cannot boot fails here with nothing to roll back.
     const runtime = await this.runtimeResolver.resolve(
       dto.server_type || server.server_type,
@@ -846,9 +840,20 @@ export class ServersService implements OnApplicationBootstrap {
     }
 
     try {
-      // 4. Purga segura de mods/ para modpacks ou sob solicitação (RF-STO-13)
+      // 4. Purga segura de mods/ para modpacks ou ações manuais de mods/plugins (RF-STO-13, #207)
       if (dto.purge_mods === true && this.backupService) {
         await this.backupService.purgeModsDirectory(server);
+      } else if (
+        dto.content_actions &&
+        dto.content_actions.length > 0 &&
+        this.serversContentService
+      ) {
+        const serverDir = this.serversContentService.getServerDataDir(server);
+        await this.serversContentService.applyContentActions(
+          server,
+          serverDir,
+          dto.content_actions,
+        );
       }
 
       // 5. Aplicação da nova versão nos metadados

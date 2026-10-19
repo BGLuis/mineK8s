@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { catchError, firstValueFrom, of } from 'rxjs';
 
-import { MinecraftVersionItem, UpdateVersionResponse } from '../../core/api/models';
+import {
+  ContentActionRequest,
+  ContentPreviewItem,
+  MinecraftVersionItem,
+  UpdateVersionResponse,
+} from '../../core/api/models';
 import { ServersApi } from '../../core/api/servers.api';
 import { McDialog, McVersionSelector, ToastService } from '../../ui';
 import { ServerLifecycle, errorReason } from '../dashboard/server-lifecycle';
@@ -59,7 +64,8 @@ function compareVersions(from: string, to: string): number {
             label="Nova versão do Minecraft"
             [serverType]="serverType()"
             [versions]="versionsList().length > 0 ? versionsList() : null"
-            [(value)]="targetVersion"
+            [value]="targetVersion()"
+            (valueChange)="setTargetVersion($event)"
           />
 
           @if (isDowngrade()) {
@@ -76,6 +82,59 @@ function compareVersions(from: string, to: string): number {
                 />
                 <span>Entendo os riscos e confirmo que desejo fazer downgrade da versão.</span>
               </label>
+            </div>
+          }
+
+          @if (previewLoading()) {
+            <p class="t-caption text-text-muted animate-pulse">
+              Verificando compatibilidade de mods e plugins...
+            </p>
+          } @else if (previewItems().length > 0) {
+            <div class="space-y-2 border border-border-subtle p-3 rounded">
+              <div class="flex items-center justify-between">
+                <h4 class="t-body-sm font-semibold text-text-primary">Compatibilidade de Mods e Plugins</h4>
+                <span class="t-caption text-text-muted">{{ previewItems().length }} itens</span>
+              </div>
+              <p class="t-caption text-text-muted">
+                Selecione as ações desejadas antes da troca de versão:
+              </p>
+              <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                @for (item of previewItems(); track item.path) {
+                  <div class="flex items-center justify-between gap-3 p-2 border border-border-subtle/50 rounded bg-bg-surface">
+                    <div class="min-w-0 flex-1">
+                      <p class="t-body-sm font-medium truncate text-text-primary" [title]="item.name">{{ item.name }}</p>
+                      <div class="flex items-center gap-2 mt-0.5">
+                        @if (item.status === 'UPDATE_AVAILABLE') {
+                          <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-status-success/15 text-status-success">
+                            {{ item.statusMessage }}
+                          </span>
+                        } @else if (item.status === 'INCOMPATIBLE') {
+                          <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-status-danger/15 text-status-danger">
+                            {{ item.statusMessage }}
+                          </span>
+                        } @else {
+                          <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-text-muted/15 text-text-muted">
+                            {{ item.statusMessage }}
+                          </span>
+                        }
+                        <span class="text-xs text-text-muted">{{ item.origin === 'MODPACK' ? 'Modpack' : 'Manual' }}</span>
+                      </div>
+                    </div>
+
+                    <select
+                      class="text-xs bg-bg-panel border border-border-subtle rounded px-2 py-1 text-text-primary cursor-pointer shrink-0"
+                      [value]="getItemAction(item.path)"
+                      (change)="setItemAction(item.path, $any($event.target).value)"
+                    >
+                      @if (item.status === 'UPDATE_AVAILABLE') {
+                        <option value="UPDATE">Atualizar</option>
+                      }
+                      <option value="KEEP">Manter</option>
+                      <option value="REMOVE">Remover</option>
+                    </select>
+                  </div>
+                }
+              </div>
             </div>
           }
         </div>
@@ -123,6 +182,11 @@ export class McUpdateVersionDialog {
   protected readonly versionsList = signal<MinecraftVersionItem[]>([]);
   protected readonly busy = signal(false);
   protected readonly updateResult = signal<UpdateVersionResponse | null>(null);
+
+  protected readonly previewLoading = signal(false);
+  protected readonly previewItems = signal<ContentPreviewItem[]>([]);
+  protected readonly selectedActions = signal<Record<string, 'UPDATE' | 'REMOVE' | 'KEEP'>>({});
+
   private trigger: HTMLElement | null = null;
 
   protected readonly currentVersion = computed(() => this.store.server()?.game_version ?? '');
@@ -150,6 +214,8 @@ export class McUpdateVersionDialog {
     this.targetVersion.set(this.currentVersion());
     this.confirmDowngrade.set(false);
     this.updateResult.set(null);
+    this.previewItems.set([]);
+    this.selectedActions.set({});
     this.loadVersions();
     this.step.set('confirm');
   }
@@ -165,6 +231,57 @@ export class McUpdateVersionDialog {
 
   setTargetVersion(version: string): void {
     this.targetVersion.set(version);
+    this.checkCompatibility(version);
+  }
+
+  protected getItemAction(path: string): 'UPDATE' | 'REMOVE' | 'KEEP' {
+    return this.selectedActions()[path] || 'KEEP';
+  }
+
+  protected setItemAction(path: string, action: 'UPDATE' | 'REMOVE' | 'KEEP'): void {
+    this.selectedActions.update((prev) => ({ ...prev, [path]: action }));
+  }
+
+  protected checkCompatibility(to: string): void {
+    const serverId = this.store.serverId();
+    if (!serverId || !to || to === this.currentVersion()) {
+      this.previewItems.set([]);
+      this.selectedActions.set({});
+      return;
+    }
+
+    this.previewLoading.set(true);
+    this.api
+      .previewUpdateVersion(serverId, {
+        game_version: to,
+        server_type: this.serverType(),
+      })
+      .pipe(
+        catchError(() =>
+          of({
+            canUpdate: true,
+            targetGameVersion: to,
+            targetServerType: this.serverType(),
+            items: [],
+          }),
+        ),
+      )
+      .subscribe((res) => {
+        this.previewLoading.set(false);
+        const items = res.items || [];
+        this.previewItems.set(items);
+        const actions: Record<string, 'UPDATE' | 'REMOVE' | 'KEEP'> = {};
+        for (const item of items) {
+          if (item.status === 'UPDATE_AVAILABLE') {
+            actions[item.path] = 'UPDATE';
+          } else if (item.status === 'INCOMPATIBLE') {
+            actions[item.path] = 'REMOVE';
+          } else {
+            actions[item.path] = 'KEEP';
+          }
+        }
+        this.selectedActions.set(actions);
+      });
   }
 
   protected canConfirm(): boolean {
@@ -181,10 +298,21 @@ export class McUpdateVersionDialog {
 
     this.busy.set(true);
     try {
+      const items = this.previewItems();
+      const content_actions: ContentActionRequest[] = items.map((item) => ({
+        path: item.path,
+        action: this.getItemAction(item.path),
+        targetVersionId: item.targetVersionId,
+        targetDownloadUrl: item.targetDownloadUrl,
+        targetFileName: item.targetFileName,
+        targetHashes: item.targetHashes,
+      }));
+
       const response = await firstValueFrom(
         this.api.updateVersion(serverId, {
           game_version: to,
           confirm_downgrade: this.confirmDowngrade(),
+          ...(content_actions.length > 0 ? { content_actions } : {}),
         }),
       );
       this.updateResult.set(response);

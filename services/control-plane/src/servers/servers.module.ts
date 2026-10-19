@@ -6,6 +6,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { ServerAuditLog } from '@database/entities/server-audit-log.entity';
 import { ServerBackupEntity } from '@database/entities/server-backup.entity';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
+import { ServerContent } from '@database/entities/server-content.entity';
 import { AppConfigModule } from '@config/app-config.module';
 import { KubernetesModule } from '@k8s/k8s.module';
 import { ConsoleModule } from '@console/console.module';
@@ -20,6 +21,7 @@ import { TasksModule } from '../tasks/tasks.module';
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
+import { ServersContentService } from './servers-content.service';
 import { ServerIconModule } from './server-icon.module';
 import { ServersBackupService } from './servers-backup.service';
 import { MinecraftStorageProvider } from './providers/minecraft-storage.provider';
@@ -38,6 +40,7 @@ import { ServersBackupSchedulerService } from './servers-backup-scheduler.servic
       ServerAuditLog,
       ServerBackupEntity,
       ModpackTaskEntity,
+      ServerContent,
     ]),
     AppConfigModule,
     KubernetesModule,
@@ -55,6 +58,7 @@ import { ServersBackupSchedulerService } from './servers-backup-scheduler.servic
   providers: [
     ServersService,
     ServersFilesService,
+    ServersContentService,
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
@@ -66,6 +70,7 @@ import { ServersBackupSchedulerService } from './servers-backup-scheduler.servic
   exports: [
     ServersService,
     ServersFilesService,
+    ServersContentService,
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,

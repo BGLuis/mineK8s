@@ -1,5 +1,80 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+
+export class ContentActionItemDto {
+  @ApiProperty({ description: 'Caminho relativo do arquivo (ex.: mods/jei.jar)' })
+  @IsString()
+  @IsNotEmpty()
+  path: string;
+
+  @ApiProperty({
+    description: 'Ação a ser executada',
+    enum: ['UPDATE', 'REMOVE', 'KEEP'],
+  })
+  @IsIn(['UPDATE', 'REMOVE', 'KEEP'])
+  action: 'UPDATE' | 'REMOVE' | 'KEEP';
+
+  @ApiPropertyOptional({ description: 'ID da versão de destino caso action seja UPDATE' })
+  @IsString()
+  @IsOptional()
+  targetVersionId?: string;
+
+  @ApiPropertyOptional({ description: 'URL de download da nova versão' })
+  @IsString()
+  @IsOptional()
+  targetDownloadUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Nome do arquivo de destino caso mude' })
+  @IsString()
+  @IsOptional()
+  targetFileName?: string;
+
+  @ApiPropertyOptional({ description: 'Hashes esperados do novo arquivo' })
+  @IsOptional()
+  targetHashes?: { sha1?: string; sha512?: string; sha256?: string };
+}
+
+export class PreviewUpdateVersionDto {
+  @ApiProperty({
+    description: 'Versão alvo do jogo/servidor',
+    example: '1.21.1',
+  })
+  @IsString()
+  @IsNotEmpty()
+  game_version: string;
+
+  @ApiPropertyOptional({
+    description: 'Tipo de servidor de destino (FABRIC, FORGE, PAPER, etc.)',
+    example: 'FABRIC',
+  })
+  @IsString()
+  @IsOptional()
+  server_type?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID do modpack caso aplicável',
+  })
+  @IsString()
+  @IsOptional()
+  modpack_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID da versão do modpack caso aplicável',
+  })
+  @IsString()
+  @IsOptional()
+  modpack_version_id?: string;
+}
 
 export class UpdateVersionDto {
   @ApiProperty({
@@ -47,6 +122,17 @@ export class UpdateVersionDto {
       'Tempo em minutos de aviso aos jogadores antes de parar para atualizar (0 = agora) (#204)',
     default: 10,
   })
+  @IsNumber()
   @IsOptional()
   warning_minutes?: number;
+
+  @ApiPropertyOptional({
+    description: 'Ações decididas pelo admin para mods e plugins (#207)',
+    type: [ContentActionItemDto],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ContentActionItemDto)
+  @IsOptional()
+  content_actions?: ContentActionItemDto[];
 }

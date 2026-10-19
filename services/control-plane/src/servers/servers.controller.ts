@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
@@ -26,6 +27,7 @@ import { Roles } from '@auth/roles.decorator';
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
 import { ServersBackupService } from './servers-backup.service';
+import { ServersContentService } from './servers-content.service';
 import { CreateServerDto, MinecraftSettingsDto } from './dto/create-server.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
@@ -34,7 +36,7 @@ import { WriteFileDto } from './dto/write-file.dto';
 import { MAX_SERVER_ICON_BYTES } from './server-icon.service';
 import { CreateDirectoryDto } from './dto/create-directory.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
-import { UpdateVersionDto } from './dto/update-version.dto';
+import { PreviewUpdateVersionDto, UpdateVersionDto } from './dto/update-version.dto';
 import { StopServerDto } from './dto/stop-server.dto';
 import { CreateBackupDto } from './dto/create-backup.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';
@@ -48,6 +50,8 @@ export class ServersController {
     private readonly serversService: ServersService,
     private readonly filesService: ServersFilesService,
     private readonly backupService: ServersBackupService,
+    @Optional()
+    private readonly contentService?: ServersContentService,
   ) {}
 
   @Post('create')
@@ -153,6 +157,43 @@ export class ServersController {
   @ApiResponse({ status: 409, description: 'Server is already being updated' })
   async updateVersion(@Param('id') id: string, @Body() dto: UpdateVersionDto) {
     return this.serversService.updateVersion(id, dto);
+  }
+
+  @Post(':id/update-version/preview')
+  @ApiOperation({
+    summary: 'Preview version update compatibility for mods and plugins (RF-STO-13, #207)',
+  })
+  @ApiResponse({ status: 200, description: 'Compatibility preview report' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async previewUpdateVersion(@Param('id') id: string, @Body() dto: PreviewUpdateVersionDto) {
+    if (!this.contentService) {
+      throw new NotFoundException('Content service is unavailable');
+    }
+    return this.contentService.previewCompatibility(id, dto);
+  }
+
+  @Post(':id/content/identify')
+  @ApiOperation({
+    summary: 'Identify manual mods and plugins against Modrinth API (RF-STO-13, #207)',
+  })
+  @ApiResponse({ status: 200, description: 'Updated server content list' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async identifyContent(@Param('id') id: string) {
+    if (!this.contentService) {
+      throw new NotFoundException('Content service is unavailable');
+    }
+    return this.contentService.identifyContents(id);
+  }
+
+  @Get(':id/content')
+  @ApiOperation({ summary: 'List installed mods, plugins, and content items (RF-STO-13, #207)' })
+  @ApiResponse({ status: 200, description: 'List of recorded server content' })
+  @ApiResponse({ status: 404, description: 'Server not found' })
+  async listContent(@Param('id') id: string) {
+    if (!this.contentService) {
+      return [];
+    }
+    return this.contentService.getContents(id);
   }
 
   @Delete(':id')

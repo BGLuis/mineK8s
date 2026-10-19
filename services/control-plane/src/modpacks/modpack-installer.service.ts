@@ -10,6 +10,7 @@ import { serverDataDirectory } from '@k8s/server-data-volume';
 import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
 import { resolveSafePath } from '@servers/security/path-traversal.validator';
 import { ServerRuntimeResolver } from '../servers/runtime/server-runtime.resolver';
+import { ServersContentService } from '../servers/servers-content.service';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
 import { CurseForgeResolverService } from './resolvers/curseforge-resolver.service';
@@ -36,6 +37,8 @@ export class ModpackInstallerService {
     private readonly serverRepo?: Repository<Server>,
     @Optional()
     private readonly runtimeResolver?: ServerRuntimeResolver,
+    @Optional()
+    private readonly serversContentService?: ServersContentService,
   ) {}
 
   public getServerDataDir(server: Server): string {
@@ -253,6 +256,10 @@ export class ModpackInstallerService {
         progressPercent: 25,
       });
 
+      if (this.serversContentService) {
+        await this.serversContentService.syncModpackFiles(server, serverDir, resolvedFiles);
+      }
+
       const isDummyHash = (h?: string) =>
         ['1111', '2222', '3333', '4444', '5555', '6666'].includes(h || '');
 
@@ -324,6 +331,20 @@ export class ModpackInstallerService {
             downloadedFiles: count,
             progressPercent: 20 + Math.floor((count / resolvedFiles.length) * 60),
             currentStep: `Downloaded and indexed in CAS: ${f.name}`,
+          });
+        }
+
+        if (this.serversContentService) {
+          const relPath = path.relative(serverDir, targetPath).replace(/\\/g, '/');
+          await this.serversContentService.recordContent({
+            serverId: server.id,
+            path: relPath,
+            sha1: f.hashes?.sha1,
+            sha512: f.hashes?.sha512,
+            origin: 'MODPACK',
+            source: (dto.source as any) || 'MODRINTH',
+            projectId: dto.projectId,
+            versionId: dto.versionId,
           });
         }
       }
