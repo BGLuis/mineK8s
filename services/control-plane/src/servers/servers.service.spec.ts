@@ -24,6 +24,9 @@ describe('ServersService', () => {
   let mockRuntimeResolver: any;
   let playerSessions: PlayerSessionsService;
   let mockNodeMetrics: { assertDiskAllowsCreation: jest.Mock };
+  let mockConsoleDriver: any;
+  let mockLogStreamer: any;
+  let mockDnsDriver: any;
 
   const runtimeFor = (version: string) => ({
     java_version: version.startsWith('26.') ? 25 : 21,
@@ -112,7 +115,7 @@ describe('ServersService', () => {
       ]),
     };
 
-    const mockConsoleDriver = {
+    mockConsoleDriver = {
       sendCommand: jest.fn().mockResolvedValue('Command output'),
       listPlayers: jest.fn().mockResolvedValue(['Steve']),
       saveOff: jest.fn().mockResolvedValue('OK'),
@@ -127,7 +130,7 @@ describe('ServersService', () => {
       findOne: jest.fn(async () => null),
     };
 
-    const mockLogStreamer = {
+    mockLogStreamer = {
       getBuffer: jest.fn().mockReturnValue({
         getHistory: jest
           .fn()
@@ -152,10 +155,13 @@ describe('ServersService', () => {
     };
 
     mockSlpProbeService = {
-      probe: jest.fn().mockResolvedValue({ ready: true }),
+      probe: jest.fn().mockImplementation(async () => {
+        const s = serversDb.get('srv-update-1');
+        return { ready: true, version: s?.game_version ? `Paper ${s.game_version}` : '1.20.5' };
+      }),
     };
 
-    const mockDnsDriver = {
+    mockDnsDriver = {
       upsertSrvRecord: jest.fn().mockResolvedValue({ id: 'rec-srv-1' }),
       deleteRecordByNameAndType: jest.fn().mockResolvedValue(true),
       getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
@@ -915,6 +921,7 @@ describe('ServersService', () => {
         id: 'srv-update-1',
         name: 'Survival Server',
         subdomain: 'survival',
+        resource_name: 'survival',
         state: 'READY',
         game_version: '1.20.4',
         server_type: 'PAPER',
@@ -948,7 +955,7 @@ describe('ServersService', () => {
     });
 
     it('should trigger automated rollback when boot of new version fails (RF-STO-13)', async () => {
-      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
 
       const result = await service.updateVersion('srv-update-1', {
         game_version: '1.21.0',
@@ -964,13 +971,75 @@ describe('ServersService', () => {
       expect(result.version).toBe('1.20.4');
     });
 
+    it('should trigger automated rollback when probe returns synthetic gateway status during window (#198)', async () => {
+      // Gateway synthetic status has version 'mineK8s' or status text instead of target MC version
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'mineK8s',
+      });
+
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.21.0',
+        purge_mods: true,
+      });
+
+      expect(mockBackupService.restorePreUpdateBackup).toHaveBeenCalled();
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.game_version).toBe('1.20.4');
+      expect(server.state).toBe('READY');
+      expect(result.rolledBack).toBe(true);
+      expect(result.version).toBe('1.20.4');
+    });
+
+    it('should probe the internal cluster Service host outside mock driver (#198)', async () => {
+      const mockConfigService = {
+        isTest: false,
+        kubernetes: {
+          useMockDriver: false,
+          namespace: 'minekubernetes',
+        },
+      };
+
+      const customService = new ServersService(
+        mockServerRepo as any,
+        mockSettingsRepo as any,
+        mockAuditRepo as any,
+        mockK8sService as any,
+        mockConsoleDriver as any,
+        mockLogStreamer as any,
+        mockRuntimeResolver as any,
+        mockBackupService as any,
+        mockGatewayIpcService as any,
+        mockSlpProbeService as any,
+        mockDnsDriver as any,
+        playerSessions,
+        mockNodeMetrics as any,
+        mockIconService as any,
+        mockConfigService as any,
+      );
+
+      const srv = { resource_name: 'survival' } as Server;
+      expect(customService.getProbeHost(srv)).toBe('mc-survival.minekubernetes.svc.cluster.local');
+
+      await customService.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+        purge_mods: true,
+      });
+
+      expect(mockSlpProbeService.probe).toHaveBeenCalledWith(
+        'mc-survival.minekubernetes.svc.cluster.local',
+        25565,
+        3000,
+      );
+    });
+
     it('should start the new version on its own jar and Java, and the old ones after a rollback (#156)', async () => {
       Object.assign(serversDb.get('srv-update-1')!, runtimeFor('1.21.11'));
       const startedWith: { java: number | null; jar: string | null }[] = [];
       mockK8sService.startServer.mockImplementation(async (s: Server) => {
         startedWith.push({ java: s.java_version, jar: s.server_jar_url });
       });
-      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
 
       await service.updateVersion('srv-update-1', { game_version: '26.2' });
 

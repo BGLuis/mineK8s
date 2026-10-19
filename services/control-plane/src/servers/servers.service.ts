@@ -16,8 +16,10 @@ import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServerAuditLog, ExecutionSource } from '@database/entities/server-audit-log.entity';
 import { User } from '@database/entities/user.entity';
+import { AppConfigService } from '@config/app-config.service';
 import { KubernetesService } from '@k8s/k8s.service';
 import { disambiguatedResourceName, serverWorkloadName } from '@k8s/resource-names';
+import { isModpackServerType } from '@k8s/server-properties';
 import {
   CONSOLE_DRIVER_TOKEN,
   ConsoleDriver,
@@ -73,6 +75,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly nodeMetrics?: NodeMetricsService,
     @Optional()
     private readonly iconService?: ServerIconService,
+    @Optional()
+    private readonly configService?: AppConfigService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -661,7 +665,7 @@ export class ServersService implements OnApplicationBootstrap {
       await this.k8sService.startServer(server);
 
       // 7. Health Watchdog / Verificação de boot
-      const probePassed = await this.verifyPostUpdateBoot(server);
+      const probePassed = await this.verifyPostUpdateBoot(server, dto.game_version);
 
       if (probePassed) {
         this.logger.log(
@@ -715,21 +719,60 @@ export class ServersService implements OnApplicationBootstrap {
     };
   }
 
-  private async verifyPostUpdateBoot(server: Server): Promise<boolean> {
+  getProbeHost(server: Server): string {
+    if (
+      !this.configService ||
+      this.configService.isTest ||
+      this.configService.kubernetes.useMockDriver
+    ) {
+      return '127.0.0.1';
+    }
+    const resourceName = server.resource_name || server.subdomain;
+    return `${serverWorkloadName(resourceName)}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
+  }
+
+  private async verifyPostUpdateBoot(
+    server: Server,
+    expectedVersion: string,
+    options?: { timeoutMs?: number; pollIntervalMs?: number },
+  ): Promise<boolean> {
     if (!this.slpProbeService) {
       return true;
     }
 
-    try {
-      const probe = await this.slpProbeService.probe(
-        '127.0.0.1',
-        server.allocated_port || 25565,
-        3000,
-      );
-      return probe.ready;
-    } catch {
-      return false;
+    const host = this.getProbeHost(server);
+    const port = server.allocated_port || 25565;
+
+    const isModpack = isModpackServerType(server.server_type);
+    const isTest = this.configService?.isTest ?? process.env.NODE_ENV === 'test';
+    const defaultTimeoutMs = isTest ? 100 : isModpack ? 930_000 : 195_000;
+    const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+    const pollIntervalMs = options?.pollIntervalMs ?? (isTest ? 10 : 3000);
+
+    const startTime = Date.now();
+    while (Date.now() - startTime <= timeoutMs) {
+      try {
+        const probe = await this.slpProbeService.probe(host, port, 3000);
+        if (
+          probe.ready &&
+          typeof probe.version === 'string' &&
+          probe.version.includes(expectedVersion)
+        ) {
+          return true;
+        }
+      } catch (err: any) {
+        this.logger.debug(
+          `SLP probe attempt failed for [${server.subdomain}] (${host}:${port}): ${err.message}`,
+        );
+      }
+
+      if (Date.now() - startTime + pollIntervalMs > timeoutMs) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
+
+    return false;
   }
 
   private async performRollback(
