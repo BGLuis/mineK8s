@@ -201,6 +201,101 @@ describe('ServersContentService (#207)', () => {
       expect(itemUnknown?.status).toBe('UNIDENTIFIED');
       expect(itemUnknown?.statusMessage).toBe('Não identificado');
     });
+
+    it('deve marcar mod como COMPATIBLE quando a versão atual já é a versão compatível', async () => {
+      const hashAlreadyCompatible = 'dddd111122223333444455556666777788889999';
+      await service.recordContent({
+        serverId: testServer.id,
+        path: 'mods/already-compat.jar',
+        sha1: hashAlreadyCompatible,
+        origin: 'MANUAL',
+        projectId: 'already-compat',
+        versionId: 'ver-compatible-1',
+      });
+
+      jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('/version_files/update')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              [hashAlreadyCompatible]: {
+                id: 'ver-compatible-1',
+                version_number: '1.0.0',
+                name: 'Already Compatible 1.0.0',
+                files: [
+                  {
+                    primary: true,
+                    filename: 'already-compat.jar',
+                    hashes: { sha1: hashAlreadyCompatible },
+                  },
+                ],
+              },
+            }),
+          } as any;
+        }
+        return { ok: true, status: 200, json: async () => ({}) } as any;
+      });
+
+      const preview = await service.previewCompatibility(testServer, {
+        game_version: '1.21.1',
+        server_type: 'FABRIC',
+      });
+
+      const item = preview.items.find((i) => i.path === 'mods/already-compat.jar');
+      expect(item).toBeDefined();
+      expect(item?.status).toBe('COMPATIBLE');
+      expect(item?.statusMessage).toBe('Compatível');
+    });
+
+    it('deve marcar mods como UNIDENTIFIED se a API da Modrinth falhar (500), evitando remoção acidental', async () => {
+      await service.recordContent({
+        serverId: testServer.id,
+        path: 'mods/fabric-api.jar',
+        sha1: 'aaaa111122223333444455556666777788889999',
+        origin: 'MANUAL',
+        projectId: 'fabric-api',
+      });
+
+      jest.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('/version_files/update')) {
+          return { ok: false, status: 500, statusText: 'Internal Server Error' } as any;
+        }
+        return { ok: true, status: 200, json: async () => ({}) } as any;
+      });
+
+      const preview = await service.previewCompatibility(testServer, {
+        game_version: '1.21.1',
+        server_type: 'FABRIC',
+      });
+
+      const item = preview.items.find((i) => i.path === 'mods/fabric-api.jar');
+      expect(item).toBeDefined();
+      expect(item?.status).toBe('UNIDENTIFIED');
+      expect(item?.statusMessage).toContain('Modrinth indisponível');
+    });
+
+    it('deve marcar todos os mods como INCOMPATIBLE quando o servidor alvo for VANILLA', async () => {
+      await service.recordContent({
+        serverId: testServer.id,
+        path: 'mods/fabric-api.jar',
+        sha1: 'aaaa111122223333444455556666777788889999',
+        origin: 'MANUAL',
+        projectId: 'fabric-api',
+      });
+
+      const preview = await service.previewCompatibility(testServer, {
+        game_version: '1.21.1',
+        server_type: 'VANILLA',
+      });
+
+      const item = preview.items.find((i) => i.path === 'mods/fabric-api.jar');
+      expect(item).toBeDefined();
+      expect(item?.status).toBe('INCOMPATIBLE');
+      expect(item?.statusMessage).toContain('Vanilla não suporta');
+    });
   });
 
   describe('Critério 2: Manual jar com SHA-1 conhecido é identificado e ganha project_id / version_id', () => {
@@ -247,6 +342,20 @@ describe('ServersContentService (#207)', () => {
       expect(sodiumEntry?.origin).toBe('MANUAL');
       expect(sodiumEntry?.loaders).toEqual(['fabric', 'quilt']);
     });
+
+    it('deve ignorar arquivos que não sejam .jar durante o escaneamento', async () => {
+      const modsDir = path.join(serverDataDir, 'mods');
+      const pluginsDir = path.join(serverDataDir, 'plugins');
+      fs.mkdirSync(modsDir, { recursive: true });
+      fs.mkdirSync(pluginsDir, { recursive: true });
+
+      fs.writeFileSync(path.join(modsDir, 'README.txt'), 'Mod instructions');
+      fs.writeFileSync(path.join(pluginsDir, 'config.yml'), 'key: value');
+
+      const identifiedList = await service.identifyContents(testServer.id);
+      expect(identifiedList.find((c) => c.path.endsWith('.txt'))).toBeUndefined();
+      expect(identifiedList.find((c) => c.path.endsWith('.yml'))).toBeUndefined();
+    });
   });
 
   describe('Critério 3: Update com item "remover" remove o arquivo; item "atualizar" instala nova versão verificada', () => {
@@ -272,6 +381,7 @@ describe('ServersContentService (#207)', () => {
         serverId: testServer.id,
         path: updateFileRel,
         origin: 'MANUAL',
+        projectId: 'my-mod-proj',
       });
 
       // Novo buffer para update
@@ -332,6 +442,7 @@ describe('ServersContentService (#207)', () => {
       expect(updatedDbItem?.sha1).toBe(newSha1);
       expect(updatedDbItem?.sha512).toBe(newSha512);
       expect(updatedDbItem?.versionId).toBe('ver-v2-id');
+      expect(updatedDbItem?.projectId).toBe('my-mod-proj'); // Metadado preservado
     });
 
     it('deve rejeitar e falhar update caso haja hash mismatch', async () => {
@@ -367,6 +478,58 @@ describe('ServersContentService (#207)', () => {
           },
         ]),
       ).rejects.toThrow(/Hash mismatch/);
+    });
+
+    it('deve bloquear tentativa de modificar arquivos fora de mods/ ou plugins/ (segurança)', async () => {
+      fs.writeFileSync(path.join(serverDataDir, 'server.properties'), 'motd=MineK8s');
+
+      await expect(
+        service.applyContentActions(testServer, serverDataDir, [
+          {
+            path: 'server.properties',
+            action: 'REMOVE',
+          },
+        ]),
+      ).rejects.toThrow(/Security violation/);
+
+      // O arquivo não deve ter sido removido
+      expect(fs.existsSync(path.join(serverDataDir, 'server.properties'))).toBe(true);
+    });
+
+    it('deve bloquear tentativa de traversal no targetFileName durante UPDATE (segurança)', async () => {
+      const modsDir = path.join(serverDataDir, 'mods');
+      fs.mkdirSync(modsDir, { recursive: true });
+      const modRel = 'mods/safe-mod.jar';
+      fs.writeFileSync(path.join(serverDataDir, modRel), 'safe');
+
+      await expect(
+        service.applyContentActions(testServer, serverDataDir, [
+          {
+            path: modRel,
+            action: 'UPDATE',
+            targetDownloadUrl: 'https://cdn.modrinth.com/data/safe.jar',
+            targetFileName: '../server.jar',
+          },
+        ]),
+      ).rejects.toThrow(/Security violation|Invalid target file name/);
+    });
+
+    it('deve rejeitar URL de download com protocolo não seguro como file:// (segurança)', async () => {
+      const modsDir = path.join(serverDataDir, 'mods');
+      fs.mkdirSync(modsDir, { recursive: true });
+      const modRel = 'mods/safe-mod.jar';
+      fs.writeFileSync(path.join(serverDataDir, modRel), 'safe');
+
+      await expect(
+        service.applyContentActions(testServer, serverDataDir, [
+          {
+            path: modRel,
+            action: 'UPDATE',
+            targetDownloadUrl: 'file:///etc/passwd',
+            targetFileName: 'passwd.jar',
+          },
+        ]),
+      ).rejects.toThrow(/Security violation/);
     });
   });
 

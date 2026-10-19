@@ -28,7 +28,7 @@ export interface ContentPreviewItem {
   source: ServerContentSource | null;
   projectId: string | null;
   currentVersionId: string | null;
-  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED';
+  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED' | 'COMPATIBLE';
   statusMessage: string;
   targetVersionId?: string;
   targetVersionName?: string;
@@ -47,6 +47,7 @@ export interface CompatibilityPreviewResponse {
 export interface ContentActionRequest {
   path: string;
   action: 'UPDATE' | 'REMOVE' | 'KEEP';
+  projectId?: string;
   targetVersionId?: string;
   targetDownloadUrl?: string;
   targetFileName?: string;
@@ -80,6 +81,10 @@ export class ServersContentService {
   }
 
   public async getContents(serverId: string): Promise<ServerContent[]> {
+    const server = await this.serverRepo.findOne({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${serverId}" not found`);
+    }
     return this.contentRepo.find({
       where: { serverId },
       order: { path: 'ASC' },
@@ -121,7 +126,12 @@ export class ServersContentService {
 
   public async removeContent(serverId: string, relPath: string): Promise<void> {
     const cleanPath = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
-    await this.contentRepo.delete({ serverId, path: cleanPath });
+    const items = await this.contentRepo.find({ where: { serverId } });
+    for (const item of items) {
+      if (item.path === cleanPath || item.path.startsWith(`${cleanPath}/`)) {
+        await this.contentRepo.delete(item.id);
+      }
+    }
   }
 
   /**
@@ -143,6 +153,9 @@ export class ServersContentService {
         try {
           const files = await fs.promises.readdir(fullDir);
           for (const file of files) {
+            if (!file.toLowerCase().endsWith('.jar')) {
+              continue;
+            }
             const relPath = `${subDir}/${file}`.replace(/\\/g, '/');
             const fullPath = path.join(fullDir, file);
             const stat = await fs.promises.stat(fullPath);
@@ -262,6 +275,7 @@ export class ServersContentService {
 
     const sha1List = contents.map((c) => c.sha1).filter((s): s is string => !!s);
     let modrinthUpdates: Record<string, any> = {};
+    let modrinthCheckFailed = false;
 
     if (sha1List.length > 0 && targetLoaders.length > 0) {
       try {
@@ -282,25 +296,66 @@ export class ServersContentService {
 
         if (res.ok) {
           modrinthUpdates = (await res.json()) as Record<string, any>;
+        } else {
+          modrinthCheckFailed = true;
+          this.logger.warn(`Falha na checagem de atualizações Modrinth: status HTTP ${res.status}`);
         }
       } catch (err: any) {
+        modrinthCheckFailed = true;
         this.logger.warn(`Falha na checagem de atualizações Modrinth: ${err.message}`);
       }
     }
+
+    const isVanilla = targetServerType === 'VANILLA';
 
     const items: ContentPreviewItem[] = contents.map((item) => {
       const fileName = path.basename(item.path);
       const updateData = item.sha1 ? modrinthUpdates[item.sha1] : undefined;
 
-      if (updateData) {
-        const primaryFile = updateData.files?.find((f: any) => f.primary) || updateData.files?.[0];
-        const verName = updateData.version_number || updateData.name || updateData.id;
+      if (isVanilla) {
         return {
           path: item.path,
           name: fileName,
           origin: item.origin,
           source: item.source,
           projectId: item.projectId,
+          currentVersionId: item.versionId,
+          status: 'INCOMPATIBLE',
+          statusMessage: 'Vanilla não suporta mods/plugins',
+        };
+      }
+
+      if (updateData) {
+        const primaryFile = updateData.files?.find((f: any) => f.primary) || updateData.files?.[0];
+        const verName = updateData.version_number || updateData.name || updateData.id;
+
+        const isSameVersion =
+          (item.versionId && item.versionId === updateData.id) ||
+          (primaryFile?.hashes?.sha1 &&
+            item.sha1 &&
+            primaryFile.hashes.sha1.toLowerCase() === item.sha1.toLowerCase());
+
+        if (isSameVersion) {
+          return {
+            path: item.path,
+            name: fileName,
+            origin: item.origin,
+            source: item.source,
+            projectId: item.projectId || updateData.project_id,
+            currentVersionId: item.versionId,
+            status: 'COMPATIBLE',
+            statusMessage: 'Compatível',
+            targetVersionId: updateData.id,
+            targetVersionName: verName,
+          };
+        }
+
+        return {
+          path: item.path,
+          name: fileName,
+          origin: item.origin,
+          source: item.source,
+          projectId: item.projectId || updateData.project_id,
           currentVersionId: item.versionId,
           status: 'UPDATE_AVAILABLE',
           statusMessage: `Atualiza para ${verName}`,
@@ -309,6 +364,19 @@ export class ServersContentService {
           targetDownloadUrl: primaryFile?.url,
           targetFileName: primaryFile?.filename,
           targetHashes: primaryFile?.hashes,
+        };
+      }
+
+      if (modrinthCheckFailed) {
+        return {
+          path: item.path,
+          name: fileName,
+          origin: item.origin,
+          source: item.source,
+          projectId: item.projectId,
+          currentVersionId: item.versionId,
+          status: 'UNIDENTIFIED',
+          statusMessage: 'Não verificado (Modrinth indisponível)',
         };
       }
 
@@ -355,6 +423,21 @@ export class ServersContentService {
   ): Promise<void> {
     for (const action of actions) {
       const relPath = action.path.replace(/\\/g, '/').replace(/^\/+/, '');
+
+      // Strict validation: Path must remain strictly within mods/ or plugins/
+      if (!relPath.startsWith('mods/') && !relPath.startsWith('plugins/')) {
+        throw new BadRequestException(
+          `Security violation: Content action path must be inside mods/ or plugins/ (${relPath})`,
+        );
+      }
+
+      // Must be a jar file
+      if (!relPath.toLowerCase().endsWith('.jar')) {
+        throw new BadRequestException(
+          `Security violation: Content action file must be a .jar package (${relPath})`,
+        );
+      }
+
       const filePath = resolveSafePath(serverDir, relPath);
 
       if (action.action === 'REMOVE') {
@@ -368,6 +451,56 @@ export class ServersContentService {
           this.logger.warn(`Ação UPDATE para ${relPath} sem URL de download; ignorando.`);
           continue;
         }
+
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(action.targetDownloadUrl);
+        } catch {
+          throw new BadRequestException(`Invalid download URL for ${relPath}`);
+        }
+
+        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+          throw new BadRequestException(
+            `Security violation: download URL protocol must be HTTP or HTTPS`,
+          );
+        }
+
+        const dir = path.dirname(relPath);
+        if (action.targetFileName) {
+          if (
+            action.targetFileName.includes('..') ||
+            action.targetFileName.includes('/') ||
+            action.targetFileName.includes('\\') ||
+            action.targetFileName.includes('\0')
+          ) {
+            throw new BadRequestException(
+              `Security violation: targetFileName cannot contain directory traversal or slashes (${action.targetFileName})`,
+            );
+          }
+        }
+        const rawFileName = action.targetFileName || path.basename(parsedUrl.pathname);
+        const newFileName = path.basename(rawFileName.trim());
+
+        if (
+          !newFileName ||
+          newFileName === '.' ||
+          newFileName === '..' ||
+          newFileName.includes('/') ||
+          newFileName.includes('\\') ||
+          newFileName.includes('\0') ||
+          !newFileName.toLowerCase().endsWith('.jar')
+        ) {
+          throw new BadRequestException(`Invalid target file name: ${rawFileName}`);
+        }
+
+        const newRelPath = path.join(dir, newFileName).replace(/\\/g, '/');
+        if (!newRelPath.startsWith('mods/') && !newRelPath.startsWith('plugins/')) {
+          throw new BadRequestException(
+            `Security violation: Target path must remain inside mods/ or plugins/ (${newRelPath})`,
+          );
+        }
+
+        const newFilePath = resolveSafePath(serverDir, newRelPath);
 
         const res = await fetch(action.targetDownloadUrl, { signal: AbortSignal.timeout(30_000) });
         if (!res.ok) {
@@ -395,11 +528,14 @@ export class ServersContentService {
             );
           }
         }
-
-        const dir = path.dirname(relPath);
-        const newFileName = action.targetFileName || path.basename(action.targetDownloadUrl);
-        const newRelPath = path.join(dir, newFileName).replace(/\\/g, '/');
-        const newFilePath = resolveSafePath(serverDir, newRelPath);
+        if (action.targetHashes?.sha256) {
+          const actualSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+          if (actualSha256.toLowerCase() !== action.targetHashes.sha256.toLowerCase()) {
+            throw new Error(
+              `Hash mismatch no update de ${relPath}: esperado sha256 ${action.targetHashes.sha256}, obtido ${actualSha256}`,
+            );
+          }
+        }
 
         await fs.promises.mkdir(path.dirname(newFilePath), { recursive: true });
 
@@ -412,6 +548,10 @@ export class ServersContentService {
         } else {
           await fs.promises.writeFile(newFilePath, buffer);
         }
+
+        const existing = await this.contentRepo.findOne({
+          where: { serverId: server.id, path: relPath },
+        });
 
         // Se o nome do arquivo mudou (ex: mod-1.0.jar -> mod-2.0.jar), remove o arquivo antigo
         if (filePath !== newFilePath && fs.existsSync(filePath)) {
@@ -429,9 +569,11 @@ export class ServersContentService {
           path: newRelPath,
           sha1: computedSha1,
           sha512: computedSha512,
-          origin: 'MANUAL',
-          source: 'MODRINTH',
-          versionId: action.targetVersionId,
+          origin: existing?.origin || 'MANUAL',
+          source: existing?.source || 'MODRINTH',
+          projectId: action.projectId || existing?.projectId,
+          versionId: action.targetVersionId || existing?.versionId,
+          loaders: existing?.loaders,
         });
 
         this.logger.log(`Arquivo atualizado com sucesso: ${relPath} -> ${newRelPath}`);

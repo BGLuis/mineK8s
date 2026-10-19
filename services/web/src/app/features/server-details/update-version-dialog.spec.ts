@@ -276,6 +276,7 @@ describe('McUpdateVersionDialog (#203)', () => {
         {
           path: 'mods/fabric-api.jar',
           action: 'UPDATE',
+          projectId: 'fabric-api',
           targetVersionId: 'v2',
           targetDownloadUrl: 'https://cdn.modrinth.com/fabric-api-2.jar',
           targetFileName: undefined,
@@ -284,6 +285,72 @@ describe('McUpdateVersionDialog (#203)', () => {
         {
           path: 'mods/old-mod.jar',
           action: 'REMOVE',
+          projectId: 'old-mod',
+          targetVersionId: undefined,
+          targetDownloadUrl: undefined,
+          targetFileName: undefined,
+          targetHashes: undefined,
+        },
+      ],
+    });
+  });
+
+  it('renders COMPATIBLE status badge and defaults action to KEEP (#207)', async () => {
+    api.previewUpdateVersion.mockReturnValue(
+      of({
+        canUpdate: true,
+        targetGameVersion: '26.4-snapshot-4',
+        targetServerType: 'FABRIC',
+        items: [
+          {
+            path: 'mods/already-compatible.jar',
+            name: 'already-compatible.jar',
+            origin: 'MANUAL',
+            source: 'MODRINTH',
+            projectId: 'already-compatible',
+            currentVersionId: 'v1',
+            status: 'COMPATIBLE',
+            statusMessage: 'Compatível',
+          },
+        ],
+      }),
+    );
+
+    const { fixture, el, component } = await open();
+    component.setTargetVersion('26.4-snapshot-4');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('already-compatible.jar');
+    expect(el.textContent).toContain('Compatível');
+
+    // Confirm button must be enabled once preview is loaded
+    const confirmButton = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Atualizar versão'),
+    ) as HTMLButtonElement;
+    expect(confirmButton.disabled).toBe(false);
+
+    api.updateVersion.mockReturnValue(
+      of({
+        message: 'Atualizado',
+        version: '26.4-snapshot-4',
+        rolledBack: false,
+      }),
+    );
+    confirmButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.updateVersion).toHaveBeenCalledWith('srv-1', {
+      game_version: '26.4-snapshot-4',
+      confirm_downgrade: false,
+      content_actions: [
+        {
+          path: 'mods/already-compatible.jar',
+          action: 'KEEP',
+          projectId: 'already-compatible',
           targetVersionId: undefined,
           targetDownloadUrl: undefined,
           targetFileName: undefined,

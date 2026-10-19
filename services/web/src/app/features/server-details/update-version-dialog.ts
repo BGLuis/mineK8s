@@ -108,6 +108,10 @@ function compareVersions(from: string, to: string): number {
                           <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-status-success/15 text-status-success">
                             {{ item.statusMessage }}
                           </span>
+                        } @else if (item.status === 'COMPATIBLE') {
+                          <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-status-success/15 text-status-success">
+                            {{ item.statusMessage }}
+                          </span>
                         } @else if (item.status === 'INCOMPATIBLE') {
                           <span class="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-status-danger/15 text-status-danger">
                             {{ item.statusMessage }}
@@ -267,6 +271,9 @@ export class McUpdateVersionDialog {
         ),
       )
       .subscribe((res) => {
+        if (to !== this.targetVersion()) {
+          return;
+        }
         this.previewLoading.set(false);
         const items = res.items || [];
         this.previewItems.set(items);
@@ -288,7 +295,7 @@ export class McUpdateVersionDialog {
     const to = this.targetVersion();
     if (!to || to === this.currentVersion()) return false;
     if (this.isDowngrade() && !this.confirmDowngrade()) return false;
-    return !this.busy();
+    return !this.busy() && !this.previewLoading();
   }
 
   protected async submit(): Promise<void> {
@@ -302,6 +309,7 @@ export class McUpdateVersionDialog {
       const content_actions: ContentActionRequest[] = items.map((item) => ({
         path: item.path,
         action: this.getItemAction(item.path),
+        projectId: item.projectId ?? undefined,
         targetVersionId: item.targetVersionId,
         targetDownloadUrl: item.targetDownloadUrl,
         targetFileName: item.targetFileName,

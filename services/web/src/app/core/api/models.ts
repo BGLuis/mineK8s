@@ -125,6 +125,7 @@ export interface CreateServerResponse {
 export interface ContentActionRequest {
   path: string;
   action: 'UPDATE' | 'REMOVE' | 'KEEP';
+  projectId?: string;
   targetVersionId?: string;
   targetDownloadUrl?: string;
   targetFileName?: string;
@@ -138,7 +139,7 @@ export interface ContentPreviewItem {
   source: 'MODRINTH' | 'CURSEFORGE' | 'MANUAL' | null;
   projectId: string | null;
   currentVersionId: string | null;
-  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED';
+  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED' | 'COMPATIBLE';
   statusMessage: string;
   targetVersionId?: string;
   targetVersionName?: string;

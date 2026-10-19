@@ -280,7 +280,10 @@ export class ServersFilesService {
     await fs.promises.rename(tempPath, safePath);
 
     if (this.serversContentService) {
-      if (normalizedRelPath.startsWith('mods/') || normalizedRelPath.startsWith('plugins/')) {
+      if (
+        (normalizedRelPath.startsWith('mods/') || normalizedRelPath.startsWith('plugins/')) &&
+        normalizedRelPath.endsWith('.jar')
+      ) {
         const sha1 = crypto.createHash('sha1').update(file.buffer).digest('hex');
         const sha512 = crypto.createHash('sha512').update(file.buffer).digest('hex');
         await this.serversContentService.recordContent({
@@ -397,18 +400,24 @@ export class ServersFilesService {
       if (normOld.startsWith('mods/') || normOld.startsWith('plugins/')) {
         await this.serversContentService.removeContent(id, oldRelPath);
       }
-      if (normNew.startsWith('mods/') || normNew.startsWith('plugins/')) {
+      if (
+        (normNew.startsWith('mods/') || normNew.startsWith('plugins/')) &&
+        normNew.endsWith('.jar')
+      ) {
         try {
-          const buf = await fs.promises.readFile(newSafePath);
-          const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
-          const sha512 = crypto.createHash('sha512').update(buf).digest('hex');
-          await this.serversContentService.recordContent({
-            serverId: id,
-            path: newRelPath,
-            sha1,
-            sha512,
-            origin: 'MANUAL',
-          });
+          const stat = await fs.promises.stat(newSafePath);
+          if (stat.isFile()) {
+            const buf = await fs.promises.readFile(newSafePath);
+            const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+            const sha512 = crypto.createHash('sha512').update(buf).digest('hex');
+            await this.serversContentService.recordContent({
+              serverId: id,
+              path: newRelPath,
+              sha1,
+              sha512,
+              origin: 'MANUAL',
+            });
+          }
         } catch (err: any) {
           this.logger.warn(`Failed to record renamed content ${newRelPath}: ${err.message}`);
         }

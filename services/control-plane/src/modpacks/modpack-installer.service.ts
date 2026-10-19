@@ -343,8 +343,6 @@ export class ModpackInstallerService {
             sha512: f.hashes?.sha512,
             origin: 'MODPACK',
             source: (dto.source as any) || 'MODRINTH',
-            projectId: dto.projectId,
-            versionId: dto.versionId,
           });
         }
       }

@@ -24,6 +24,11 @@ export class ContentActionItemDto {
   @IsIn(['UPDATE', 'REMOVE', 'KEEP'])
   action: 'UPDATE' | 'REMOVE' | 'KEEP';
 
+  @ApiPropertyOptional({ description: 'ID do projeto Modrinth/CurseForge caso aplicável' })
+  @IsString()
+  @IsOptional()
+  projectId?: string;
+
   @ApiPropertyOptional({ description: 'ID da versão de destino caso action seja UPDATE' })
   @IsString()
   @IsOptional()

@@ -843,6 +843,9 @@ export class ServersService implements OnApplicationBootstrap {
       // 4. Purga segura de mods/ para modpacks ou ações manuais de mods/plugins (RF-STO-13, #207)
       if (dto.purge_mods === true && this.backupService) {
         await this.backupService.purgeModsDirectory(server);
+        if (this.serversContentService) {
+          await this.serversContentService.removeContent(server.id, 'mods');
+        }
       } else if (
         dto.content_actions &&
         dto.content_actions.length > 0 &&
