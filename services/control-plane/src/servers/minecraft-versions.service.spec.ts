@@ -186,6 +186,16 @@ describe('MinecraftVersionsService', () => {
       const direction = await service.getVersionDirection('26.3', '26.3');
       expect(direction).toBe('same');
     });
+
+    it('classifies unlisted 99.1 -> 99.1.1 as upgrade using compareMcVersions fallback', async () => {
+      const direction = await service.getVersionDirection('99.1', '99.1.1');
+      expect(direction).toBe('upgrade');
+    });
+
+    it('classifies unlisted 99.1.1 -> 99.1 as downgrade using compareMcVersions fallback', async () => {
+      const direction = await service.getVersionDirection('99.1.1', '99.1');
+      expect(direction).toBe('downgrade');
+    });
   });
 
   describe('error handling', () => {

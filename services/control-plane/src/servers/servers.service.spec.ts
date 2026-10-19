@@ -1484,7 +1484,9 @@ describe('ServersService', () => {
       );
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+      await warningService.cancelAllCountdowns();
+      jest.clearAllTimers();
       jest.useRealTimers();
     });
 
@@ -1651,6 +1653,41 @@ describe('ServersService', () => {
       expect(res.taskId).toBeDefined();
       expect(res.rolledBack).toBe(false);
       expect(warningService.hasActiveCountdown('srv-update-warn-1')).toBe(true);
+    });
+
+    it('updateVersion com jogadores online marca task como FAILED se o boot falhar e disparar rollback (#204, #207)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-update-fail-1',
+        subdomain: 'survival-up-fail',
+        state: 'READY',
+        game_version: '1.20.1',
+        server_type: 'VANILLA',
+        stop_warning_minutes: 5,
+        minecraft_settings: { language: 'pt-BR' },
+        ...runtimeFor('1.20.1'),
+      } as any;
+      serversDb.set('srv-update-fail-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
+
+      const res = await customService.updateVersion('srv-update-fail-1', {
+        game_version: '1.20.2',
+        warning_minutes: 1,
+      });
+
+      expect(res.taskId).toBeDefined();
+
+      await jest.advanceTimersByTimeAsync(60_000);
+      await jest.advanceTimersByTimeAsync(200);
+
+      expect(mockTaskService.update).toHaveBeenCalledWith(
+        res.taskId,
+        expect.objectContaining({
+          status: 'FAILED',
+          errorMessage: expect.stringContaining('Automatic rollback completed successfully'),
+        }),
+      );
     });
 
     it('delete cancela contagem ativa de parada antes de desprovisionar (#204)', async () => {

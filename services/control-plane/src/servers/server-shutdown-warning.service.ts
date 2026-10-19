@@ -1,4 +1,11 @@
-import { ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -54,7 +61,7 @@ export function calculateMilestones(totalSeconds: number): number[] {
 }
 
 @Injectable()
-export class ServerShutdownWarningService {
+export class ServerShutdownWarningService implements OnModuleDestroy {
   private readonly logger = new Logger(ServerShutdownWarningService.name);
   private readonly activeCountdowns = new Map<string, ActiveCountdown>();
 
@@ -332,6 +339,17 @@ export class ServerShutdownWarningService {
       }
     }
     return false;
+  }
+
+  public async onModuleDestroy(): Promise<void> {
+    await this.cancelAllCountdowns();
+  }
+
+  public async cancelAllCountdowns(): Promise<void> {
+    const actives = Array.from(this.activeCountdowns.values());
+    for (const active of actives) {
+      await active.cancel();
+    }
   }
 
   private async resolveLanguage(server: Server): Promise<ServerLanguage> {

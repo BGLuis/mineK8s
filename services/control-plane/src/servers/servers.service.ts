@@ -764,7 +764,7 @@ export class ServersService implements OnApplicationBootstrap {
             relations: { minecraft_settings: true },
           });
           if (!freshServer) return;
-          await this.executeVersionUpdate(
+          const result = await this.executeVersionUpdate(
             freshServer,
             dto,
             runtime,
@@ -774,6 +774,9 @@ export class ServersService implements OnApplicationBootstrap {
             previousRuntime,
             previousState,
           );
+          if (result.rolledBack) {
+            throw new Error(result.message);
+          }
         },
       });
 

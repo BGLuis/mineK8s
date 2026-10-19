@@ -26,8 +26,8 @@ function compareMcVersions(a: string, b: string): number {
   for (let i = 0; i < maxLen; i++) {
     const pA = partsA[i];
     const pB = partsB[i];
-    if (pA === undefined) return -1;
-    if (pB === undefined) return 1;
+    if (pA === undefined) return 1;
+    if (pB === undefined) return -1;
     if (typeof pA === 'number' && typeof pB === 'number') {
       if (pA !== pB) return pB - pA;
     } else {
