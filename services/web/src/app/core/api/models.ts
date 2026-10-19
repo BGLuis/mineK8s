@@ -35,10 +35,20 @@ export interface ServerSummary {
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
+  stop_warning_minutes?: number;
+  backup_schedule_mode?: 'OFF' | 'INTERVAL' | 'DAILY';
+  backup_interval_hours?: number | null;
+  backup_daily_time?: string | null;
+  backup_window_start?: string | null;
+  backup_window_end?: string | null;
+  backup_timezone?: string;
+  backup_retention_count?: number;
+  backup_next_run_at?: string | null;
   created_at: string;
   updated_at: string;
   replicas?: number;
   ready_replicas?: number;
+  active_countdown?: { taskId: string; action: string } | null;
 }
 
 /** ServerSettingsDto (servers/dto/server-summary.dto.ts). The RCON password is never sent. */
@@ -96,8 +106,13 @@ export interface CreateServerRequest {
   allocated_memory_mb?: number;
   auto_wake?: boolean;
   sleep_timeout_minutes?: number;
+  stop_warning_minutes?: number;
   access_policy?: ServerAccessPolicy;
   minecraft_settings?: MinecraftSettingsInput;
+}
+
+export interface StopServerRequest {
+  warning_minutes?: number;
 }
 
 export interface CreateServerResponse {
@@ -107,17 +122,75 @@ export interface CreateServerResponse {
   status: ServerState;
 }
 
+export interface ContentActionRequest {
+  path: string;
+  action: 'UPDATE' | 'REMOVE' | 'KEEP';
+  projectId?: string;
+  targetVersionId?: string;
+  targetDownloadUrl?: string;
+  targetFileName?: string;
+  targetHashes?: { sha1?: string; sha512?: string; sha256?: string };
+}
+
+export interface ContentPreviewItem {
+  path: string;
+  name: string;
+  origin: 'MANUAL' | 'MODPACK';
+  source: 'MODRINTH' | 'CURSEFORGE' | 'MANUAL' | null;
+  projectId: string | null;
+  currentVersionId: string | null;
+  status: 'UPDATE_AVAILABLE' | 'INCOMPATIBLE' | 'UNIDENTIFIED' | 'COMPATIBLE';
+  statusMessage: string;
+  targetVersionId?: string;
+  targetVersionName?: string;
+  targetDownloadUrl?: string;
+  targetFileName?: string;
+  targetHashes?: { sha1?: string; sha512?: string; sha256?: string };
+}
+
+export interface CompatibilityPreviewResponse {
+  canUpdate: boolean;
+  targetGameVersion: string;
+  targetServerType: string;
+  items: ContentPreviewItem[];
+}
+
+export interface ServerContentItem {
+  id: string;
+  serverId: string;
+  path: string;
+  sha1?: string | null;
+  sha512?: string | null;
+  origin: 'MANUAL' | 'MODPACK';
+  source?: 'MODRINTH' | 'CURSEFORGE' | 'MANUAL' | null;
+  projectId?: string | null;
+  versionId?: string | null;
+  loaders?: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UpdateVersionRequest {
   game_version: string;
   server_type?: string;
   modpack_id?: string;
   purge_mods?: boolean;
+  confirm_downgrade?: boolean;
+  warning_minutes?: number;
+  content_actions?: ContentActionRequest[];
 }
 
 export interface UpdateVersionResponse {
   message: string;
   version: string;
   rolledBack: boolean;
+  taskId?: string;
+}
+
+export interface MinecraftVersionItem {
+  id: string;
+  kind: 'release' | 'snapshot';
+  releaseTime?: string;
 }
 
 export interface MessageResponse {
@@ -646,9 +719,17 @@ export interface UpdateServerRequest {
   /** A running server restarts to pick up the new heap. */
   allocated_memory_mb?: number;
   sleep_timeout_minutes?: number;
+  stop_warning_minutes?: number;
   auto_wake?: boolean;
   is_maintenance?: boolean;
   access_policy?: Exclude<ServerAccessPolicy, 'INTERNET'>;
+  backup_schedule_mode?: 'OFF' | 'INTERVAL' | 'DAILY';
+  backup_interval_hours?: number;
+  backup_daily_time?: string;
+  backup_window_start?: string;
+  backup_window_end?: string;
+  backup_timezone?: string;
+  backup_retention_count?: number;
 }
 
 export type SettingType = 'text' | 'url' | 'domain' | 'boolean' | 'integer' | 'secret';

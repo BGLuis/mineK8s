@@ -104,5 +104,8 @@ export class ServerJarSourcesConfig {
     public readonly mojangManifestUrl: string,
     public readonly paperApiUrl: string,
     public readonly purpurApiUrl: string,
+    public readonly fabricMetaUrl: string = 'https://meta.fabricmc.net',
+    public readonly neoforgeMavenUrl: string = 'https://maven.neoforged.net',
+    public readonly forgePromotionsUrl: string = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json',
   ) {}
 }

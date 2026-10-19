@@ -17,6 +17,7 @@ import {
   ModpackTaskEntity,
   ModpackTaskStatus,
   CasObjectEntity,
+  ServerContent,
 } from './entities';
 
 describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
@@ -27,10 +28,21 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     server.server_type = 'PAPER';
     server.game_version = '1.20.4';
 
+    server.backup_schedule_mode = 'DAILY';
+    server.backup_interval_hours = 12;
+    server.backup_daily_time = '04:00';
+    server.backup_timezone = 'America/Sao_Paulo';
+    server.backup_retention_count = 5;
+
     expect(server.name).toBe('Survival World');
     expect(server.subdomain).toBe('survival');
     expect(server.server_type).toBe('PAPER');
     expect(server.game_version).toBe('1.20.4');
+    expect(server.backup_schedule_mode).toBe('DAILY');
+    expect(server.backup_interval_hours).toBe(12);
+    expect(server.backup_daily_time).toBe('04:00');
+    expect(server.backup_timezone).toBe('America/Sao_Paulo');
+    expect(server.backup_retention_count).toBe(5);
   });
 
   it('should instantiate MinecraftServerSettings with canonical defaults', () => {
@@ -175,5 +187,29 @@ describe('Database Entities Model (RF-RCON-11, RF-TS-10, RF-MG-01)', () => {
     expect(cas.fileName).toBe('sodium-fabric-0.5.8.jar');
     expect(cas.fileSize).toBe(450123);
     expect(cas.contentType).toBe('application/java-archive');
+  });
+
+  it('should instantiate ServerContent with mod and plugin tracking metadata (#207)', () => {
+    const content = new ServerContent();
+    content.id = 'content-1';
+    content.serverId = 'srv-1';
+    content.path = 'mods/lithium-fabric.jar';
+    content.sha1 = '1234567890abcdef1234567890abcdef12345678';
+    content.sha512 = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+    content.origin = 'MODPACK';
+    content.source = 'MODRINTH';
+    content.projectId = 'lithium';
+    content.versionId = 'v0.11.2';
+    content.loaders = ['fabric', 'quilt'];
+
+    expect(content.id).toBe('content-1');
+    expect(content.serverId).toBe('srv-1');
+    expect(content.path).toBe('mods/lithium-fabric.jar');
+    expect(content.sha1).toBe('1234567890abcdef1234567890abcdef12345678');
+    expect(content.origin).toBe('MODPACK');
+    expect(content.source).toBe('MODRINTH');
+    expect(content.projectId).toBe('lithium');
+    expect(content.versionId).toBe('v0.11.2');
+    expect(content.loaders).toEqual(['fabric', 'quilt']);
   });
 });

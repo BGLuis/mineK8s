@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import {
   BadRequestException,
@@ -8,8 +11,11 @@ import {
 import { Server } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServersService } from './servers.service';
+import { ServersBackupService } from './servers-backup.service';
 import { ServerType } from './dto/create-server.dto';
 import { RouteAction } from '../gateway-ipc/gateway-ipc.interfaces';
+import { serverDataDirectory } from '@k8s/server-data-volume';
+import { ServerShutdownWarningService } from './server-shutdown-warning.service';
 
 describe('ServersService', () => {
   let service: ServersService;
@@ -24,6 +30,10 @@ describe('ServersService', () => {
   let mockRuntimeResolver: any;
   let playerSessions: PlayerSessionsService;
   let mockNodeMetrics: { assertDiskAllowsCreation: jest.Mock };
+  let mockConsoleDriver: any;
+  let mockLogStreamer: any;
+  let mockDnsDriver: any;
+  let mockVersionsService: any;
 
   const runtimeFor = (version: string) => ({
     java_version: version.startsWith('26.') ? 25 : 21,
@@ -112,7 +122,7 @@ describe('ServersService', () => {
       ]),
     };
 
-    const mockConsoleDriver = {
+    mockConsoleDriver = {
       sendCommand: jest.fn().mockResolvedValue('Command output'),
       listPlayers: jest.fn().mockResolvedValue(['Steve']),
       saveOff: jest.fn().mockResolvedValue('OK'),
@@ -127,7 +137,7 @@ describe('ServersService', () => {
       findOne: jest.fn(async () => null),
     };
 
-    const mockLogStreamer = {
+    mockLogStreamer = {
       getBuffer: jest.fn().mockReturnValue({
         getHistory: jest
           .fn()
@@ -152,10 +162,13 @@ describe('ServersService', () => {
     };
 
     mockSlpProbeService = {
-      probe: jest.fn().mockResolvedValue({ ready: true }),
+      probe: jest.fn().mockImplementation(async () => {
+        const s = serversDb.get('srv-update-1');
+        return { ready: true, version: s?.game_version ? `Paper ${s.game_version}` : '1.20.5' };
+      }),
     };
 
-    const mockDnsDriver = {
+    mockDnsDriver = {
       upsertSrvRecord: jest.fn().mockResolvedValue({ id: 'rec-srv-1' }),
       deleteRecordByNameAndType: jest.fn().mockResolvedValue(true),
       getRootDomain: jest.fn().mockReturnValue('minek8s.net'),
@@ -167,6 +180,13 @@ describe('ServersService', () => {
 
     playerSessions = new PlayerSessionsService();
     mockNodeMetrics = { assertDiskAllowsCreation: jest.fn().mockResolvedValue(undefined) };
+    mockVersionsService = {
+      getVersionDirection: jest.fn(async (from: string, to: string) => {
+        if (from === '26.3' && to === '1.21.11') return 'downgrade';
+        if (from === '1.21.11' && to === '26.1') return 'upgrade';
+        return 'upgrade';
+      }),
+    };
 
     service = new ServersService(
       mockServerRepo as any,
@@ -183,6 +203,8 @@ describe('ServersService', () => {
       playerSessions,
       mockNodeMetrics as any,
       mockIconService as any,
+      undefined,
+      mockVersionsService,
     );
   });
 
@@ -383,7 +405,7 @@ describe('ServersService', () => {
 
       const res = await service.stop('srv-1');
       expect(res.message).toBe('Instance stopping');
-      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
       expect(server.state).toBe('STOPPED');
     });
   });
@@ -915,6 +937,7 @@ describe('ServersService', () => {
         id: 'srv-update-1',
         name: 'Survival Server',
         subdomain: 'survival',
+        resource_name: 'survival',
         state: 'READY',
         game_version: '1.20.4',
         server_type: 'PAPER',
@@ -947,8 +970,34 @@ describe('ServersService', () => {
       );
     });
 
+    it('calls graceful stop before pre-update backup and waits for pod termination (#199)', async () => {
+      let stopResolved = false;
+      let backupCalledAfterStop = false;
+
+      mockK8sService.stopServer.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        stopResolved = true;
+      });
+
+      mockBackupService.createPreUpdateBackup.mockImplementation(async () => {
+        backupCalledAfterStop = stopResolved;
+        return '/tmp/backup-order-test';
+      });
+
+      await service.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+        purge_mods: true,
+      });
+
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'srv-update-1' }),
+        'READY',
+      );
+      expect(backupCalledAfterStop).toBe(true);
+    });
+
     it('should trigger automated rollback when boot of new version fails (RF-STO-13)', async () => {
-      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
 
       const result = await service.updateVersion('srv-update-1', {
         game_version: '1.21.0',
@@ -964,13 +1013,75 @@ describe('ServersService', () => {
       expect(result.version).toBe('1.20.4');
     });
 
+    it('should trigger automated rollback when probe returns synthetic gateway status during window (#198)', async () => {
+      // Gateway synthetic status has version 'mineK8s' or status text instead of target MC version
+      mockSlpProbeService.probe.mockResolvedValue({
+        ready: true,
+        version: 'mineK8s',
+      });
+
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.21.0',
+        purge_mods: true,
+      });
+
+      expect(mockBackupService.restorePreUpdateBackup).toHaveBeenCalled();
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.game_version).toBe('1.20.4');
+      expect(server.state).toBe('READY');
+      expect(result.rolledBack).toBe(true);
+      expect(result.version).toBe('1.20.4');
+    });
+
+    it('should probe the internal cluster Service host outside mock driver (#198)', async () => {
+      const mockConfigService = {
+        isTest: false,
+        kubernetes: {
+          useMockDriver: false,
+          namespace: 'minekubernetes',
+        },
+      };
+
+      const customService = new ServersService(
+        mockServerRepo as any,
+        mockSettingsRepo as any,
+        mockAuditRepo as any,
+        mockK8sService as any,
+        mockConsoleDriver as any,
+        mockLogStreamer as any,
+        mockRuntimeResolver as any,
+        mockBackupService as any,
+        mockGatewayIpcService as any,
+        mockSlpProbeService as any,
+        mockDnsDriver as any,
+        playerSessions,
+        mockNodeMetrics as any,
+        mockIconService as any,
+        mockConfigService as any,
+      );
+
+      const srv = { resource_name: 'survival' } as Server;
+      expect(customService.getProbeHost(srv)).toBe('mc-survival.minekubernetes.svc.cluster.local');
+
+      await customService.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+        purge_mods: true,
+      });
+
+      expect(mockSlpProbeService.probe).toHaveBeenCalledWith(
+        'mc-survival.minekubernetes.svc.cluster.local',
+        25565,
+        3000,
+      );
+    });
+
     it('should start the new version on its own jar and Java, and the old ones after a rollback (#156)', async () => {
       Object.assign(serversDb.get('srv-update-1')!, runtimeFor('1.21.11'));
       const startedWith: { java: number | null; jar: string | null }[] = [];
       mockK8sService.startServer.mockImplementation(async (s: Server) => {
         startedWith.push({ java: s.java_version, jar: s.server_jar_url });
       });
-      mockSlpProbeService.probe.mockResolvedValueOnce({ ready: false });
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
 
       await service.updateVersion('srv-update-1', { game_version: '26.2' });
 
@@ -1005,6 +1116,221 @@ describe('ServersService', () => {
       await expect(
         service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('should permit update on FABRIC server with pre-update backup and restart (#207)', async () => {
+      const server = serversDb.get('srv-update-1')!;
+      server.server_type = 'FABRIC';
+
+      const result = await service.updateVersion('srv-update-1', { game_version: '1.21.0' });
+
+      expect(result.rolledBack).toBe(false);
+      expect(result.version).toBe('1.21.0');
+      expect(mockK8sService.stopServer).toHaveBeenCalled();
+      expect(mockBackupService.createPreUpdateBackup).toHaveBeenCalled();
+    });
+
+    it('should not purge mods on PAPER server when purge_mods is omitted (#200)', async () => {
+      await service.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+      });
+
+      expect(mockBackupService.purgeModsDirectory).not.toHaveBeenCalled();
+    });
+
+    it('updateVersion de 26.3 para 1.21.11 sem confirm_downgrade devolve 409 e não chama stopServer; com confirm_downgrade: true, segue o pipeline (#203)', async () => {
+      const server = serversDb.get('srv-update-1')!;
+      server.game_version = '26.3';
+
+      try {
+        await service.updateVersion('srv-update-1', {
+          game_version: '1.21.11',
+        });
+        throw new Error('should have thrown ConflictException');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConflictException);
+        const res = (err as ConflictException).getResponse();
+        expect(res).toEqual(
+          expect.objectContaining({
+            from: '26.3',
+            to: '1.21.11',
+            direction: 'downgrade',
+          }),
+        );
+      }
+
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // Com confirm_downgrade: true, segue o pipeline
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.21.11',
+        confirm_downgrade: true,
+      });
+
+      expect(result.version).toBe('1.21.11');
+      expect(mockK8sService.stopServer).toHaveBeenCalled();
+    });
+
+    it('creates a protected PRE_UPDATE backup record with 14-day retention and leaves nothing in <serverDir>/.backups (#201)', async () => {
+      const tempStorageRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-data-srv-'),
+      );
+      const tempBackupsRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-backups-srv-'),
+      );
+
+      try {
+        const serverDir = path.join(tempStorageRoot, serverDataDirectory('survival'));
+        await fs.promises.mkdir(path.join(serverDir, 'world'), { recursive: true });
+        await fs.promises.writeFile(path.join(serverDir, 'world', 'level.dat'), 'seed=123');
+        await fs.promises.writeFile(path.join(serverDir, 'server.properties'), 'motd=Test');
+
+        const inMemBackups: any[] = [];
+        const testBackupRepo: any = {
+          create: jest.fn((dto) => ({
+            id: `bk-${inMemBackups.length + 1}`,
+            createdAt: new Date(),
+            ...dto,
+          })),
+          save: jest.fn(async (e) => {
+            inMemBackups.push(e);
+            return e;
+          }),
+          find: jest.fn(async () => inMemBackups),
+        };
+
+        const realBackupService = new ServersBackupService(
+          { storage: { serversDataRoot: tempStorageRoot, backupsPath: tempBackupsRoot } } as any,
+          mockK8sService,
+          mockConsoleDriver,
+          undefined,
+          testBackupRepo,
+        );
+
+        const customService = new ServersService(
+          mockServerRepo as any,
+          mockSettingsRepo as any,
+          mockAuditRepo as any,
+          mockK8sService,
+          mockConsoleDriver,
+          mockLogStreamer,
+          mockRuntimeResolver,
+          realBackupService,
+          mockGatewayIpcService,
+          mockSlpProbeService,
+          mockDnsDriver,
+          undefined,
+          undefined,
+          undefined,
+          { isTest: true } as any,
+        );
+
+        await customService.updateVersion('srv-update-1', { game_version: '1.20.5' });
+
+        expect(inMemBackups).toHaveLength(1);
+        const record = inMemBackups[0];
+        expect(record.backupType).toBe('PRE_UPDATE');
+        expect(record.isProtected).toBe(true);
+        expect(fs.existsSync(record.storagePath)).toBe(true);
+        expect(record.storagePath.endsWith('.tar.gz')).toBe(true);
+        expect(fs.existsSync(`${record.storagePath}.sha256`)).toBe(true);
+        expect(fs.existsSync(path.join(serverDir, '.backups'))).toBe(false);
+
+        const diffDays = (record.retentionExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        expect(diffDays).toBeGreaterThan(13.9);
+        expect(diffDays).toBeLessThanOrEqual(14.1);
+
+        const backupsList = await realBackupService.listBackups('srv-update-1');
+        expect(backupsList).toHaveLength(1);
+        expect(backupsList[0].id).toBe(record.id);
+      } finally {
+        await fs.promises.rm(tempStorageRoot, { recursive: true, force: true });
+        await fs.promises.rm(tempBackupsRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('restores from the pre-update archive record during rollback (#201)', async () => {
+      const tempStorageRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-data-srv-rb-'),
+      );
+      const tempBackupsRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'servers-backups-srv-rb-'),
+      );
+
+      try {
+        const serverDir = path.join(tempStorageRoot, serverDataDirectory('survival'));
+        await fs.promises.mkdir(path.join(serverDir, 'world'), { recursive: true });
+        await fs.promises.writeFile(
+          path.join(serverDir, 'world', 'level.dat'),
+          'seed=original-world',
+        );
+        await fs.promises.writeFile(path.join(serverDir, 'server.properties'), 'motd=OriginalMOTD');
+
+        const inMemBackups: any[] = [];
+        const testBackupRepo: any = {
+          create: jest.fn((dto) => ({
+            id: `bk-${inMemBackups.length + 1}`,
+            createdAt: new Date(),
+            ...dto,
+          })),
+          save: jest.fn(async (e) => {
+            inMemBackups.push(e);
+            return e;
+          }),
+          find: jest.fn(async () => inMemBackups),
+        };
+
+        const realBackupService = new ServersBackupService(
+          { storage: { serversDataRoot: tempStorageRoot, backupsPath: tempBackupsRoot } } as any,
+          mockK8sService,
+          mockConsoleDriver,
+          undefined,
+          testBackupRepo,
+        );
+
+        mockSlpProbeService.probe.mockResolvedValue({ ready: false });
+
+        const customService = new ServersService(
+          mockServerRepo as any,
+          mockSettingsRepo as any,
+          mockAuditRepo as any,
+          mockK8sService,
+          mockConsoleDriver,
+          mockLogStreamer,
+          mockRuntimeResolver,
+          realBackupService,
+          mockGatewayIpcService,
+          mockSlpProbeService,
+          mockDnsDriver,
+          undefined,
+          undefined,
+          undefined,
+          { isTest: true } as any,
+        );
+
+        mockK8sService.startServer.mockImplementationOnce(async () => {
+          await fs.promises.writeFile(
+            path.join(serverDir, 'server.properties'),
+            'motd=BrokenAfterUpdate',
+          );
+        });
+
+        const result = await customService.updateVersion('srv-update-1', {
+          game_version: '1.21.0',
+        });
+
+        expect(result.rolledBack).toBe(true);
+        expect(result.version).toBe('1.20.4');
+
+        const restoredMotd = await fs.promises.readFile(
+          path.join(serverDir, 'server.properties'),
+          'utf-8',
+        );
+        expect(restoredMotd).toBe('motd=OriginalMOTD');
+      } finally {
+        await fs.promises.rm(tempStorageRoot, { recursive: true, force: true });
+        await fs.promises.rm(tempBackupsRoot, { recursive: true, force: true });
+      }
     });
   });
 
@@ -1117,6 +1443,311 @@ describe('ServersService', () => {
       expect(result.access_policy).toBe('GROUP');
       expect(server.access_policy).toBe('GROUP');
       expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith(server.id);
+    });
+  });
+
+  describe('aviso aos jogadores antes de parar o servidor (#204)', () => {
+    let warningService: ServerShutdownWarningService;
+    let customService: ServersService;
+    let mockTaskService: any;
+
+    beforeEach(() => {
+      mockTaskService = {
+        register: jest.fn(),
+        update: jest.fn(),
+        registerCancelHandler: jest.fn(),
+        unregisterCancelHandler: jest.fn(),
+      };
+      warningService = new ServerShutdownWarningService(
+        mockConsoleDriver as any,
+        mockTaskService as any,
+        mockSettingsRepo as any,
+      );
+      customService = new ServersService(
+        mockServerRepo as any,
+        mockSettingsRepo as any,
+        mockAuditRepo as any,
+        mockK8sService as any,
+        mockConsoleDriver as any,
+        mockLogStreamer as any,
+        mockRuntimeResolver as any,
+        mockBackupService as any,
+        mockGatewayIpcService as any,
+        mockSlpProbeService as any,
+        mockDnsDriver as any,
+        playerSessions,
+        mockNodeMetrics as any,
+        mockIconService as any,
+        undefined,
+        mockVersionsService,
+        warningService,
+      );
+    });
+
+    afterEach(async () => {
+      await warningService.cancelAllCountdowns();
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    });
+
+    it('Teste com relógio falso: stop com 10 min e um jogador online envia tellraw aos 10, 5 e 1 min, aos 30 s e aos 10 s, e só então chama stopServer (#204)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-stop-warn-1',
+        subdomain: 'survival',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const res = await customService.stop('srv-stop-warn-1', { warning_minutes: 10 });
+      expect(res.message).toBe('Instance stopping');
+      expect(res.taskId).toBeDefined();
+
+      // Marco 10 min
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('10 minutos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 5 min restantes
+      await jest.advanceTimersByTimeAsync(300_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('5 minutos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 1 min restante
+      await jest.advanceTimersByTimeAsync(240_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('1 minuto'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 30 s restantes
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('30 segundos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 10 s restantes
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('10 segundos'),
+      );
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // 0 s restantes -> chama stopServer
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+      expect(server.state).toBe('STOPPED');
+    });
+
+    it('Teste: sem jogadores online, stop chama stopServer sem esperar (#204)', async () => {
+      const server = {
+        id: 'srv-stop-warn-2',
+        subdomain: 'survival2',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-2', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue([]);
+
+      const res = await customService.stop('srv-stop-warn-2', { warning_minutes: 10 });
+      expect(res.message).toBe('Instance stopping');
+      expect(res.taskId).toBeUndefined();
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+      expect(server.state).toBe('STOPPED');
+    });
+
+    it('Teste: cancelar durante a contagem não chama stopServer e envia a mensagem de cancelamento (#204)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-stop-warn-3',
+        subdomain: 'survival3',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-3', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      await customService.stop('srv-stop-warn-3', { warning_minutes: 10 });
+      await jest.advanceTimersByTimeAsync(300_000);
+
+      const cancelRes = await customService.cancelStop('srv-stop-warn-3');
+      expect(cancelRes.message).toBe('Stop countdown cancelled');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('A parada do servidor foi cancelada.'),
+      );
+
+      await jest.advanceTimersByTimeAsync(600_000);
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(server.state).toBe('READY');
+    });
+
+    it('Teste: stop_warning_minutes = 0 no servidor para na hora; warning_minutes: 3 na ação começa a contagem em 3 min (#204)', async () => {
+      const server = {
+        id: 'srv-stop-warn-4',
+        subdomain: 'survival4',
+        state: 'READY',
+        stop_warning_minutes: 0,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-stop-warn-4', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      // stop_warning_minutes = 0 -> para na hora
+      await customService.stop('srv-stop-warn-4');
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+
+      mockK8sService.stopServer.mockClear();
+      mockConsoleDriver.sendCommand.mockClear();
+
+      // Reset state for second test
+      server.state = 'READY';
+
+      // warning_minutes = 3 -> começa contagem em 3 min
+      jest.useFakeTimers();
+      await customService.stop('srv-stop-warn-4', { warning_minutes: 3 });
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('3 minutos'),
+      );
+
+      await jest.advanceTimersByTimeAsync(180_000);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
+    });
+
+    it('updateVersion com jogadores online agenda contagem e devolve taskId (#204)', async () => {
+      const server = {
+        id: 'srv-update-warn-1',
+        subdomain: 'survival-up',
+        state: 'READY',
+        game_version: '1.20.1',
+        server_type: 'VANILLA',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-update-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const res = await customService.updateVersion('srv-update-warn-1', {
+        game_version: '1.20.2',
+        warning_minutes: 5,
+      });
+
+      expect(res.message).toBe('Version update scheduled with player warning countdown');
+      expect(res.version).toBe('1.20.2');
+      expect(res.taskId).toBeDefined();
+      expect(res.rolledBack).toBe(false);
+      expect(warningService.hasActiveCountdown('srv-update-warn-1')).toBe(true);
+    });
+
+    it('updateVersion com jogadores online marca task como FAILED se o boot falhar e disparar rollback (#204, #207)', async () => {
+      jest.useFakeTimers();
+      const server = {
+        id: 'srv-update-fail-1',
+        subdomain: 'survival-up-fail',
+        state: 'READY',
+        game_version: '1.20.1',
+        server_type: 'VANILLA',
+        stop_warning_minutes: 5,
+        minecraft_settings: { language: 'pt-BR' },
+        ...runtimeFor('1.20.1'),
+      } as any;
+      serversDb.set('srv-update-fail-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
+
+      const res = await customService.updateVersion('srv-update-fail-1', {
+        game_version: '1.20.2',
+        warning_minutes: 1,
+      });
+
+      expect(res.taskId).toBeDefined();
+
+      await jest.advanceTimersByTimeAsync(60_000);
+      await jest.advanceTimersByTimeAsync(200);
+
+      expect(mockTaskService.update).toHaveBeenCalledWith(
+        res.taskId,
+        expect.objectContaining({
+          status: 'FAILED',
+          errorMessage: expect.stringContaining('Automatic rollback completed successfully'),
+        }),
+      );
+    });
+
+    it('delete cancela contagem ativa de parada antes de desprovisionar (#204)', async () => {
+      const server = {
+        id: 'srv-del-warn-1',
+        resource_name: 'del-warn-1',
+        subdomain: 'del-warn-1',
+        state: 'READY',
+        stop_warning_minutes: 10,
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-del-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      await customService.stop('srv-del-warn-1', { warning_minutes: 10 });
+      expect(warningService.hasActiveCountdown('srv-del-warn-1')).toBe(true);
+
+      const delRes = await customService.delete('srv-del-warn-1');
+      expect(delRes.message).toBe('Instance removed');
+      expect(warningService.hasActiveCountdown('srv-del-warn-1')).toBe(false);
+    });
+
+    it('findOne e findAll incluem active_countdown (#204)', async () => {
+      const server = {
+        id: 'srv-find-warn-1',
+        name: 'Survival',
+        resource_name: 'find-warn-1',
+        subdomain: 'find-warn-1',
+        game_type: 'minecraft',
+        routing_model: 'subdomain',
+        server_type: 'VANILLA',
+        game_version: '1.20.1',
+        allocated_memory_mb: 4096,
+        allocated_port: null,
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+        auto_wake: true,
+        sleep_timeout_minutes: 15,
+        stop_warning_minutes: 10,
+        created_at: new Date(),
+        updated_at: new Date(),
+        minecraft_settings: { language: 'pt-BR' },
+      } as any;
+      serversDb.set('srv-find-warn-1', server);
+      mockConsoleDriver.listPlayers.mockResolvedValue(['Steve']);
+
+      const stopRes = await customService.stop('srv-find-warn-1', { warning_minutes: 10 });
+      const found = await customService.findOne('srv-find-warn-1');
+      expect(found.active_countdown).toEqual({
+        taskId: stopRes.taskId,
+        action: 'stop',
+      });
+
+      const list = await customService.findAll();
+      const listed = list.find((s) => s.id === 'srv-find-warn-1');
+      expect(listed?.active_countdown).toEqual({
+        taskId: stopRes.taskId,
+        action: 'stop',
+      });
     });
   });
 });

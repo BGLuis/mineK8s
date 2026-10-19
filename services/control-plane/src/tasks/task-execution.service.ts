@@ -12,12 +12,31 @@ export class TaskExecutionService {
   private readonly logger = new Logger(TaskExecutionService.name);
   private readonly tasks = new Map<string, TaskStateDto>();
   private readonly listeners = new Set<(task: TaskStateDto) => void>();
+  private readonly cancelHandlers = new Map<string, () => Promise<void>>();
 
   public onProgress(listener: (task: TaskStateDto) => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public registerCancelHandler(taskId: string, handler: () => Promise<void>): void {
+    this.cancelHandlers.set(taskId, handler);
+  }
+
+  public unregisterCancelHandler(taskId: string): void {
+    this.cancelHandlers.delete(taskId);
+  }
+
+  public async cancelTask(taskId: string): Promise<boolean> {
+    const handler = this.cancelHandlers.get(taskId);
+    if (handler) {
+      this.cancelHandlers.delete(taskId);
+      await handler();
+      return true;
+    }
+    return false;
   }
 
   public register(

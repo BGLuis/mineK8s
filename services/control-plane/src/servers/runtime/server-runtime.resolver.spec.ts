@@ -14,6 +14,7 @@ const fixture = (name: string) => fs.readFileSync(path.join(__dirname, 'fixtures
 const MANIFEST_URL = 'https://meta.test/mc/game/version_manifest_v2.json';
 const PAPER_API = 'https://fill.test';
 const PURPUR_API = 'https://purpur.test';
+const FABRIC_META = 'https://meta.fabricmc.test';
 
 describe('ServerRuntimeResolver', () => {
   const originalFetch = global.fetch;
@@ -30,7 +31,15 @@ describe('ServerRuntimeResolver', () => {
   beforeEach(() => {
     routes = new Map();
     serve(MANIFEST_URL, fixture('mojang-version-manifest-v2.json'));
-    for (const version of ['26.3', '1.21.1', '1.20.4', '1.17.1', '1.16.5', '1.0']) {
+    for (const version of [
+      '26.4-snapshot-4',
+      '26.3',
+      '1.21.1',
+      '1.20.4',
+      '1.17.1',
+      '1.16.5',
+      '1.0',
+    ]) {
       serve(mojangUrl(version), fixture(`mojang-${version}.json`));
     }
     for (const version of ['1.21.11', '26.3']) {
@@ -53,6 +62,7 @@ describe('ServerRuntimeResolver', () => {
         mojangManifestUrl: MANIFEST_URL,
         paperApiUrl: PAPER_API,
         purpurApiUrl: PURPUR_API,
+        fabricMetaUrl: FABRIC_META,
       },
     } as any);
   });
@@ -90,6 +100,17 @@ describe('ServerRuntimeResolver', () => {
       );
 
       await expect(resolver.resolve('VANILLA', '1.21.1')).rejects.toThrow(BadGatewayException);
+    });
+
+    it('resolves a snapshot version like 26.4-snapshot-4 (#202)', async () => {
+      await expect(resolver.resolve('VANILLA', '26.4-snapshot-4')).resolves.toEqual({
+        java_version: 25,
+        server_jar_url:
+          'https://piston-data.mojang.com/v1/objects/d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5/server.jar',
+        server_jar_checksum: 'sha1:d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5',
+        server_build: null,
+        server_build_channel: null,
+      });
     });
   });
 
@@ -196,6 +217,31 @@ describe('ServerRuntimeResolver', () => {
         server_jar_url: `${PURPUR_API}/v2/purpur/1.21.1/2329/download`,
         server_jar_checksum: 'md5:dc0026462cac76c869335feb43388a76',
         server_build: '2329',
+        server_build_channel: null,
+      });
+    });
+  });
+
+  describe('Fabric (#206)', () => {
+    it('CRITÉRIO DE ACEITE: o resolver de runtime de FABRIC 1.21.1 devolve server_jar_url do meta e um server_jar_checksum sha256:', async () => {
+      serve(
+        `${FABRIC_META}/v2/versions/loader/1.21.1`,
+        JSON.stringify([{ loader: { version: '0.16.9', stable: true } }]),
+      );
+      serve(
+        `${FABRIC_META}/v2/versions/installer`,
+        JSON.stringify([{ version: '1.1.2', stable: true }]),
+      );
+      const fakeJar = 'fabric-server-jar-content';
+      serve(`${FABRIC_META}/v2/versions/loader/1.21.1/0.16.9/1.1.2/server/jar`, fakeJar);
+
+      const expectedSha256 = createHash('sha256').update(fakeJar).digest('hex');
+
+      await expect(resolver.resolve('FABRIC', '1.21.1')).resolves.toEqual({
+        java_version: 21,
+        server_jar_url: `${FABRIC_META}/v2/versions/loader/1.21.1/0.16.9/1.1.2/server/jar`,
+        server_jar_checksum: `sha256:${expectedSha256}`,
+        server_build: '0.16.9',
         server_build_channel: null,
       });
     });

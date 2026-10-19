@@ -173,4 +173,12 @@ export class MockKubernetesDriver implements IKubernetesDriver {
     job.status.podPhase = 'Succeeded';
     return true;
   }
+
+  async waitForDeploymentPodsTerminated(
+    _deploymentName: string,
+    _timeoutMs = 90000,
+    _namespace = 'minekubernetes',
+  ): Promise<boolean> {
+    return true;
+  }
 }

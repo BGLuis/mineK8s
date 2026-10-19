@@ -14,9 +14,10 @@ export type ServerRuntime = Pick<
   | 'server_build_channel'
 >;
 
-const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
+const MC_VERSION_PATTERN =
+  /^(?:\d+(\.\d+)+(-[a-zA-Z0-9._-]+)?|\d{2}w\d{2}[a-z](-[a-zA-Z0-9._-]+)?)$/;
 /** Their installer provides the jar; only the Java version is resolved here. */
-const MODPACK_LOADER_TYPES = ['FORGE', 'NEOFORGE', 'FABRIC'];
+const MODPACK_LOADER_TYPES = ['FORGE', 'NEOFORGE'];
 /** Java majors with an eclipse-temurin JRE image. There is no 16, and 17 runs what asks for 16. */
 const RUNNER_JAVA_VERSIONS = [8, 11, 17, 21, 25];
 // Fill v3 refuses requests without an identifying User-Agent.
@@ -48,6 +49,20 @@ interface PurpurBuild {
   md5: string;
 }
 
+interface FabricLoaderEntry {
+  loader?: {
+    version: string;
+    stable?: boolean;
+  };
+  version?: string;
+  stable?: boolean;
+}
+
+interface FabricInstallerEntry {
+  version: string;
+  stable?: boolean;
+}
+
 @Injectable()
 export class ServerRuntimeResolver {
   constructor(private readonly configService: AppConfigService) {}
@@ -61,6 +76,7 @@ export class ServerRuntimeResolver {
     if (type === 'VANILLA') return this.resolveVanilla(gameVersion);
     if (type === 'PAPER') return this.resolvePaper(gameVersion);
     if (type === 'PURPUR') return this.resolvePurpur(gameVersion);
+    if (type === 'FABRIC') return this.resolveFabric(gameVersion);
     if (MODPACK_LOADER_TYPES.includes(type)) {
       const mojang = await this.mojangVersion(gameVersion);
       return {
@@ -146,6 +162,63 @@ export class ServerRuntimeResolver {
       server_jar_url: `${base}/${latest.build}/download`,
       server_jar_checksum: `md5:${latest.md5}`,
       server_build: latest.build,
+      server_build_channel: null,
+    };
+  }
+
+  private async resolveFabric(version: string): Promise<ServerRuntime> {
+    const metaBase = this.configService.serverJarSources.fabricMetaUrl;
+    const [mojang, loaders, installers] = await Promise.all([
+      this.mojangVersion(version),
+      this.getJson<FabricLoaderEntry[]>(`${metaBase}/v2/versions/loader/${version}`),
+      this.getJson<FabricInstallerEntry[]>(`${metaBase}/v2/versions/installer`),
+    ]);
+
+    if (!loaders || loaders.length === 0) {
+      throw new BadRequestException(`Fabric has no loader for Minecraft ${version}`);
+    }
+
+    const loaderVersion =
+      loaders.find((l) => l.loader?.stable ?? l.stable)?.loader?.version ||
+      loaders.find((l) => l.loader?.stable ?? l.stable)?.version ||
+      loaders[0]?.loader?.version ||
+      loaders[0]?.version;
+    if (!loaderVersion) {
+      throw new BadRequestException(`Fabric has no valid loader version for Minecraft ${version}`);
+    }
+
+    const installerVersion =
+      installers?.find((i) => i.stable)?.version || installers?.[0]?.version || '1.1.2';
+
+    const jarUrl = `${metaBase}/v2/versions/loader/${version}/${loaderVersion}/${installerVersion}/server/jar`;
+
+    let res: Response;
+    try {
+      res = await fetch(jarUrl, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      throw new BadGatewayException(
+        `Could not reach ${new URL(jarUrl).host}: ${(err as Error).message}`,
+      );
+    }
+
+    if (res.status === 404) {
+      throw new BadRequestException(`Fabric server jar not found for Minecraft ${version}`);
+    }
+    if (!res.ok) {
+      throw new BadGatewayException(`Fabric meta answered HTTP ${res.status}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const sha256 = createHash('sha256').update(Buffer.from(arrayBuffer)).digest('hex');
+
+    return {
+      java_version: this.runnerJava(version, mojang.javaVersion?.majorVersion),
+      server_jar_url: jarUrl,
+      server_jar_checksum: `sha256:${sha256}`,
+      server_build: loaderVersion,
       server_build_channel: null,
     };
   }

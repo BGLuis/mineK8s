@@ -7,16 +7,20 @@ import {
   CreateServerRequest,
   CreateServerResponse,
   MessageResponse,
+  MinecraftVersionItem,
   PublishResponse,
   ServerDetail,
   ServerLogsResponse,
   ServerPlayers,
   ServerRuntimeStats,
   ServerSummary,
+  StopServerRequest,
   UpdateServerRequest,
   UpdateServerSettingsRequest,
   UpdateVersionRequest,
   UpdateVersionResponse,
+  CompatibilityPreviewResponse,
+  ServerContentItem,
 } from './models';
 
 /** servers.controller.ts, `api/servers`. */
@@ -44,12 +48,16 @@ export class ServersApi {
     return this.api.post(`/api/servers/${id}/start`);
   }
 
-  stop(id: string): Observable<MessageResponse> {
-    return this.api.post(`/api/servers/${id}/stop`);
+  stop(id: string, dto?: StopServerRequest): Observable<MessageResponse & { taskId?: string }> {
+    return this.api.post(`/api/servers/${id}/stop`, dto ?? {});
   }
 
-  restart(id: string): Observable<MessageResponse> {
-    return this.api.post(`/api/servers/${id}/restart`);
+  restart(id: string, dto?: StopServerRequest): Observable<MessageResponse & { taskId?: string }> {
+    return this.api.post(`/api/servers/${id}/restart`, dto ?? {});
+  }
+
+  cancelStop(id: string): Observable<MessageResponse> {
+    return this.api.post(`/api/servers/${id}/cancel-stop`);
   }
 
   update(id: string, patch: UpdateServerRequest): Observable<ServerDetail> {
@@ -58,6 +66,26 @@ export class ServersApi {
 
   updateVersion(id: string, dto: UpdateVersionRequest): Observable<UpdateVersionResponse> {
     return this.api.post(`/api/servers/${id}/update-version`, dto);
+  }
+
+  previewUpdateVersion(
+    id: string,
+    dto: {
+      game_version: string;
+      server_type?: string;
+      modpack_id?: string;
+      modpack_version_id?: string;
+    },
+  ): Observable<CompatibilityPreviewResponse> {
+    return this.api.post(`/api/servers/${id}/update-version/preview`, dto);
+  }
+
+  identifyContent(id: string): Observable<ServerContentItem[]> {
+    return this.api.post(`/api/servers/${id}/content/identify`);
+  }
+
+  listContent(id: string): Observable<ServerContentItem[]> {
+    return this.api.get(`/api/servers/${id}/content`);
   }
 
   delete(id: string): Observable<MessageResponse> {
@@ -105,5 +133,11 @@ export class ServersApi {
 
   unpublish(id: string): Observable<PublishResponse> {
     return this.api.delete(`/api/servers/${id}/publish`);
+  }
+
+  listMinecraftVersions(type: string, snapshots = false): Observable<MinecraftVersionItem[]> {
+    return this.api.get('/api/minecraft/versions', {
+      params: { type, snapshots: String(snapshots) },
+    });
   }
 }

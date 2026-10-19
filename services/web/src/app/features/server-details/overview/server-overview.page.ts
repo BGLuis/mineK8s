@@ -29,6 +29,7 @@ import {
 import { errorReason } from '../../dashboard/server-lifecycle';
 import { formatDuration } from '../format';
 import { ServerDetailStore } from '../server-detail.store';
+import { McUpdateVersionDialog } from '../update-version-dialog';
 import { formatMemory, TPS_TARGET, tpsLevel, tpsSeries } from './performance';
 import {
   QuickSettings,
@@ -36,6 +37,7 @@ import {
   hasChanges,
   policyLabel,
   validateSleepMinutes,
+  validateStopWarningMinutes,
   validateSubdomain,
 } from './quick-settings';
 
@@ -74,7 +76,16 @@ function avatarColor(nick: string): string {
 @Component({
   selector: 'mc-server-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McButton, McPanel, McPlayerHead, McRamSlider, McSwitch, McTextField],
+  imports: [
+    FormsModule,
+    McButton,
+    McPanel,
+    McPlayerHead,
+    McRamSlider,
+    McSwitch,
+    McTextField,
+    McUpdateVersionDialog,
+  ],
   template: `
     @if (store.server(); as server) {
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -162,6 +173,18 @@ function avatarColor(nick: string): string {
         </div>
 
         <div class="flex min-w-0 flex-col gap-6">
+          <mc-panel title="Versão do jogo">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="t-caption text-text-muted">Versão instalada</p>
+                <p class="t-title-sm">{{ server.server_type }} {{ server.game_version }}</p>
+              </div>
+              <mc-button size="sm" variant="neutral" (click)="updateDialog.open()">
+                Atualizar versão
+              </mc-button>
+            </div>
+          </mc-panel>
+
           <mc-panel title="Configurações rápidas">
             <div class="flex flex-col gap-5">
               <div>
@@ -176,6 +199,17 @@ function avatarColor(nick: string): string {
                   [errorText]="sleepError() ?? ''"
                   [ngModel]="sleep()"
                   (ngModelChange)="sleep.set($event)"
+                />
+              </div>
+
+              <div>
+                <mc-text-field
+                  label="Aviso antes de parar (minutos)"
+                  inputmode="numeric"
+                  helpText="Tempo em minutos para avisar jogadores antes de desligar ou reiniciar (0 desliga o aviso)."
+                  [errorText]="stopWarningError() ?? ''"
+                  [ngModel]="stopWarning()"
+                  (ngModelChange)="stopWarning.set($event)"
                 />
               </div>
 
@@ -215,6 +249,7 @@ function avatarColor(nick: string): string {
           </mc-panel>
         </div>
       </div>
+      <mc-update-version-dialog #updateDialog />
     } @else if (store.loadState() === 'loading') {
       <div
         class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
@@ -288,6 +323,7 @@ export class ServerOverviewPage {
 
   protected readonly memory = signal(4096);
   protected readonly sleep = signal('');
+  protected readonly stopWarning = signal('10');
   protected readonly subdomain = signal('');
   protected readonly maintenance = signal(false);
   protected readonly autoWake = signal(true);
@@ -299,11 +335,15 @@ export class ServerOverviewPage {
   private readonly current = computed<QuickSettings>(() => ({
     memoryMb: this.memory(),
     sleepMinutes: this.sleep(),
+    stopWarningMinutes: this.stopWarning(),
     subdomain: this.subdomain(),
     maintenance: this.maintenance(),
     autoWake: this.autoWake(),
   }));
   protected readonly sleepError = computed(() => validateSleepMinutes(this.sleep()));
+  protected readonly stopWarningError = computed(() =>
+    validateStopWarningMinutes(this.stopWarning()),
+  );
   protected readonly subdomainError = computed(
     () => this.domainConflict() ?? validateSubdomain(this.subdomain()),
   );
@@ -318,6 +358,7 @@ export class ServerOverviewPage {
       hasChanges(changes) &&
       !this.saving() &&
       this.sleepError() === null &&
+      this.stopWarningError() === null &&
       this.subdomainError() === null
     );
   });
@@ -458,8 +499,8 @@ export class ServerOverviewPage {
   }
 
   private patchedFields(): Partial<QuickSettings> {
-    const { memoryMb, sleepMinutes, maintenance, autoWake } = this.current();
-    return { memoryMb, sleepMinutes, maintenance, autoWake };
+    const { memoryMb, sleepMinutes, stopWarningMinutes, maintenance, autoWake } = this.current();
+    return { memoryMb, sleepMinutes, stopWarningMinutes, maintenance, autoWake };
   }
 
   private resetForm(server: NonNullable<ReturnType<typeof this.store.server>>): void {
@@ -467,6 +508,7 @@ export class ServerOverviewPage {
     const settings: QuickSettings = {
       memoryMb: server.allocated_memory_mb,
       sleepMinutes: String(server.sleep_timeout_minutes),
+      stopWarningMinutes: String(server.stop_warning_minutes ?? 10),
       subdomain: server.subdomain,
       maintenance: server.is_maintenance,
       autoWake: server.auto_wake,
@@ -474,6 +516,7 @@ export class ServerOverviewPage {
     this.initial.set(settings);
     this.memory.set(settings.memoryMb);
     this.sleep.set(settings.sleepMinutes);
+    this.stopWarning.set(settings.stopWarningMinutes);
     this.subdomain.set(settings.subdomain);
     this.maintenance.set(settings.maintenance);
     this.autoWake.set(settings.autoWake);

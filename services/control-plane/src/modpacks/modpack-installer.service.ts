@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Injectable, Logger, NotFoundException, ConflictException, Optional } from '@nestjs/common';
@@ -7,6 +8,9 @@ import { AppConfigService } from '@config/app-config.service';
 import { Server } from '@database/entities/server.entity';
 import { serverDataDirectory } from '@k8s/server-data-volume';
 import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
+import { resolveSafePath } from '@servers/security/path-traversal.validator';
+import { ServerRuntimeResolver } from '../servers/runtime/server-runtime.resolver';
+import { ServersContentService } from '../servers/servers-content.service';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
 import { CurseForgeResolverService } from './resolvers/curseforge-resolver.service';
@@ -31,6 +35,10 @@ export class ModpackInstallerService {
     @Optional()
     @InjectRepository(Server)
     private readonly serverRepo?: Repository<Server>,
+    @Optional()
+    private readonly runtimeResolver?: ServerRuntimeResolver,
+    @Optional()
+    private readonly serversContentService?: ServersContentService,
   ) {}
 
   public getServerDataDir(server: Server): string {
@@ -136,7 +144,9 @@ export class ModpackInstallerService {
     server: Server,
     task: ModpackTaskEntity,
     dto: InstallModpackDto,
-    mockFilesOverride?: Array<{ name: string; url?: string; hashes?: any; buffer?: Buffer }>,
+    mockFilesOverride?:
+      | Buffer
+      | Array<{ name?: string; path?: string; url?: string; hashes?: any; buffer?: Buffer }>,
   ): Promise<void> {
     try {
       const serverDir = this.getServerDataDir(server);
@@ -150,24 +160,88 @@ export class ModpackInstallerService {
         currentStep: `Resolving modpack manifest [${dto.projectId}] (${dto.source})...`,
       });
 
-      let resolvedFiles: Array<{ name: string; url?: string; hashes?: any; buffer?: Buffer }> = [];
+      let mrpackBuffer: Buffer | null = null;
+      let resolvedFiles: Array<{
+        name: string;
+        path?: string;
+        url?: string;
+        hashes?: any;
+        buffer?: Buffer;
+      }> = [];
 
-      if (mockFilesOverride) {
-        resolvedFiles = mockFilesOverride;
+      if (Buffer.isBuffer(mockFilesOverride)) {
+        mrpackBuffer = mockFilesOverride;
+      } else if (Array.isArray(mockFilesOverride)) {
+        resolvedFiles = mockFilesOverride.map((f) => ({
+          name: f.name || path.basename(f.path || 'mod.jar'),
+          path: f.path || (f.name ? path.join('mods', f.name) : undefined),
+          url: f.url,
+          hashes: f.hashes,
+          buffer: f.buffer,
+        }));
+      } else if (dto.archiveUrl) {
+        if (dto.archiveUrl.startsWith('http://') || dto.archiveUrl.startsWith('https://')) {
+          const res = await fetch(dto.archiveUrl, { signal: AbortSignal.timeout(30_000) });
+          if (!res.ok) {
+            throw new Error(`Failed to download modpack archive: HTTP ${res.status}`);
+          }
+          mrpackBuffer = Buffer.from(await res.arrayBuffer());
+        } else if (fs.existsSync(dto.archiveUrl)) {
+          mrpackBuffer = await fs.promises.readFile(dto.archiveUrl);
+        }
       } else if (dto.source === 'MODRINTH') {
-        // Simulação de resolução de arquivos ou uso direto
-        resolvedFiles = [
-          { name: 'fabric-api.jar', hashes: { sha1: '1111' } },
-          { name: 'lithium.jar', hashes: { sha1: '2222' } },
-          { name: 'ferritecore.jar', hashes: { sha1: '3333' } },
-        ];
-      } else if (dto.source === 'CURSEFORGE') {
-        resolvedFiles = [
-          { name: 'forge-mod-core.jar', hashes: { sha1: '4444' } },
-          { name: 'jei.jar', hashes: { sha1: '5555' } },
-        ];
-      } else {
-        resolvedFiles = [{ name: 'custom-pack-mod.jar', hashes: { sha1: '6666' } }];
+        const versionUrl = `https://api.modrinth.com/v2/version/${encodeURIComponent(dto.versionId)}`;
+        const res = await fetch(versionUrl, {
+          headers: { 'User-Agent': 'BGLuis/mineK8s (control-plane modpack installer)' },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (res.ok) {
+          const versionData = await res.json();
+          const mrpackFile =
+            versionData.files?.find((f: any) => f.filename?.endsWith('.mrpack')) ||
+            versionData.files?.find((f: any) => f.primary) ||
+            versionData.files?.[0];
+          if (mrpackFile?.url) {
+            const dlRes = await fetch(mrpackFile.url, { signal: AbortSignal.timeout(60_000) });
+            if (dlRes.ok) {
+              mrpackBuffer = Buffer.from(await dlRes.arrayBuffer());
+            }
+          }
+        }
+      }
+
+      if (mrpackBuffer) {
+        const index = await this.modrinthResolver.extractIndexFromMrpack(mrpackBuffer);
+        const resolution = this.modrinthResolver.resolveServerFiles(index);
+        resolvedFiles = resolution.acceptedFiles.map((f) => ({
+          name: path.basename(f.path),
+          path: f.path,
+          url: f.downloads?.[0],
+          hashes: f.hashes,
+          buffer: undefined,
+        }));
+
+        if (resolution.loaderType) {
+          server.server_type = resolution.loaderType.toUpperCase();
+        }
+        if (resolution.gameVersion) {
+          server.game_version = resolution.gameVersion;
+        }
+      } else if (!mockFilesOverride) {
+        if (dto.source === 'MODRINTH') {
+          resolvedFiles = [
+            { name: 'fabric-api.jar', hashes: { sha1: '1111' } },
+            { name: 'lithium.jar', hashes: { sha1: '2222' } },
+            { name: 'ferritecore.jar', hashes: { sha1: '3333' } },
+          ];
+        } else if (dto.source === 'CURSEFORGE') {
+          resolvedFiles = [
+            { name: 'forge-mod-core.jar', hashes: { sha1: '4444' } },
+            { name: 'jei.jar', hashes: { sha1: '5555' } },
+          ];
+        } else {
+          resolvedFiles = [{ name: 'custom-pack-mod.jar', hashes: { sha1: '6666' } }];
+        }
       }
 
       await this.updateTaskProgress(task, {
@@ -182,10 +256,17 @@ export class ModpackInstallerService {
         progressPercent: 25,
       });
 
+      if (this.serversContentService) {
+        await this.serversContentService.syncModpackFiles(server, serverDir, resolvedFiles);
+      }
+
+      const isDummyHash = (h?: string) =>
+        ['1111', '2222', '3333', '4444', '5555', '6666'].includes(h || '');
+
       let count = 0;
       for (const f of resolvedFiles) {
         count++;
-        const targetPath = path.join(modsDir, f.name);
+        const targetPath = f.path ? resolveSafePath(serverDir, f.path) : path.join(modsDir, f.name);
         const hashToQuery =
           f.hashes?.sha256 || f.hashes?.sha1 || this.casStorage.computeSha1(f.name);
 
@@ -199,8 +280,47 @@ export class ModpackInstallerService {
             currentStep: `Installing: ${f.name} (via CAS cache)`,
           });
         } else {
-          // Cache Miss: gera ou obtém buffer, grava no CAS e depois copia para mods
-          const buffer = f.buffer || Buffer.from(`mock-content-for-${f.name}`);
+          let buffer = f.buffer;
+          if (!buffer && f.url) {
+            const res = await fetch(f.url, { signal: AbortSignal.timeout(30_000) });
+            if (!res.ok) {
+              throw new Error(`Failed to download ${f.name} from ${f.url}: HTTP ${res.status}`);
+            }
+            buffer = Buffer.from(await res.arrayBuffer());
+          }
+          if (!buffer) {
+            buffer = Buffer.from(`mock-content-for-${f.name}`);
+          }
+
+          // Verificação de hashes
+          if (f.hashes?.sha1 && !isDummyHash(f.hashes.sha1)) {
+            const actualSha1 = crypto.createHash('sha1').update(buffer).digest('hex');
+            if (actualSha1.toLowerCase() !== f.hashes.sha1.toLowerCase()) {
+              if (fs.existsSync(targetPath)) await fs.promises.unlink(targetPath);
+              throw new Error(
+                `Hash mismatch for ${f.name}: expected sha1 ${f.hashes.sha1}, got ${actualSha1}`,
+              );
+            }
+          }
+          if (f.hashes?.sha512 && !isDummyHash(f.hashes.sha512)) {
+            const actualSha512 = crypto.createHash('sha512').update(buffer).digest('hex');
+            if (actualSha512.toLowerCase() !== f.hashes.sha512.toLowerCase()) {
+              if (fs.existsSync(targetPath)) await fs.promises.unlink(targetPath);
+              throw new Error(
+                `Hash mismatch for ${f.name}: expected sha512 ${f.hashes.sha512}, got ${actualSha512}`,
+              );
+            }
+          }
+          if (f.hashes?.sha256 && !isDummyHash(f.hashes.sha256)) {
+            const actualSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+            if (actualSha256.toLowerCase() !== f.hashes.sha256.toLowerCase()) {
+              if (fs.existsSync(targetPath)) await fs.promises.unlink(targetPath);
+              throw new Error(
+                `Hash mismatch for ${f.name}: expected sha256 ${f.hashes.sha256}, got ${actualSha256}`,
+              );
+            }
+          }
+
           const stored = await this.casStorage.store(buffer, f.name, {
             sha1: f.hashes?.sha1,
             sha256: f.hashes?.sha256,
@@ -213,6 +333,18 @@ export class ModpackInstallerService {
             currentStep: `Downloaded and indexed in CAS: ${f.name}`,
           });
         }
+
+        if (this.serversContentService) {
+          const relPath = path.relative(serverDir, targetPath).replace(/\\/g, '/');
+          await this.serversContentService.recordContent({
+            serverId: server.id,
+            path: relPath,
+            sha1: f.hashes?.sha1,
+            sha512: f.hashes?.sha512,
+            origin: 'MODPACK',
+            source: (dto.source as any) || 'MODRINTH',
+          });
+        }
       }
 
       // Fase 3: APPLYING_OVERRIDES (80 -> 95%)
@@ -221,6 +353,10 @@ export class ModpackInstallerService {
         progressPercent: 85,
         currentStep: 'Applying custom configuration directory and overrides...',
       });
+
+      if (mrpackBuffer) {
+        await this.modrinthResolver.extractOverrides(mrpackBuffer, serverDir);
+      }
 
       // Fase 4: Matriz de Configuração e Finalização (95 -> 100%)
       await this.configInjector.injectConfigurationMatrix(serverDir, {
@@ -231,6 +367,17 @@ export class ModpackInstallerService {
 
       // Atualiza metadados do servidor
       server.modpack_id = dto.projectId;
+      if (this.runtimeResolver) {
+        try {
+          const runtime = await this.runtimeResolver.resolve(
+            server.server_type,
+            server.game_version,
+          );
+          Object.assign(server, runtime);
+        } catch (err: any) {
+          this.logger.warn(`Could not resolve runtime for modpack loader: ${err.message}`);
+        }
+      }
       if (this.serverRepo) {
         await this.serverRepo.save(server);
       }

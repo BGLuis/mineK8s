@@ -1,7 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
 
-import { ModpackTaskStatus } from '@database/entities/modpack-task.entity';
+import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
 import { TasksController } from './tasks.controller';
+import { TaskExecutionService } from './task-execution.service';
 
 const TASK_ID = '3f2b8c1e-5a47-4d0e-9c1b-7a6e2d4f8b90';
 
@@ -11,7 +13,7 @@ describe('TasksController: GET /api/tasks/:id', () => {
 
   beforeEach(() => {
     taskRepo = { findOne: jest.fn() };
-    controller = new TasksController(taskRepo as any);
+    controller = new TasksController(taskRepo as unknown as Repository<ModpackTaskEntity>);
   });
 
   it('devolve o último estado salvo, no mesmo formato do evento taskProgress', async () => {
@@ -68,5 +70,37 @@ describe('TasksController: GET /api/tasks/:id', () => {
   it('responde 404, sem consultar o banco, para id que não é uuid', async () => {
     await expect(controller.getTask('restore-task-123')).rejects.toThrow(NotFoundException);
     expect(taskRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  describe('POST /api/tasks/:id/cancel (#204)', () => {
+    it('cancela a tarefa usando o TaskExecutionService', async () => {
+      const mockTaskExecutionService = {
+        getTask: jest.fn(),
+        cancelTask: jest.fn().mockResolvedValue(true),
+      };
+      const customController = new TasksController(
+        taskRepo as unknown as Repository<ModpackTaskEntity>,
+        mockTaskExecutionService as unknown as TaskExecutionService,
+      );
+
+      const res = await customController.cancelTask('stop-task-1');
+      expect(res).toEqual({ message: 'Task cancelled successfully', taskId: 'stop-task-1' });
+      expect(mockTaskExecutionService.cancelTask).toHaveBeenCalledWith('stop-task-1');
+    });
+
+    it('responde 404 se a tarefa não for cancelável ou não existir', async () => {
+      const mockTaskExecutionService = {
+        getTask: jest.fn(),
+        cancelTask: jest.fn().mockResolvedValue(false),
+      };
+      const customController = new TasksController(
+        taskRepo as unknown as Repository<ModpackTaskEntity>,
+        mockTaskExecutionService as unknown as TaskExecutionService,
+      );
+
+      await expect(customController.cancelTask('non-existent-task')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
   });
 });

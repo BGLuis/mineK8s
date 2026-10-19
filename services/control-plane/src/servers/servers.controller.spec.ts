@@ -33,6 +33,7 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
       sendCommand: jest.fn(),
       publishServer: jest.fn(),
       unpublishServer: jest.fn(),
+      cancelStop: jest.fn(),
     };
 
     mockFilesService = {
@@ -109,6 +110,30 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
     expect(mockBackupService.listBackups).toHaveBeenCalledWith('srv-1');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('backup-123');
+  });
+
+  it('GET :id/backups deve listar backups do tipo PRE_UPDATE após atualização (#201)', async () => {
+    mockBackupService.listBackups.mockResolvedValueOnce([
+      {
+        id: 'backup-pre-update-1',
+        serverId: 'srv-1',
+        filename: 'survival_pre-update_12345.tar.gz',
+        sizeBytes: 2048,
+        sha256Checksum: 'abcdef123456',
+        backupType: 'PRE_UPDATE',
+        status: 'COMPLETED',
+        isProtected: true,
+        retentionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+      },
+    ]);
+
+    const result = await controller.listBackups('srv-1');
+
+    expect(mockBackupService.listBackups).toHaveBeenCalledWith('srv-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].backupType).toBe('PRE_UPDATE');
+    expect(result[0].isProtected).toBe(true);
   });
 
   it('DELETE :id/backups/:backupId deve repassar flag force e remover backup (RF-STO-17)', async () => {
@@ -238,6 +263,27 @@ describe('ServersController - Backup Endpoints (RF-STO-17)', () => {
 
       expect(mockServersService.unpublishServer).toHaveBeenCalledWith('srv-1');
       expect(result).toEqual(mockResult);
+    });
+
+    it('POST :id/stop deve delegar para serversService.stop com dto (#204)', async () => {
+      mockServersService.stop.mockResolvedValue({ message: 'Instance stopping', taskId: 'task-1' });
+      const result = await controller.stop('srv-1', { warning_minutes: 5 });
+      expect(mockServersService.stop).toHaveBeenCalledWith('srv-1', { warning_minutes: 5 });
+      expect(result).toEqual({ message: 'Instance stopping', taskId: 'task-1' });
+    });
+
+    it('POST :id/restart deve delegar para serversService.restart com dto (#204)', async () => {
+      mockServersService.restart.mockResolvedValue({ message: 'Instance restarting' });
+      const result = await controller.restart('srv-1', { warning_minutes: 0 });
+      expect(mockServersService.restart).toHaveBeenCalledWith('srv-1', { warning_minutes: 0 });
+      expect(result).toEqual({ message: 'Instance restarting' });
+    });
+
+    it('POST :id/cancel-stop deve delegar para serversService.cancelStop (#204)', async () => {
+      mockServersService.cancelStop.mockResolvedValue({ message: 'Stop countdown cancelled' });
+      const result = await controller.cancelStop('srv-1');
+      expect(mockServersService.cancelStop).toHaveBeenCalledWith('srv-1');
+      expect(result).toEqual({ message: 'Stop countdown cancelled' });
     });
   });
 });

@@ -1,11 +1,16 @@
+import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
+import { promisify } from 'node:util';
+import { BackupType } from '@database/entities/server-backup.entity';
 import { Server } from '@database/entities/server.entity';
-import { ServersBackupService } from './servers-backup.service';
-import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { serverDataDirectory } from '@k8s/server-data-volume';
+import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
+import { ServerActivityBus } from '../server-events/server-activity.bus';
+import { ServersBackupService } from './servers-backup.service';
+
+const execFileAsync = promisify(execFile);
 
 describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
   let service: ServersBackupService;
@@ -17,10 +22,14 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
   let mockConfigService: any;
   let mockConsoleDriver: any;
   let mockK8sService: any;
+  let mockBackupRepo: any;
+  let mockServerRepo: any;
+  let inMemoryBackups: any[];
 
   beforeEach(async () => {
     tempStorageRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'servers-data-test-'));
     tempBackupsRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'servers-backups-test-'));
+    inMemoryBackups = [];
 
     mockConfigService = {
       kubernetes: {
@@ -47,7 +56,60 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       deleteJob: jest.fn().mockResolvedValue(undefined),
     };
 
-    service = new ServersBackupService(mockConfigService, mockK8sService, mockConsoleDriver);
+    mockBackupRepo = {
+      create: jest.fn().mockImplementation((dto) => ({
+        id: `backup-uuid-${inMemoryBackups.length + 1}`,
+        createdAt: new Date(),
+        ...dto,
+      })),
+      save: jest.fn().mockImplementation(async (entity) => {
+        const existingIdx = inMemoryBackups.findIndex((b) => b.id === entity.id);
+        if (existingIdx >= 0) {
+          inMemoryBackups[existingIdx] = entity;
+        } else {
+          inMemoryBackups.push(entity);
+        }
+        return entity;
+      }),
+      find: jest.fn().mockImplementation(async (options) => {
+        let list = [...inMemoryBackups];
+        if (options?.where?.serverId) {
+          list = list.filter((b) => b.serverId === options.where.serverId);
+        }
+        if (options?.order?.createdAt === 'DESC') {
+          list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+        return list;
+      }),
+      findOne: jest.fn().mockImplementation(async (options) => {
+        return inMemoryBackups.find(
+          (b) =>
+            b.id === options?.where?.id &&
+            (!options?.where?.serverId || b.serverId === options.where.serverId),
+        );
+      }),
+      delete: jest.fn().mockImplementation(async (id) => {
+        inMemoryBackups = inMemoryBackups.filter((b) => b.id !== id);
+        return { affected: 1 };
+      }),
+    };
+
+    mockServerRepo = {
+      findOne: jest.fn().mockImplementation(async ({ where }) => {
+        if (where?.id === sampleServer?.id) return sampleServer;
+        if (where?.id === readyServer?.id) return readyServer;
+        return null;
+      }),
+    };
+
+    service = new ServersBackupService(
+      mockConfigService,
+      mockK8sService,
+      mockConsoleDriver,
+      undefined,
+      mockBackupRepo,
+      mockServerRepo,
+    );
 
     sampleServer = {
       id: 'srv-backup-123',
@@ -123,19 +185,32 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
   });
 
   describe('RF-STO-13: Pre-Update Backup, Purge & Rollback', () => {
-    it('should create a complete pre-update backup snapshot excluding existing backups', async () => {
+    it('should create a complete pre-update backup snapshot archive and persist DB record (#201)', async () => {
+      const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
       const backupPath = await service.createPreUpdateBackup(sampleServer);
 
+      expect(backupPath.endsWith('.tar.gz')).toBe(true);
       expect(fs.existsSync(backupPath)).toBe(true);
-      expect(fs.existsSync(path.join(backupPath, 'mods', 'jei-1.20.jar'))).toBe(true);
-      expect(fs.existsSync(path.join(backupPath, 'world', 'level.dat'))).toBe(true);
-      expect(fs.existsSync(path.join(backupPath, 'server.properties'))).toBe(true);
+      expect(fs.existsSync(`${backupPath}.sha256`)).toBe(true);
 
-      const backedUpContent = await fs.promises.readFile(
-        path.join(backupPath, 'mods', 'jei-1.20.jar'),
-        'utf-8',
-      );
-      expect(backedUpContent).toBe('binary-mod-v1');
+      // Não deve criar diretório .backups dentro do PVC do servidor (#201)
+      expect(fs.existsSync(path.join(serverDir, '.backups'))).toBe(false);
+
+      const { stdout } = await execFileAsync('tar', ['-tzf', backupPath]);
+      expect(stdout).toContain('mods/jei-1.20.jar');
+      expect(stdout).toContain('world/level.dat');
+      expect(stdout).toContain('server.properties');
+
+      const backups = await service.listBackups(sampleServer.id);
+      expect(backups).toHaveLength(1);
+      const record = backups[0];
+      expect(record.backupType).toBe(BackupType.PRE_UPDATE);
+      expect(record.isProtected).toBe(true);
+      expect(record.storagePath).toBe(backupPath);
+      expect(record.retentionExpiresAt).toBeDefined();
+      const diffDays = (record.retentionExpiresAt!.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      expect(diffDays).toBeGreaterThan(13.9);
+      expect(diffDays).toBeLessThanOrEqual(14.1);
     });
 
     it('should purge mods directory without touching world or configuration files', async () => {
@@ -150,7 +225,7 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
       expect(fs.existsSync(path.join(serverDir, 'server.properties'))).toBe(true);
     });
 
-    it('should restore pre-update backup during rollback, recovering deleted mods and original files', async () => {
+    it('should restore pre-update backup during rollback, recovering deleted mods and original files (#201)', async () => {
       const serverDir = path.join(tempStorageRoot, serverDataDirectory(sampleServer.resource_name));
 
       const backupPath = await service.createPreUpdateBackup(sampleServer);
@@ -548,10 +623,6 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
   });
 
   describe('Política de Retenção e Expurgos (RF-STO-15, RF-STO-16, RF-STO-17)', () => {
-    let mockBackupRepo: any;
-    let mockServerRepo: any;
-    let inMemoryBackups: any[];
-
     beforeEach(() => {
       inMemoryBackups = [];
 
@@ -713,6 +784,34 @@ describe('ServersBackupService (RF-STO-01..RF-STO-20)', () => {
 
       // Devem restar 5 backups rotineiros + 1 pre-update = 6 backups no total
       expect(inMemoryBackups.length).toBe(6);
+    });
+
+    it('com backup_retention_count = 3, o quarto backup de rotina apaga o mais antigo (#205)', async () => {
+      const serverId = sampleServer.id;
+      const routineBackups: any[] = [];
+      for (let i = 1; i <= 4; i++) {
+        const filePath = path.join(tempBackupsRoot, `custom-routine-${i}.tar.gz`);
+        await fs.promises.writeFile(filePath, `routine-${i}`);
+        const b = await service.persistBackupRecord({
+          serverId,
+          filename: `custom-routine-${i}.tar.gz`,
+          storagePath: filePath,
+          sizeBytes: 100,
+          sha256Checksum: `dummy-sha-${i}`,
+          backupType: 'HOT_SCHEDULED' as any,
+          status: 'COMPLETED' as any,
+          isProtected: false,
+          minecraftVersion: '1.20.4',
+        });
+        b!.createdAt = new Date(Date.now() - (5 - i) * 60000);
+        routineBackups.push(b);
+      }
+
+      // Aplica com maxRoutine = 3
+      const { removedBackups } = await service.applyRetentionPolicy(serverId, 3);
+      expect(removedBackups).toHaveLength(1);
+      expect(removedBackups[0]).toBe(routineBackups[0].id);
+      expect(fs.existsSync(routineBackups[0].storagePath)).toBe(false);
     });
 
     it('deve proteger backups PRE_RESTORE por no mínimo 48 horas contra exclusão e rotação', async () => {

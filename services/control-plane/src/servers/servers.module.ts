@@ -6,6 +6,7 @@ import { MinecraftServerSettings } from '@database/entities/minecraft-server-set
 import { ServerAuditLog } from '@database/entities/server-audit-log.entity';
 import { ServerBackupEntity } from '@database/entities/server-backup.entity';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
+import { ServerContent } from '@database/entities/server-content.entity';
 import { AppConfigModule } from '@config/app-config.module';
 import { KubernetesModule } from '@k8s/k8s.module';
 import { ConsoleModule } from '@console/console.module';
@@ -20,11 +21,16 @@ import { TasksModule } from '../tasks/tasks.module';
 import { ServersController } from './servers.controller';
 import { ServersService } from './servers.service';
 import { ServersFilesService } from './servers-files.service';
+import { ServersContentService } from './servers-content.service';
 import { ServerIconModule } from './server-icon.module';
 import { ServersBackupService } from './servers-backup.service';
 import { MinecraftStorageProvider } from './providers/minecraft-storage.provider';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
 import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
+import { MinecraftVersionsController } from './minecraft-versions.controller';
+import { MinecraftVersionsService } from './minecraft-versions.service';
+import { ServerShutdownWarningService } from './server-shutdown-warning.service';
+import { ServersBackupSchedulerService } from './servers-backup-scheduler.service';
 
 @Module({
   imports: [
@@ -34,6 +40,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
       ServerAuditLog,
       ServerBackupEntity,
       ModpackTaskEntity,
+      ServerContent,
     ]),
     AppConfigModule,
     KubernetesModule,
@@ -47,21 +54,29 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     NodeModule,
     TasksModule,
   ],
-  controllers: [ServersController],
+  controllers: [ServersController, MinecraftVersionsController],
   providers: [
     ServersService,
     ServersFilesService,
+    ServersContentService,
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
     ServerRuntimeResolver,
+    MinecraftVersionsService,
+    ServerShutdownWarningService,
+    ServersBackupSchedulerService,
   ],
   exports: [
     ServersService,
     ServersFilesService,
+    ServersContentService,
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
+    MinecraftVersionsService,
+    ServerShutdownWarningService,
+    ServersBackupSchedulerService,
   ],
 })
 export class ServersModule {}

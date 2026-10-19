@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -6,6 +7,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +19,7 @@ import { serverDataDirectory } from '@k8s/server-data-volume';
 import { FileItemDto } from './dto/file-item.dto';
 import { ArchiveExtractor } from './security/archive-extractor';
 import { resolveSafePath } from './security/path-traversal.validator';
+import { ServersContentService } from './servers-content.service';
 
 @Injectable()
 export class ServersFilesService {
@@ -26,6 +29,8 @@ export class ServersFilesService {
     @InjectRepository(Server)
     private readonly serverRepo: Repository<Server>,
     private readonly configService: AppConfigService,
+    @Optional()
+    private readonly serversContentService?: ServersContentService,
   ) {}
 
   private async getServer(id: string): Promise<Server> {
@@ -170,6 +175,9 @@ export class ServersFilesService {
     }
 
     await fs.promises.rm(safePath, { recursive: true, force: true });
+    if (this.serversContentService) {
+      await this.serversContentService.removeContent(id, relPath);
+    }
     return { message: 'Removed successfully' };
   }
 
@@ -271,6 +279,23 @@ export class ServersFilesService {
     await fs.promises.writeFile(tempPath, file.buffer);
     await fs.promises.rename(tempPath, safePath);
 
+    if (this.serversContentService) {
+      if (
+        (normalizedRelPath.startsWith('mods/') || normalizedRelPath.startsWith('plugins/')) &&
+        normalizedRelPath.endsWith('.jar')
+      ) {
+        const sha1 = crypto.createHash('sha1').update(file.buffer).digest('hex');
+        const sha512 = crypto.createHash('sha512').update(file.buffer).digest('hex');
+        await this.serversContentService.recordContent({
+          serverId: server.id,
+          path: fullRelPath,
+          sha1,
+          sha512,
+          origin: 'MANUAL',
+        });
+      }
+    }
+
     return { message: 'File uploaded successfully' };
   }
 
@@ -370,6 +395,34 @@ export class ServersFilesService {
 
     await fs.promises.mkdir(path.dirname(newSafePath), { recursive: true });
     await fs.promises.rename(oldSafePath, newSafePath);
+
+    if (this.serversContentService) {
+      if (normOld.startsWith('mods/') || normOld.startsWith('plugins/')) {
+        await this.serversContentService.removeContent(id, oldRelPath);
+      }
+      if (
+        (normNew.startsWith('mods/') || normNew.startsWith('plugins/')) &&
+        normNew.endsWith('.jar')
+      ) {
+        try {
+          const stat = await fs.promises.stat(newSafePath);
+          if (stat.isFile()) {
+            const buf = await fs.promises.readFile(newSafePath);
+            const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+            const sha512 = crypto.createHash('sha512').update(buf).digest('hex');
+            await this.serversContentService.recordContent({
+              serverId: id,
+              path: newRelPath,
+              sha1,
+              sha512,
+              origin: 'MANUAL',
+            });
+          }
+        } catch (err: any) {
+          this.logger.warn(`Failed to record renamed content ${newRelPath}: ${err.message}`);
+        }
+      }
+    }
 
     return { message: 'Renamed successfully' };
   }

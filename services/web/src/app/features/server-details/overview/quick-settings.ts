@@ -26,9 +26,18 @@ export function validateSleepMinutes(value: string): string | null {
   return null;
 }
 
+export function validateStopWarningMinutes(value: string): string | null {
+  const text = value.trim();
+  if (!/^\d+$/.test(text) || Number(text) > MAX_SLEEP_MINUTES) {
+    return `Informe um número inteiro de 0 a ${MAX_SLEEP_MINUTES}.`;
+  }
+  return null;
+}
+
 export interface QuickSettings {
   memoryMb: number;
   sleepMinutes: string;
+  stopWarningMinutes: string;
   subdomain: string;
   maintenance: boolean;
   autoWake: boolean;
@@ -48,6 +57,9 @@ export function diffSettings(initial: QuickSettings, current: QuickSettings): Se
   }
   if (current.sleepMinutes.trim() !== initial.sleepMinutes.trim()) {
     patch.sleep_timeout_minutes = Number(current.sleepMinutes);
+  }
+  if (current.stopWarningMinutes.trim() !== initial.stopWarningMinutes.trim()) {
+    patch.stop_warning_minutes = Number(current.stopWarningMinutes);
   }
   if (current.maintenance !== initial.maintenance) {
     patch.is_maintenance = current.maintenance;

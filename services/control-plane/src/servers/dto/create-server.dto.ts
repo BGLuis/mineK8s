@@ -155,6 +155,12 @@ export class CreateServerDto {
   sleep_timeout_minutes?: number = 15;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1440)
+  stop_warning_minutes?: number = 10;
+
+  @IsOptional()
   @IsString()
   @IsIn(['PUBLIC', 'GROUP', 'INDIVIDUAL', 'MAINTENANCE', 'INTERNET'])
   access_policy?: 'PUBLIC' | 'GROUP' | 'INDIVIDUAL' | 'MAINTENANCE' | 'INTERNET' = 'GROUP';

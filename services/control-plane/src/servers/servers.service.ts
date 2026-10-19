@@ -16,8 +16,10 @@ import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
 import { ServerAuditLog, ExecutionSource } from '@database/entities/server-audit-log.entity';
 import { User } from '@database/entities/user.entity';
+import { AppConfigService } from '@config/app-config.service';
 import { KubernetesService } from '@k8s/k8s.service';
 import { disambiguatedResourceName, serverWorkloadName } from '@k8s/resource-names';
+import { isModpackServerType } from '@k8s/server-properties';
 import {
   CONSOLE_DRIVER_TOKEN,
   ConsoleDriver,
@@ -36,9 +38,14 @@ import { CreateServerDto, MinecraftSettingsDto, ServerType } from './dto/create-
 import { ServerDetailDto, ServerSummaryDto, toServerSettingsDto } from './dto/server-summary.dto';
 import { UpdateServerDto } from './dto/update-server.dto';
 import { UpdateVersionDto } from './dto/update-version.dto';
+import { StopServerDto } from './dto/stop-server.dto';
 import { ServersBackupService } from './servers-backup.service';
 import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { ServerIconService } from './server-icon.service';
+import { MinecraftVersionsService } from './minecraft-versions.service';
+import { ServersContentService } from './servers-content.service';
+import { ServerShutdownWarningService } from './server-shutdown-warning.service';
+import { ServersBackupSchedulerService } from './servers-backup-scheduler.service';
 import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
@@ -73,6 +80,16 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly nodeMetrics?: NodeMetricsService,
     @Optional()
     private readonly iconService?: ServerIconService,
+    @Optional()
+    private readonly configService?: AppConfigService,
+    @Optional()
+    private readonly versionsService?: MinecraftVersionsService,
+    @Optional()
+    private readonly shutdownWarningService?: ServerShutdownWarningService,
+    @Optional()
+    private readonly backupSchedulerService?: ServersBackupSchedulerService,
+    @Optional()
+    private readonly serversContentService?: ServersContentService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -136,6 +153,7 @@ export class ServersService implements OnApplicationBootstrap {
       allocated_memory_mb: dto.allocated_memory_mb || 4096,
       auto_wake: dto.auto_wake ?? true,
       sleep_timeout_minutes: dto.sleep_timeout_minutes ?? 15,
+      stop_warning_minutes: dto.stop_warning_minutes ?? 10,
       state: 'PROVISIONING',
       access_policy: accessPolicy,
     });
@@ -231,11 +249,21 @@ export class ServersService implements OnApplicationBootstrap {
         is_maintenance: s.is_maintenance,
         auto_wake: s.auto_wake,
         sleep_timeout_minutes: s.sleep_timeout_minutes,
+        stop_warning_minutes: s.stop_warning_minutes,
+        backup_schedule_mode: s.backup_schedule_mode,
+        backup_interval_hours: s.backup_interval_hours,
+        backup_daily_time: s.backup_daily_time,
+        backup_window_start: s.backup_window_start,
+        backup_window_end: s.backup_window_end,
+        backup_timezone: s.backup_timezone,
+        backup_retention_count: s.backup_retention_count,
+        backup_next_run_at: s.backup_next_run_at,
         created_at: s.created_at,
         updated_at: s.updated_at,
         replicas: dep?.replicas ?? 0,
         ready_replicas: dep?.status?.readyReplicas ?? 0,
         players_online: this.playerSessions?.count(s.id) ?? 0,
+        active_countdown: this.shutdownWarningService?.getActiveCountdown(s.id) ?? null,
       };
     });
   }
@@ -277,11 +305,21 @@ export class ServersService implements OnApplicationBootstrap {
       is_maintenance: server.is_maintenance,
       auto_wake: server.auto_wake,
       sleep_timeout_minutes: server.sleep_timeout_minutes,
+      stop_warning_minutes: server.stop_warning_minutes,
+      backup_schedule_mode: server.backup_schedule_mode,
+      backup_interval_hours: server.backup_interval_hours,
+      backup_daily_time: server.backup_daily_time,
+      backup_window_start: server.backup_window_start,
+      backup_window_end: server.backup_window_end,
+      backup_timezone: server.backup_timezone,
+      backup_retention_count: server.backup_retention_count,
+      backup_next_run_at: server.backup_next_run_at,
       created_at: server.created_at,
       updated_at: server.updated_at,
       replicas: dep?.replicas ?? 0,
       ready_replicas: dep?.status?.readyReplicas ?? 0,
       players_online: this.playerSessions?.count(server.id) ?? 0,
+      active_countdown: this.shutdownWarningService?.getActiveCountdown(server.id) ?? null,
       settings: server.minecraft_settings
         ? toServerSettingsDto(server.minecraft_settings)
         : undefined,
@@ -329,23 +367,54 @@ export class ServersService implements OnApplicationBootstrap {
     return { message: 'Instance starting' };
   }
 
-  async stop(id: string): Promise<{ message: string }> {
-    const server = await this.serverRepo.findOne({ where: { id } });
+  async stop(id: string, dto?: StopServerDto): Promise<{ message: string; taskId?: string }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: { minecraft_settings: true },
+    });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
 
+    if (this.shutdownWarningService && (server.state === 'READY' || server.state === 'STARTING')) {
+      const scheduled = await this.shutdownWarningService.scheduleCountdown({
+        server,
+        action: 'stop',
+        warningMinutes: dto?.warning_minutes,
+        onExecute: async () => {
+          const freshServer = await this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          });
+          if (!freshServer) return;
+          const previousState = freshServer.state;
+          await this.k8sService.stopServer(freshServer, previousState);
+          freshServer.state = 'STOPPED';
+          await this.serverRepo.save(freshServer);
+          this.notifyGateway(freshServer, 'STOPPED');
+        },
+      });
+
+      if (scheduled.scheduled) {
+        return { message: 'Instance stopping', taskId: scheduled.taskId };
+      }
+    }
+
+    const previousState = server.state;
+    await this.k8sService.stopServer(server, previousState);
     server.state = 'STOPPED';
     await this.serverRepo.save(server);
-    await this.k8sService.stopServer(server);
     // The reconciler only reports a stop it sees as a transition, and this one is already STOPPED.
     this.notifyGateway(server, 'STOPPED');
 
     return { message: 'Instance stopping' };
   }
 
-  async restart(id: string): Promise<{ message: string }> {
-    const server = await this.serverRepo.findOne({ where: { id } });
+  async restart(id: string, dto?: StopServerDto): Promise<{ message: string; taskId?: string }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: { minecraft_settings: true },
+    });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
@@ -356,6 +425,31 @@ export class ServersService implements OnApplicationBootstrap {
       );
     }
 
+    if (this.shutdownWarningService && server.state === 'READY') {
+      const scheduled = await this.shutdownWarningService.scheduleCountdown({
+        server,
+        action: 'restart',
+        warningMinutes: dto?.warning_minutes,
+        onExecute: async () => {
+          const freshServer = await this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          });
+          if (!freshServer) return;
+          freshServer.state = 'STOPPING';
+          await this.serverRepo.save(freshServer);
+          await this.k8sService.restartServer(freshServer);
+          freshServer.state = 'STARTING';
+          await this.serverRepo.save(freshServer);
+          this.notifyGateway(freshServer, 'STARTING');
+        },
+      });
+
+      if (scheduled.scheduled) {
+        return { message: 'Instance restarting', taskId: scheduled.taskId };
+      }
+    }
+
     server.state = 'STOPPING';
     await this.serverRepo.save(server);
     await this.k8sService.restartServer(server);
@@ -364,6 +458,25 @@ export class ServersService implements OnApplicationBootstrap {
     this.notifyGateway(server, 'STARTING');
 
     return { message: 'Instance restarting' };
+  }
+
+  async cancelStop(id: string): Promise<{ message: string }> {
+    const server = await this.serverRepo.findOne({
+      where: { id },
+      relations: { minecraft_settings: true },
+    });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    if (!this.shutdownWarningService || !this.shutdownWarningService.hasActiveCountdown(id)) {
+      throw new ConflictException(
+        `Nenhuma parada ou reinício agendado para o servidor [${server.subdomain}]`,
+      );
+    }
+
+    await this.shutdownWarningService.cancelCountdown(id);
+    return { message: 'Stop countdown cancelled' };
   }
 
   async update(id: string, dto: UpdateServerDto) {
@@ -397,6 +510,19 @@ export class ServersService implements OnApplicationBootstrap {
     }
 
     Object.assign(server, Object.fromEntries(changes));
+
+    const scheduleChanged =
+      dto.backup_schedule_mode !== undefined ||
+      dto.backup_interval_hours !== undefined ||
+      dto.backup_daily_time !== undefined ||
+      dto.backup_window_start !== undefined ||
+      dto.backup_window_end !== undefined ||
+      dto.backup_timezone !== undefined;
+
+    if (scheduleChanged) {
+      server.backup_next_run_at = this.backupSchedulerService?.calculateNextRun(server) ?? null;
+    }
+
     await this.serverRepo.save(server);
 
     if (memoryChanged) {
@@ -425,6 +551,10 @@ export class ServersService implements OnApplicationBootstrap {
     const server = await this.serverRepo.findOne({ where: { id } });
     if (!server) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
+    }
+
+    if (this.shutdownWarningService?.hasActiveCountdown(id)) {
+      await this.shutdownWarningService.cancelCountdown(id);
     }
 
     await this.k8sService.deprovisionServer(server);
@@ -573,7 +703,7 @@ export class ServersService implements OnApplicationBootstrap {
   async updateVersion(
     id: string,
     dto: UpdateVersionDto,
-  ): Promise<{ message: string; version: string; rolledBack: boolean }> {
+  ): Promise<{ message: string; version: string; rolledBack: boolean; taskId?: string }> {
     const server = await this.serverRepo.findOne({
       where: { id },
       relations: {
@@ -603,10 +733,85 @@ export class ServersService implements OnApplicationBootstrap {
     const previousRuntime = ServersService.runtimeOf(server);
     const previousState = server.state;
 
+    const direction =
+      this.versionsService && previousVersion
+        ? await this.versionsService.getVersionDirection(previousVersion, dto.game_version)
+        : 'upgrade';
+    if (direction === 'downgrade' && !dto.confirm_downgrade) {
+      throw new ConflictException({
+        from: previousVersion,
+        to: dto.game_version,
+        direction: 'downgrade',
+        message: 'Downgrade requires explicit confirmation',
+      });
+    }
+
     this.logger.log(
       `Iniciando pipeline de atualização para [${server.subdomain}]: ${previousVersion} -> ${dto.game_version} (RF-STO-13)`,
     );
 
+    if (
+      this.shutdownWarningService &&
+      (previousState === 'READY' || previousState === 'STARTING')
+    ) {
+      const scheduled = await this.shutdownWarningService.scheduleCountdown({
+        server,
+        action: 'update-version',
+        warningMinutes: dto.warning_minutes,
+        onExecute: async () => {
+          const freshServer = await this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          });
+          if (!freshServer) return;
+          const result = await this.executeVersionUpdate(
+            freshServer,
+            dto,
+            runtime,
+            previousVersion,
+            previousModpack,
+            previousType,
+            previousRuntime,
+            previousState,
+          );
+          if (result.rolledBack) {
+            throw new Error(result.message);
+          }
+        },
+      });
+
+      if (scheduled.scheduled) {
+        return {
+          message: 'Version update scheduled with player warning countdown',
+          version: dto.game_version,
+          rolledBack: false,
+          taskId: scheduled.taskId,
+        };
+      }
+    }
+
+    return this.executeVersionUpdate(
+      server,
+      dto,
+      runtime,
+      previousVersion,
+      previousModpack,
+      previousType,
+      previousRuntime,
+      previousState,
+    );
+  }
+
+  private async executeVersionUpdate(
+    server: Server,
+    dto: UpdateVersionDto,
+    runtime: ServerRuntime,
+    previousVersion: string,
+    previousModpack: string | null,
+    previousType: string,
+    previousRuntime: ServerRuntime,
+    previousState: ServerState,
+  ): Promise<{ message: string; version: string; rolledBack: boolean }> {
     // 1. Transição de estado para UPDATING e notificação ao Gateway L7
     server.state = 'UPDATING';
     await this.serverRepo.save(server);
@@ -614,7 +819,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     // 2. Parada graciosa da JVM ativa caso o servidor estivesse rodando
     if (previousState === 'READY' || previousState === 'STARTING') {
-      await this.k8sService.stopServer(server);
+      await this.k8sService.stopServer(server, previousState);
     }
 
     // 3. Backup Preventivo Obrigatório (pre-update)
@@ -638,9 +843,23 @@ export class ServersService implements OnApplicationBootstrap {
     }
 
     try {
-      // 4. Purga segura de mods/ para modpacks ou sob solicitação (RF-STO-13)
-      if (dto.purge_mods !== false && this.backupService) {
+      // 4. Purga segura de mods/ para modpacks ou ações manuais de mods/plugins (RF-STO-13, #207)
+      if (dto.purge_mods === true && this.backupService) {
         await this.backupService.purgeModsDirectory(server);
+        if (this.serversContentService) {
+          await this.serversContentService.removeContent(server.id, 'mods');
+        }
+      } else if (
+        dto.content_actions &&
+        dto.content_actions.length > 0 &&
+        this.serversContentService
+      ) {
+        const serverDir = this.serversContentService.getServerDataDir(server);
+        await this.serversContentService.applyContentActions(
+          server,
+          serverDir,
+          dto.content_actions,
+        );
       }
 
       // 5. Aplicação da nova versão nos metadados
@@ -661,7 +880,7 @@ export class ServersService implements OnApplicationBootstrap {
       await this.k8sService.startServer(server);
 
       // 7. Health Watchdog / Verificação de boot
-      const probePassed = await this.verifyPostUpdateBoot(server);
+      const probePassed = await this.verifyPostUpdateBoot(server, dto.game_version);
 
       if (probePassed) {
         this.logger.log(
@@ -715,21 +934,60 @@ export class ServersService implements OnApplicationBootstrap {
     };
   }
 
-  private async verifyPostUpdateBoot(server: Server): Promise<boolean> {
+  getProbeHost(server: Server): string {
+    if (
+      !this.configService ||
+      this.configService.isTest ||
+      this.configService.kubernetes.useMockDriver
+    ) {
+      return '127.0.0.1';
+    }
+    const resourceName = server.resource_name || server.subdomain;
+    return `${serverWorkloadName(resourceName)}.${this.configService.kubernetes.namespace}.svc.cluster.local`;
+  }
+
+  private async verifyPostUpdateBoot(
+    server: Server,
+    expectedVersion: string,
+    options?: { timeoutMs?: number; pollIntervalMs?: number },
+  ): Promise<boolean> {
     if (!this.slpProbeService) {
       return true;
     }
 
-    try {
-      const probe = await this.slpProbeService.probe(
-        '127.0.0.1',
-        server.allocated_port || 25565,
-        3000,
-      );
-      return probe.ready;
-    } catch {
-      return false;
+    const host = this.getProbeHost(server);
+    const port = server.allocated_port || 25565;
+
+    const isModpack = isModpackServerType(server.server_type);
+    const isTest = this.configService?.isTest ?? process.env.NODE_ENV === 'test';
+    const defaultTimeoutMs = isTest ? 100 : isModpack ? 930_000 : 195_000;
+    const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+    const pollIntervalMs = options?.pollIntervalMs ?? (isTest ? 10 : 3000);
+
+    const startTime = Date.now();
+    while (Date.now() - startTime <= timeoutMs) {
+      try {
+        const probe = await this.slpProbeService.probe(host, port, 3000);
+        if (
+          probe.ready &&
+          typeof probe.version === 'string' &&
+          probe.version.includes(expectedVersion)
+        ) {
+          return true;
+        }
+      } catch (err: any) {
+        this.logger.debug(
+          `SLP probe attempt failed for [${server.subdomain}] (${host}:${port}): ${err.message}`,
+        );
+      }
+
+      if (Date.now() - startTime + pollIntervalMs > timeoutMs) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
+
+    return false;
   }
 
   private async performRollback(

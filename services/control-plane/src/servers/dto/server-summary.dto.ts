@@ -16,11 +16,21 @@ export class ServerSummaryDto {
   is_maintenance: boolean;
   auto_wake: boolean;
   sleep_timeout_minutes: number;
+  stop_warning_minutes: number;
+  backup_schedule_mode?: string;
+  backup_interval_hours?: number | null;
+  backup_daily_time?: string | null;
+  backup_window_start?: string | null;
+  backup_window_end?: string | null;
+  backup_timezone?: string;
+  backup_retention_count?: number;
+  backup_next_run_at?: Date | null;
   created_at: Date;
   updated_at: Date;
   replicas?: number;
   ready_replicas?: number;
   players_online: number;
+  active_countdown?: { taskId: string; action: string } | null;
 }
 
 /** Settings exposed to the panel: an explicit allow-list, so a new entity column is never leaked by default. */

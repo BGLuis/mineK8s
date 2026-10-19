@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Optional, Param } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Optional, Param, Post } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
@@ -6,7 +6,6 @@ import { Repository } from 'typeorm';
 import { Roles } from '@auth/roles.decorator';
 import { UUID_PATTERN } from '@common/uuid';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
-import { TaskProgressPayload } from './tasks.gateway';
 import { TaskExecutionService, TaskStateDto } from './task-execution.service';
 
 export { TaskStateDto };
@@ -53,5 +52,17 @@ export class TasksController {
       startedAt: task.startedAt,
       updatedAt: task.updatedAt,
     };
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancelar execução de uma tarefa ativa (#204)' })
+  @ApiResponse({ status: 200, description: 'Tarefa cancelada' })
+  @ApiResponse({ status: 404, description: 'Tarefa não encontrada ou não cancelável' })
+  async cancelTask(@Param('id') id: string) {
+    const cancelled = await this.taskExecutionService?.cancelTask(id);
+    if (!cancelled) {
+      throw new NotFoundException(`Task "${id}" not found or cannot be cancelled`);
+    }
+    return { message: 'Task cancelled successfully', taskId: id };
   }
 }

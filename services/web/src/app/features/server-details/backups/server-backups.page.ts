@@ -19,13 +19,18 @@ import { TasksSocket } from '../../../core/realtime/tasks-socket';
 import { AuthSession } from '../../../core/auth/auth-session';
 import { ServersSocket } from '../../../core/realtime/servers-socket';
 import { liveRefresh } from '../../dashboard/live-refresh';
+import { FormsModule } from '@angular/forms';
 import {
   McBanner,
   McButton,
   McDialog,
   McIcon,
+  McPanel,
   McProgress,
+  McSelect,
   McTable,
+  McTextField,
+  SelectOption,
   ToastService,
 } from '../../../ui';
 import {
@@ -82,7 +87,18 @@ const STATE_LABELS: Partial<Record<ServerState, string>> = {
 @Component({
   selector: 'mc-server-backups-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McBanner, McButton, McDialog, McIcon, McProgress, McTable],
+  imports: [
+    FormsModule,
+    McBanner,
+    McButton,
+    McDialog,
+    McIcon,
+    McPanel,
+    McProgress,
+    McSelect,
+    McTable,
+    McTextField,
+  ],
   template: `
     <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
       <div class="min-w-72 flex-1">
@@ -106,6 +122,93 @@ const STATE_LABELS: Partial<Record<ServerState, string>> = {
     <p class="t-caption mb-4 text-text-muted">
       O backup a quente exige o servidor ONLINE; o a frio, o servidor parado.
     </p>
+
+    <mc-panel title="Agendamento" class="mb-6" data-testid="backup-schedule-panel">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <mc-select
+            label="Modo de agendamento"
+            [options]="scheduleModes"
+            [value]="backupScheduleMode()"
+            (valueChange)="onScheduleModeChange($event)"
+          />
+        </div>
+
+        @if (backupScheduleMode() === 'INTERVAL') {
+          <div>
+            <mc-text-field
+              label="Intervalo (horas)"
+              type="number"
+              [ngModel]="backupIntervalHours().toString()"
+              (ngModelChange)="backupIntervalHours.set(+$event || 12)"
+            />
+          </div>
+        }
+
+        @if (backupScheduleMode() === 'DAILY') {
+          <div>
+            <mc-text-field
+              label="Horário diário (HH:MM)"
+              placeholder="04:00"
+              [ngModel]="backupDailyTime()"
+              (ngModelChange)="backupDailyTime.set($event)"
+            />
+          </div>
+        }
+
+        <div>
+          <mc-text-field
+            label="Início da janela (opcional)"
+            placeholder="02:00"
+            [ngModel]="backupWindowStart()"
+            (ngModelChange)="backupWindowStart.set($event)"
+          />
+        </div>
+
+        <div>
+          <mc-text-field
+            label="Fim da janela (opcional)"
+            placeholder="06:00"
+            [ngModel]="backupWindowEnd()"
+            (ngModelChange)="backupWindowEnd.set($event)"
+          />
+        </div>
+
+        <div>
+          <mc-text-field
+            label="Retenção (backups rotineiros)"
+            type="number"
+            [ngModel]="backupRetentionCount().toString()"
+            (ngModelChange)="backupRetentionCount.set(+$event || 5)"
+          />
+        </div>
+
+        <div>
+          <mc-text-field
+            label="Fuso horário"
+            placeholder="America/Sao_Paulo"
+            [ngModel]="backupTimezone()"
+            (ngModelChange)="backupTimezone.set($event)"
+          />
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-border-default pt-4">
+        <div>
+          <span class="t-caption text-text-muted">Próximo backup calculado: </span>
+          <span class="t-label-md text-text-primary" data-testid="next-run-at">
+            {{ nextRunFormatted() }}
+          </span>
+        </div>
+        <mc-button
+          variant="primary"
+          [disabled]="savingSchedule()"
+          (click)="saveSchedule()"
+        >
+          Salvar agendamento
+        </mc-button>
+      </div>
+    </mc-panel>
 
     @if (operation(); as op) {
       <section
@@ -369,6 +472,29 @@ export class ServerBackupsPage {
     }
   });
 
+  protected readonly scheduleModes: readonly SelectOption[] = [
+    { value: 'OFF', label: 'Desativado' },
+    { value: 'INTERVAL', label: 'A cada N horas' },
+    { value: 'DAILY', label: 'Diário em horário fixo' },
+  ];
+  protected readonly backupScheduleMode = signal<'OFF' | 'INTERVAL' | 'DAILY'>('OFF');
+  protected readonly backupIntervalHours = signal<number>(12);
+  protected readonly backupDailyTime = signal<string>('04:00');
+  protected readonly backupWindowStart = signal<string>('');
+  protected readonly backupWindowEnd = signal<string>('');
+  protected readonly backupTimezone = signal<string>('America/Sao_Paulo');
+  protected readonly backupRetentionCount = signal<number>(5);
+  protected readonly backupNextRunAt = signal<string | null>(null);
+  protected readonly savingSchedule = signal(false);
+
+  protected readonly nextRunFormatted = computed(() => {
+    const next = this.backupNextRunAt();
+    if (!next || this.backupScheduleMode() === 'OFF') {
+      return 'Nenhum agendamento ativo';
+    }
+    return formatBackupDate(next);
+  });
+
   constructor() {
     effect(() => {
       const id = this.id();
@@ -377,6 +503,14 @@ export class ServerBackupsPage {
           next: (server) => {
             this.serverState.set(server.state);
             this.serverName.set(server.name);
+            this.backupScheduleMode.set(server.backup_schedule_mode ?? 'OFF');
+            this.backupIntervalHours.set(server.backup_interval_hours ?? 12);
+            this.backupDailyTime.set(server.backup_daily_time ?? '04:00');
+            this.backupWindowStart.set(server.backup_window_start ?? '');
+            this.backupWindowEnd.set(server.backup_window_end ?? '');
+            this.backupTimezone.set(server.backup_timezone ?? 'America/Sao_Paulo');
+            this.backupRetentionCount.set(server.backup_retention_count ?? 5);
+            this.backupNextRunAt.set(server.backup_next_run_at ?? null);
           },
           error: () => this.serverState.set(null),
         });
@@ -477,6 +611,36 @@ export class ServerBackupsPage {
         this.operationError.set(backupErrorMessage('create', error, mode));
       },
     });
+  }
+
+  protected onScheduleModeChange(value: string): void {
+    this.backupScheduleMode.set(value as 'OFF' | 'INTERVAL' | 'DAILY');
+  }
+
+  protected saveSchedule(): void {
+    this.savingSchedule.set(true);
+    const mode = this.backupScheduleMode();
+    this.servers
+      .update(this.id(), {
+        backup_schedule_mode: mode,
+        backup_interval_hours: mode === 'INTERVAL' ? Number(this.backupIntervalHours()) : undefined,
+        backup_daily_time: mode === 'DAILY' ? this.backupDailyTime() : undefined,
+        backup_window_start: this.backupWindowStart() ? this.backupWindowStart() : undefined,
+        backup_window_end: this.backupWindowEnd() ? this.backupWindowEnd() : undefined,
+        backup_timezone: this.backupTimezone(),
+        backup_retention_count: Number(this.backupRetentionCount()),
+      })
+      .subscribe({
+        next: (server) => {
+          this.savingSchedule.set(false);
+          this.backupNextRunAt.set(server.backup_next_run_at ?? null);
+          this.toast.success('Agendamento de backups salvo.');
+        },
+        error: () => {
+          this.savingSchedule.set(false);
+          this.toast.error('Não foi possível salvar o agendamento.');
+        },
+      });
   }
 
   protected openDialog(kind: DialogKind, backup: ServerBackup, reason?: string): void {

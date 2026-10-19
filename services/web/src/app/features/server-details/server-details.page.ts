@@ -24,6 +24,7 @@ import { formatDuration, serverTypeLabel } from './format';
 import { headerActions } from './header-actions';
 import { McPublishDialog } from './publish-dialog';
 import { ServerDetailStore } from './server-detail.store';
+import { ServerLifecycle } from '../dashboard/server-lifecycle';
 
 /** Layout for `/servers/:id`; the router binds `:id` to the `id` input. */
 @Component({
@@ -124,6 +125,19 @@ import { ServerDetailStore } from './server-detail.store';
       </header>
       <mc-publish-dialog #publish [serverName]="s.name" />
       <p class="sr-only" role="status">Estado do servidor: {{ announcement() }}</p>
+      @if (activeTask(); as task) {
+        <mc-banner class="mb-4" tone="warning" [title]="bannerTitle(task.action)">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p class="t-body-md">{{ task.step }}</p>
+              <p class="t-caption text-text-muted">Progresso: {{ task.progressPercent }}%</p>
+            </div>
+            <mc-button size="sm" variant="danger" (click)="lifecycle.cancel(s.id)">
+              {{ cancelLabel(task.action) }}
+            </mc-button>
+          </div>
+        </mc-banner>
+      }
       @if (store.stale()) {
         <mc-banner class="mb-4" tone="warning" title="Dados desatualizados">
           Não foi possível atualizar o estado do servidor. Tentando de novo em alguns segundos.
@@ -154,8 +168,22 @@ import { ServerDetailStore } from './server-detail.store';
 })
 export class ServerDetailsPage {
   protected readonly store = inject(ServerDetailStore);
+  protected readonly lifecycle = inject(ServerLifecycle);
 
   readonly id = input.required<string>();
+  protected readonly activeTask = computed(() => this.lifecycle.activeTaskFor(this.id()));
+
+  protected bannerTitle(action: string): string {
+    if (action === 'restart') return 'Reinício do servidor programado';
+    if (action === 'update-version') return 'Atualização do servidor programada';
+    return 'Parada do servidor programada';
+  }
+
+  protected cancelLabel(action: string): string {
+    if (action === 'restart') return 'Cancelar reinício';
+    if (action === 'update-version') return 'Cancelar atualização';
+    return 'Cancelar parada';
+  }
 
   protected readonly tabs = computed<McTabItem[]>(() => {
     const base = ['/servers', this.id()];

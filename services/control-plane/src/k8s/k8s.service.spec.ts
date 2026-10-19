@@ -314,5 +314,29 @@ describe('KubernetesService', () => {
       const dep = await driver.getDeployment('mc-lobby', 'minekubernetes');
       expect(dep?.replicas).toBe(0);
     });
+
+    it('should invoke gracefulShutdown when stopping an UPDATING server whose previousState was READY (#199)', async () => {
+      server.state = 'UPDATING';
+      server.game_type = 'MINECRAFT';
+
+      await service.provisionServer(server, settings);
+      await service.startServer(server);
+      await service.stopServer(server, 'READY');
+
+      expect(mockConsoleDriver.gracefulShutdown).toHaveBeenCalledWith(server);
+      const dep = await driver.getDeployment('mc-lobby', 'minekubernetes');
+      expect(dep?.replicas).toBe(0);
+    });
+
+    it('should wait for deployment pods to terminate when stopping (#199)', async () => {
+      server.state = 'READY';
+      const waitSpy = jest.spyOn(driver, 'waitForDeploymentPodsTerminated');
+
+      await service.provisionServer(server, settings);
+      await service.startServer(server);
+      await service.stopServer(server);
+
+      expect(waitSpy).toHaveBeenCalledWith('mc-lobby', 90000, 'minekubernetes');
+    });
   });
 });
