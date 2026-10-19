@@ -389,7 +389,7 @@ describe('ServersService', () => {
 
       const res = await service.stop('srv-1');
       expect(res.message).toBe('Instance stopping');
-      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server);
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(server, 'READY');
       expect(server.state).toBe('STOPPED');
     });
   });
@@ -952,6 +952,32 @@ describe('ServersService', () => {
       expect(mockGatewayIpcService.broadcastRouteUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'READY' }),
       );
+    });
+
+    it('calls graceful stop before pre-update backup and waits for pod termination (#199)', async () => {
+      let stopResolved = false;
+      let backupCalledAfterStop = false;
+
+      mockK8sService.stopServer.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        stopResolved = true;
+      });
+
+      mockBackupService.createPreUpdateBackup.mockImplementation(async () => {
+        backupCalledAfterStop = stopResolved;
+        return '/tmp/backup-order-test';
+      });
+
+      await service.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+        purge_mods: true,
+      });
+
+      expect(mockK8sService.stopServer).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'srv-update-1' }),
+        'READY',
+      );
+      expect(backupCalledAfterStop).toBe(true);
     });
 
     it('should trigger automated rollback when boot of new version fails (RF-STO-13)', async () => {

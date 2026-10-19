@@ -339,9 +339,10 @@ export class ServersService implements OnApplicationBootstrap {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
 
+    const previousState = server.state;
+    await this.k8sService.stopServer(server, previousState);
     server.state = 'STOPPED';
     await this.serverRepo.save(server);
-    await this.k8sService.stopServer(server);
     // The reconciler only reports a stop it sees as a transition, and this one is already STOPPED.
     this.notifyGateway(server, 'STOPPED');
 
@@ -618,7 +619,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     // 2. Parada graciosa da JVM ativa caso o servidor estivesse rodando
     if (previousState === 'READY' || previousState === 'STARTING') {
-      await this.k8sService.stopServer(server);
+      await this.k8sService.stopServer(server, previousState);
     }
 
     // 3. Backup Preventivo Obrigatório (pre-update)

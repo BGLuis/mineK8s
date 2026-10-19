@@ -61,6 +61,11 @@ export interface IKubernetesDriver {
   deleteJob(name: string, namespace?: string): Promise<void>;
   waitForJobPodRunning(name: string, timeoutMs?: number, namespace?: string): Promise<boolean>;
   waitForJobCompletion(name: string, timeoutMs?: number, namespace?: string): Promise<boolean>;
+  waitForDeploymentPodsTerminated(
+    name: string,
+    timeoutMs?: number,
+    namespace?: string,
+  ): Promise<boolean>;
 }
 
 export const KUBERNETES_DRIVER = 'KUBERNETES_DRIVER';

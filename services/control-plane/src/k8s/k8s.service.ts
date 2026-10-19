@@ -6,7 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
 import { MinecraftServerSettings } from '@database/entities/minecraft-server-settings.entity';
-import { Server } from '@database/entities/server.entity';
+import { Server, ServerState } from '@database/entities/server.entity';
 import { MinecraftRconConsoleDriver } from '@console/minecraft-rcon-console.driver';
 
 import {
@@ -121,12 +121,13 @@ export class KubernetesService {
     });
   }
 
-  async stopServer(server: Server): Promise<void> {
+  async stopServer(server: Server, previousState?: ServerState): Promise<void> {
     const isMinecraft = !server.game_type || server.game_type.toUpperCase() === 'MINECRAFT';
+    const effectiveState = previousState ?? server.state;
     if (
       isMinecraft &&
       this.consoleDriver &&
-      (server.state === 'READY' || server.state === 'STOPPING')
+      (effectiveState === 'READY' || effectiveState === 'STOPPING')
     ) {
       try {
         await this.consoleDriver.gracefulShutdown(server);
@@ -136,9 +137,11 @@ export class KubernetesService {
     }
 
     this.logger.log(`Stopping server [${server.subdomain}]: scaling deployment to 0...`);
-    await this.driver.scaleDeployment(
-      serverWorkloadName(server.resource_name),
-      0,
+    const workloadName = serverWorkloadName(server.resource_name);
+    await this.driver.scaleDeployment(workloadName, 0, this.configService.kubernetes.namespace);
+    await this.driver.waitForDeploymentPodsTerminated(
+      workloadName,
+      90000,
       this.configService.kubernetes.namespace,
     );
   }
@@ -224,6 +227,18 @@ export class KubernetesService {
   ): Promise<boolean> {
     return this.driver.waitForJobCompletion(
       jobName,
+      timeoutMs,
+      namespace || this.configService.kubernetes.namespace,
+    );
+  }
+
+  async waitForDeploymentPodsTerminated(
+    name: string,
+    timeoutMs?: number,
+    namespace?: string,
+  ): Promise<boolean> {
+    return this.driver.waitForDeploymentPodsTerminated(
+      name,
       timeoutMs,
       namespace || this.configService.kubernetes.namespace,
     );

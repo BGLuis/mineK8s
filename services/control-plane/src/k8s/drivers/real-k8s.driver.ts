@@ -343,4 +343,32 @@ export class RealKubernetesDriver implements IKubernetesDriver {
     }
     return false;
   }
+
+  async waitForDeploymentPodsTerminated(
+    deploymentName: string,
+    timeoutMs = 90000,
+    namespace = this.configService.kubernetes.namespace,
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const pods = await this.coreV1Api.listNamespacedPod({
+          namespace,
+          labelSelector: `app.kubernetes.io/name=${deploymentName}`,
+        });
+        const activePods = (pods.items || []).filter(
+          (p) => p.status?.phase !== 'Succeeded' && p.status?.phase !== 'Failed',
+        );
+        if (activePods.length === 0) {
+          return true;
+        }
+      } catch (err) {
+        this.logger.debug(
+          `Error checking pod termination status for deployment ${deploymentName}: ${(err as Error).message}`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    return false;
+  }
 }
