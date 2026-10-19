@@ -1,4 +1,33 @@
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
+
+@ValidatorConstraint({ name: 'isValidTimeZone', async: false })
+export class IsValidTimeZoneConstraint implements ValidatorConstraintInterface {
+  validate(tz: unknown): boolean {
+    if (typeof tz !== 'string') return false;
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  defaultMessage(): string {
+    return 'backup_timezone must be a valid IANA time zone identifier';
+  }
+}
 
 /** Campos editáveis depois da criação; mesmos limites do CreateServerDto. INTERNET só entra por POST /:id/publish. */
 export class UpdateServerDto {
@@ -63,6 +92,7 @@ export class UpdateServerDto {
 
   @IsOptional()
   @IsString()
+  @Validate(IsValidTimeZoneConstraint)
   backup_timezone?: string;
 
   @IsOptional()

@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { EMPTY, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ServerDetail } from '../../../core/api/models';
 import { BackupsApi } from '../../../core/api/backups.api';
 import { ServersApi } from '../../../core/api/servers.api';
 import { TasksSocket } from '../../../core/realtime/tasks-socket';
@@ -13,15 +14,31 @@ import { formatBackupDate } from './backups.model';
 
 describe('ServerBackupsPage (#205)', () => {
   let fixture: ComponentFixture<ServerBackupsPage>;
-  let component: ServerBackupsPage;
   let serversApi: { get: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   let backupsApi: { list: ReturnType<typeof vi.fn> };
   let toast: { success: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
-  const initialServer = {
+  const createServerDetail = (overrides?: Partial<ServerDetail>): ServerDetail => ({
     id: 'srv-1',
     name: 'Survival',
+    subdomain: 'survival',
+    game_type: 'minecraft',
+    routing_model: 'sni-shared-port',
+    server_type: 'PAPER',
+    game_version: '1.20.4',
+    allocated_memory_mb: 4096,
+    allocated_port: null,
     state: 'STOPPED',
+    access_policy: 'GROUP',
+    is_maintenance: false,
+    auto_wake: true,
+    sleep_timeout_minutes: 15,
+    stop_warning_minutes: 10,
+    created_at: '2026-10-09T00:00:00Z',
+    updated_at: '2026-10-09T00:00:00Z',
+    java_version: 21,
+    server_build: '1',
+    server_build_channel: 'STABLE',
     backup_schedule_mode: 'OFF',
     backup_interval_hours: 12,
     backup_daily_time: '04:00',
@@ -30,19 +47,20 @@ describe('ServerBackupsPage (#205)', () => {
     backup_timezone: 'America/Sao_Paulo',
     backup_retention_count: 5,
     backup_next_run_at: null,
-  };
+    ...overrides,
+  });
 
-  const updatedServer = {
-    ...initialServer,
+  const initialServer = createServerDetail();
+  const updatedServer = createServerDetail({
     backup_schedule_mode: 'DAILY',
     backup_daily_time: '04:00',
     backup_next_run_at: '2026-10-19T07:00:00.000Z',
-  };
+  });
 
   beforeEach(async () => {
     serversApi = {
-      get: vi.fn(() => of(initialServer as any)),
-      update: vi.fn(() => of(updatedServer as any)),
+      get: vi.fn(() => of(initialServer)),
+      update: vi.fn(() => of(updatedServer)),
     };
 
     backupsApi = {
@@ -76,7 +94,6 @@ describe('ServerBackupsPage (#205)', () => {
     });
 
     fixture = TestBed.createComponent(ServerBackupsPage);
-    component = fixture.componentInstance;
     fixture.componentRef.setInput('id', 'srv-1');
     await fixture.whenStable();
     fixture.detectChanges();

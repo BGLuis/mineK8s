@@ -53,5 +53,6 @@ describe('UpdateServerDto', () => {
     expect(await invalidFields({ backup_daily_time: '25:00' })).toEqual(['backup_daily_time']);
     expect(await invalidFields({ backup_interval_hours: 0 })).toEqual(['backup_interval_hours']);
     expect(await invalidFields({ backup_retention_count: 0 })).toEqual(['backup_retention_count']);
+    expect(await invalidFields({ backup_timezone: 'Invalid/Zone' })).toEqual(['backup_timezone']);
   });
 });
