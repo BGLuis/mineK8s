@@ -28,7 +28,7 @@ export class UpdateVersionDto {
 
   @ApiPropertyOptional({
     description: 'Purga seletiva da pasta mods/ antes de instalar nova versão (RF-STO-13)',
-    default: true,
+    default: false,
   })
   @IsBoolean()
   @IsOptional()

@@ -596,6 +596,15 @@ export class ServersService implements OnApplicationBootstrap {
       );
     }
 
+    const currentOrTargetType = (server.server_type || dto.server_type)?.toUpperCase();
+    if (
+      currentOrTargetType === 'FABRIC' ||
+      currentOrTargetType === 'FORGE' ||
+      currentOrTargetType === 'NEOFORGE'
+    ) {
+      throw new ConflictException('Troca de versão de servidor com loader ainda não é suportada');
+    }
+
     // Resolved before the server is touched, so a version that cannot boot fails here with nothing to roll back.
     const runtime = await this.runtimeResolver.resolve(
       dto.server_type || server.server_type,
@@ -644,7 +653,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     try {
       // 4. Purga segura de mods/ para modpacks ou sob solicitação (RF-STO-13)
-      if (dto.purge_mods !== false && this.backupService) {
+      if (dto.purge_mods === true && this.backupService) {
         await this.backupService.purgeModsDirectory(server);
       }
 

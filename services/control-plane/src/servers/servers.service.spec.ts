@@ -1101,6 +1101,26 @@ describe('ServersService', () => {
         service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
       ).rejects.toThrow(ConflictException);
     });
+
+    it('should reject update on FABRIC server with 409 without stopping server or creating backup (#200)', async () => {
+      const server = serversDb.get('srv-update-1')!;
+      server.server_type = 'FABRIC';
+
+      await expect(
+        service.updateVersion('srv-update-1', { game_version: '1.21.0' }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+      expect(mockBackupService.createPreUpdateBackup).not.toHaveBeenCalled();
+    });
+
+    it('should not purge mods on PAPER server when purge_mods is omitted (#200)', async () => {
+      await service.updateVersion('srv-update-1', {
+        game_version: '1.20.5',
+      });
+
+      expect(mockBackupService.purgeModsDirectory).not.toHaveBeenCalled();
+    });
   });
 
   describe('runtime de servidores criados antes da resolução', () => {
