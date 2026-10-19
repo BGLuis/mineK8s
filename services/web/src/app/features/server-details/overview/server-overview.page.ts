@@ -29,6 +29,7 @@ import {
 import { errorReason } from '../../dashboard/server-lifecycle';
 import { formatDuration } from '../format';
 import { ServerDetailStore } from '../server-detail.store';
+import { McUpdateVersionDialog } from '../update-version-dialog';
 import { formatMemory, TPS_TARGET, tpsLevel, tpsSeries } from './performance';
 import {
   QuickSettings,
@@ -74,7 +75,16 @@ function avatarColor(nick: string): string {
 @Component({
   selector: 'mc-server-overview-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McButton, McPanel, McPlayerHead, McRamSlider, McSwitch, McTextField],
+  imports: [
+    FormsModule,
+    McButton,
+    McPanel,
+    McPlayerHead,
+    McRamSlider,
+    McSwitch,
+    McTextField,
+    McUpdateVersionDialog,
+  ],
   template: `
     @if (store.server(); as server) {
       <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -162,6 +172,18 @@ function avatarColor(nick: string): string {
         </div>
 
         <div class="flex min-w-0 flex-col gap-6">
+          <mc-panel title="Versão do jogo">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="t-caption text-text-muted">Versão instalada</p>
+                <p class="t-title-sm">{{ server.server_type }} {{ server.game_version }}</p>
+              </div>
+              <mc-button size="sm" variant="neutral" (click)="updateDialog.open()">
+                Atualizar versão
+              </mc-button>
+            </div>
+          </mc-panel>
+
           <mc-panel title="Configurações rápidas">
             <div class="flex flex-col gap-5">
               <div>
@@ -215,6 +237,7 @@ function avatarColor(nick: string): string {
           </mc-panel>
         </div>
       </div>
+      <mc-update-version-dialog #updateDialog />
     } @else if (store.loadState() === 'loading') {
       <div
         class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"

@@ -41,6 +41,7 @@ import { UpdateVersionDto } from './dto/update-version.dto';
 import { ServersBackupService } from './servers-backup.service';
 import { ServerRuntime, ServerRuntimeResolver } from './runtime/server-runtime.resolver';
 import { ServerIconService } from './server-icon.service';
+import { MinecraftVersionsService } from './minecraft-versions.service';
 import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
@@ -77,6 +78,8 @@ export class ServersService implements OnApplicationBootstrap {
     private readonly iconService?: ServerIconService,
     @Optional()
     private readonly configService?: AppConfigService,
+    @Optional()
+    private readonly versionsService?: MinecraftVersionsService,
   ) {}
 
   /** Servers created before the runtime was resolved get one now, so their next start fetches the right jar and Java. */
@@ -616,6 +619,19 @@ export class ServersService implements OnApplicationBootstrap {
     const previousType = server.server_type;
     const previousRuntime = ServersService.runtimeOf(server);
     const previousState = server.state;
+
+    const direction =
+      this.versionsService && previousVersion
+        ? await this.versionsService.getVersionDirection(previousVersion, dto.game_version)
+        : 'upgrade';
+    if (direction === 'downgrade' && !dto.confirm_downgrade) {
+      throw new ConflictException({
+        from: previousVersion,
+        to: dto.game_version,
+        direction: 'downgrade',
+        message: 'Downgrade requires explicit confirmation',
+      });
+    }
 
     this.logger.log(
       `Iniciando pipeline de atualização para [${server.subdomain}]: ${previousVersion} -> ${dto.game_version} (RF-STO-13)`,

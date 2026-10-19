@@ -112,6 +112,7 @@ export interface UpdateVersionRequest {
   server_type?: string;
   modpack_id?: string;
   purge_mods?: boolean;
+  confirm_downgrade?: boolean;
 }
 
 export interface UpdateVersionResponse {

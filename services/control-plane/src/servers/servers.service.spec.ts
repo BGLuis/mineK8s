@@ -32,6 +32,7 @@ describe('ServersService', () => {
   let mockConsoleDriver: any;
   let mockLogStreamer: any;
   let mockDnsDriver: any;
+  let mockVersionsService: any;
 
   const runtimeFor = (version: string) => ({
     java_version: version.startsWith('26.') ? 25 : 21,
@@ -178,6 +179,13 @@ describe('ServersService', () => {
 
     playerSessions = new PlayerSessionsService();
     mockNodeMetrics = { assertDiskAllowsCreation: jest.fn().mockResolvedValue(undefined) };
+    mockVersionsService = {
+      getVersionDirection: jest.fn(async (from: string, to: string) => {
+        if (from === '26.3' && to === '1.21.11') return 'downgrade';
+        if (from === '1.21.11' && to === '26.1') return 'upgrade';
+        return 'upgrade';
+      }),
+    };
 
     service = new ServersService(
       mockServerRepo as any,
@@ -194,6 +202,8 @@ describe('ServersService', () => {
       playerSessions,
       mockNodeMetrics as any,
       mockIconService as any,
+      undefined,
+      mockVersionsService,
     );
   });
 
@@ -1125,6 +1135,39 @@ describe('ServersService', () => {
       });
 
       expect(mockBackupService.purgeModsDirectory).not.toHaveBeenCalled();
+    });
+
+    it('updateVersion de 26.3 para 1.21.11 sem confirm_downgrade devolve 409 e não chama stopServer; com confirm_downgrade: true, segue o pipeline (#203)', async () => {
+      const server = serversDb.get('srv-update-1')!;
+      server.game_version = '26.3';
+
+      try {
+        await service.updateVersion('srv-update-1', {
+          game_version: '1.21.11',
+        });
+        throw new Error('should have thrown ConflictException');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConflictException);
+        const res = (err as ConflictException).getResponse();
+        expect(res).toEqual(
+          expect.objectContaining({
+            from: '26.3',
+            to: '1.21.11',
+            direction: 'downgrade',
+          }),
+        );
+      }
+
+      expect(mockK8sService.stopServer).not.toHaveBeenCalled();
+
+      // Com confirm_downgrade: true, segue o pipeline
+      const result = await service.updateVersion('srv-update-1', {
+        game_version: '1.21.11',
+        confirm_downgrade: true,
+      });
+
+      expect(result.version).toBe('1.21.11');
+      expect(mockK8sService.stopServer).toHaveBeenCalled();
     });
 
     it('creates a protected PRE_UPDATE backup record with 14-day retention and leaves nothing in <serverDir>/.backups (#201)', async () => {

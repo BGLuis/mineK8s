@@ -103,7 +103,8 @@ describe('MinecraftVersionsService', () => {
       expect(versions.length).toBeGreaterThan(0);
       expect(versions.every((v) => v.kind === 'release')).toBe(true);
       expect(versions[0].id).toBe('26.3');
-      expect(versions[1].id).toBe('1.21.1');
+      expect(versions[1].id).toBe('26.1');
+      expect(versions.find((v) => v.id === '1.21.1')).toBeDefined();
       expect(versions.find((v) => v.id === '26.4-snapshot-4')).toBeUndefined();
     });
 
@@ -167,6 +168,23 @@ describe('MinecraftVersionsService', () => {
     it('extracts unique MC versions and sorts descending', async () => {
       const versions = await service.listVersions('FORGE', false);
       expect(versions.map((v) => v.id)).toEqual(['1.21.1', '1.20.4', '1.19.4']);
+    });
+  });
+
+  describe('getVersionDirection (#203)', () => {
+    it('classifies 1.21.11 -> 26.1 as upgrade using manifest releaseTime', async () => {
+      const direction = await service.getVersionDirection('1.21.11', '26.1');
+      expect(direction).toBe('upgrade');
+    });
+
+    it('classifies 26.3 -> 1.21.11 as downgrade using manifest releaseTime', async () => {
+      const direction = await service.getVersionDirection('26.3', '1.21.11');
+      expect(direction).toBe('downgrade');
+    });
+
+    it('returns same when versions are equal', async () => {
+      const direction = await service.getVersionDirection('26.3', '26.3');
+      expect(direction).toBe('same');
     });
   });
 

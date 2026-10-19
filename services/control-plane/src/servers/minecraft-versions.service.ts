@@ -61,6 +61,36 @@ export class MinecraftVersionsService {
     return allVersions.filter((v) => v.kind === 'release');
   }
 
+  async getVersionDirection(
+    fromVersion: string,
+    toVersion: string,
+  ): Promise<'upgrade' | 'downgrade' | 'same'> {
+    if (fromVersion === toVersion) {
+      return 'same';
+    }
+
+    const versions = await this.listVersions('VANILLA', true);
+    const from = versions.find((v) => v.id === fromVersion);
+    const to = versions.find((v) => v.id === toVersion);
+
+    if (from?.releaseTime && to?.releaseTime) {
+      const fromTime = Date.parse(from.releaseTime);
+      const toTime = Date.parse(to.releaseTime);
+      if (toTime < fromTime) {
+        return 'downgrade';
+      }
+      if (toTime > fromTime) {
+        return 'upgrade';
+      }
+      return 'same';
+    }
+
+    const cmp = compareMcVersions(fromVersion, toVersion);
+    if (cmp < 0) return 'downgrade';
+    if (cmp > 0) return 'upgrade';
+    return 'same';
+  }
+
   private async getAllVersionsForType(type: string): Promise<MinecraftVersionItem[]> {
     const cached = this.cache.get(type);
     if (cached && cached.expiresAt > Date.now()) {

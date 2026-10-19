@@ -33,4 +33,12 @@ export class UpdateVersionDto {
   @IsBoolean()
   @IsOptional()
   purge_mods?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Confirmação explícita de downgrade para versões anteriores (#203)',
+    default: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  confirm_downgrade?: boolean;
 }
