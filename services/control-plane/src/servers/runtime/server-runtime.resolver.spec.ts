@@ -30,7 +30,15 @@ describe('ServerRuntimeResolver', () => {
   beforeEach(() => {
     routes = new Map();
     serve(MANIFEST_URL, fixture('mojang-version-manifest-v2.json'));
-    for (const version of ['26.3', '1.21.1', '1.20.4', '1.17.1', '1.16.5', '1.0']) {
+    for (const version of [
+      '26.4-snapshot-4',
+      '26.3',
+      '1.21.1',
+      '1.20.4',
+      '1.17.1',
+      '1.16.5',
+      '1.0',
+    ]) {
       serve(mojangUrl(version), fixture(`mojang-${version}.json`));
     }
     for (const version of ['1.21.11', '26.3']) {
@@ -90,6 +98,17 @@ describe('ServerRuntimeResolver', () => {
       );
 
       await expect(resolver.resolve('VANILLA', '1.21.1')).rejects.toThrow(BadGatewayException);
+    });
+
+    it('resolves a snapshot version like 26.4-snapshot-4 (#202)', async () => {
+      await expect(resolver.resolve('VANILLA', '26.4-snapshot-4')).resolves.toEqual({
+        java_version: 25,
+        server_jar_url:
+          'https://piston-data.mojang.com/v1/objects/d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5/server.jar',
+        server_jar_checksum: 'sha1:d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5',
+        server_build: null,
+        server_build_channel: null,
+      });
     });
   });
 

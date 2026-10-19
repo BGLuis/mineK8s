@@ -5,6 +5,15 @@
   },
   "versions": [
     {
+      "id": "26.4-snapshot-4",
+      "type": "snapshot",
+      "url": "https://piston-meta.mojang.com/v1/packages/1c2bef5269058557f56768302f6edef5ad382116/26.4-snapshot-4.json",
+      "time": "2026-09-30T11:39:25+00:00",
+      "releaseTime": "2026-09-30T11:32:57+00:00",
+      "sha1": "1c2bef5269058557f56768302f6edef5ad382116",
+      "complianceLevel": 1
+    },
+    {
       "id": "26.4-snapshot-2",
       "type": "snapshot",
       "url": "https://piston-meta.mojang.com/v1/packages/655c2da7d6815e84864a0f9a055c90e36337b0b4/26.4-snapshot-2.json",

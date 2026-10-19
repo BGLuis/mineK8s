@@ -28,3 +28,4 @@ export * from './choice-tile/choice-tile';
 export * from './legal-footer/legal-footer';
 export * from './switch/switch';
 export * from './select/select';
+export * from './version-selector/version-selector';

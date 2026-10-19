@@ -25,6 +25,8 @@ import { ServersBackupService } from './servers-backup.service';
 import { MinecraftStorageProvider } from './providers/minecraft-storage.provider';
 import { GameStorageProviderRegistry } from './providers/game-storage-provider.registry';
 import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
+import { MinecraftVersionsController } from './minecraft-versions.controller';
+import { MinecraftVersionsService } from './minecraft-versions.service';
 
 @Module({
   imports: [
@@ -47,7 +49,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     NodeModule,
     TasksModule,
   ],
-  controllers: [ServersController],
+  controllers: [ServersController, MinecraftVersionsController],
   providers: [
     ServersService,
     ServersFilesService,
@@ -55,6 +57,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
     ServerRuntimeResolver,
+    MinecraftVersionsService,
   ],
   exports: [
     ServersService,
@@ -62,6 +65,7 @@ import { ServerRuntimeResolver } from './runtime/server-runtime.resolver';
     ServersBackupService,
     MinecraftStorageProvider,
     GameStorageProviderRegistry,
+    MinecraftVersionsService,
   ],
 })
 export class ServersModule {}

@@ -7,6 +7,7 @@ import {
   CreateServerRequest,
   CreateServerResponse,
   MessageResponse,
+  MinecraftVersionItem,
   PublishResponse,
   ServerDetail,
   ServerLogsResponse,
@@ -105,5 +106,11 @@ export class ServersApi {
 
   unpublish(id: string): Observable<PublishResponse> {
     return this.api.delete(`/api/servers/${id}/publish`);
+  }
+
+  listMinecraftVersions(type: string, snapshots = false): Observable<MinecraftVersionItem[]> {
+    return this.api.get('/api/minecraft/versions', {
+      params: { type, snapshots: String(snapshots) },
+    });
   }
 }

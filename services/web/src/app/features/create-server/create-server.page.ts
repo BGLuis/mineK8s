@@ -31,6 +31,7 @@ import {
   McStatusChip,
   McStepper,
   McTextField,
+  McVersionSelector,
   McVoxelScene,
   ToastService,
   containerMemoryMb,
@@ -80,6 +81,7 @@ const SEARCH_LIMIT = 10;
     McStatusChip,
     McStepper,
     McTextField,
+    McVersionSelector,
     McVoxelScene,
   ],
   template: `
@@ -299,13 +301,12 @@ const SEARCH_LIMIT = 10;
                   }
                 </div>
               } @else if (state().profile) {
-                <mc-text-field
-                  class="max-w-sm"
+                <mc-version-selector
+                  class="max-w-md"
                   label="Versão do Minecraft"
-                  placeholder="1.21.1"
-                  autocomplete="off"
-                  [ngModel]="state().gameVersion"
-                  (ngModelChange)="patch({ gameVersion: $event })"
+                  [serverType]="state().profile!"
+                  [value]="state().gameVersion"
+                  (valueChange)="patch({ gameVersion: $event })"
                   [errorText]="errors()['gameVersion'] ?? ''"
                 />
               }

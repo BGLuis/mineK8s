@@ -14,7 +14,8 @@ export type ServerRuntime = Pick<
   | 'server_build_channel'
 >;
 
-const MC_VERSION_PATTERN = /^\d+(\.\d+){1,2}(-(pre|rc)\d+)?$/;
+const MC_VERSION_PATTERN =
+  /^(?:\d+(\.\d+)+(-[a-zA-Z0-9._-]+)?|\d{2}w\d{2}[a-z](-[a-zA-Z0-9._-]+)?)$/;
 /** Their installer provides the jar; only the Java version is resolved here. */
 const MODPACK_LOADER_TYPES = ['FORGE', 'NEOFORGE', 'FABRIC'];
 /** Java majors with an eclipse-temurin JRE image. There is no 16, and 17 runs what asks for 16. */

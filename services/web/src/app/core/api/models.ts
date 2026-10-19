@@ -120,6 +120,12 @@ export interface UpdateVersionResponse {
   rolledBack: boolean;
 }
 
+export interface MinecraftVersionItem {
+  id: string;
+  kind: 'release' | 'snapshot';
+  releaseTime?: string;
+}
+
 export interface MessageResponse {
   message: string;
 }

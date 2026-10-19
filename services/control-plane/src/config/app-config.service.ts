@@ -228,6 +228,12 @@ export class AppConfigService {
       ),
       this.config.get<string>('PAPER_API_URL', 'https://fill.papermc.io'),
       this.config.get<string>('PURPUR_API_URL', 'https://api.purpurmc.org'),
+      this.config.get<string>('FABRIC_META_URL', 'https://meta.fabricmc.net'),
+      this.config.get<string>('NEOFORGE_MAVEN_URL', 'https://maven.neoforged.net'),
+      this.config.get<string>(
+        'FORGE_PROMOTIONS_URL',
+        'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json',
+      ),
     );
   }
 }
