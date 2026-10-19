@@ -14,6 +14,7 @@ const fixture = (name: string) => fs.readFileSync(path.join(__dirname, 'fixtures
 const MANIFEST_URL = 'https://meta.test/mc/game/version_manifest_v2.json';
 const PAPER_API = 'https://fill.test';
 const PURPUR_API = 'https://purpur.test';
+const FABRIC_META = 'https://meta.fabricmc.test';
 
 describe('ServerRuntimeResolver', () => {
   const originalFetch = global.fetch;
@@ -61,6 +62,7 @@ describe('ServerRuntimeResolver', () => {
         mojangManifestUrl: MANIFEST_URL,
         paperApiUrl: PAPER_API,
         purpurApiUrl: PURPUR_API,
+        fabricMetaUrl: FABRIC_META,
       },
     } as any);
   });
@@ -215,6 +217,31 @@ describe('ServerRuntimeResolver', () => {
         server_jar_url: `${PURPUR_API}/v2/purpur/1.21.1/2329/download`,
         server_jar_checksum: 'md5:dc0026462cac76c869335feb43388a76',
         server_build: '2329',
+        server_build_channel: null,
+      });
+    });
+  });
+
+  describe('Fabric (#206)', () => {
+    it('CRITÉRIO DE ACEITE: o resolver de runtime de FABRIC 1.21.1 devolve server_jar_url do meta e um server_jar_checksum sha256:', async () => {
+      serve(
+        `${FABRIC_META}/v2/versions/loader/1.21.1`,
+        JSON.stringify([{ loader: { version: '0.16.9', stable: true } }]),
+      );
+      serve(
+        `${FABRIC_META}/v2/versions/installer`,
+        JSON.stringify([{ version: '1.1.2', stable: true }]),
+      );
+      const fakeJar = 'fabric-server-jar-content';
+      serve(`${FABRIC_META}/v2/versions/loader/1.21.1/0.16.9/1.1.2/server/jar`, fakeJar);
+
+      const expectedSha256 = createHash('sha256').update(fakeJar).digest('hex');
+
+      await expect(resolver.resolve('FABRIC', '1.21.1')).resolves.toEqual({
+        java_version: 21,
+        server_jar_url: `${FABRIC_META}/v2/versions/loader/1.21.1/0.16.9/1.1.2/server/jar`,
+        server_jar_checksum: `sha256:${expectedSha256}`,
+        server_build: '0.16.9',
         server_build_channel: null,
       });
     });

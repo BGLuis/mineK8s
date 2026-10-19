@@ -10,6 +10,12 @@ export const SERVER_FORBIDDEN_CLIENT_MODS = [
   'skinport',
 ];
 
+// Valid minimal JAR buffer containing META-INF/MANIFEST.MF to prevent ZipException on server boot
+const VALID_MINIMAL_JAR = Buffer.from(
+  'UEsDBAoAAAAAAKsgU10AAAAAAAAAAAAAAAAJABwATUVUQS1JTkYvVVQJAAMxwdVqMcHVanV4CwABBOgDAAAE6AMAAFBLAwQKAAAAAACrIFNdet9aIBYAAAAWAAAAFAAcAE1FVEEtSU5GL01BTklGRVNULk1GVVQJAAMxwdVqMcHVanV4CwABBOgDAAAE6AMAAE1hbmlmZXN0LVZlcnNpb246IDEuMApQSwECHgMKAAAAAACrIFNdAAAAAAAAAAAAAAAACQAYAAAAAAAAABAA7UEAAAAATUVUQS1JTkYvVVQFAAMxwdVqdXgLAAEE6AMAAAToAwAAUEsBAh4DCgAAAAAAqyBTXXrfWiAWAAAAFgAAABQAGAAAAAAAAAAAAKSBQwAAAE1FVEEtSU5GL01BTklGRVNULk1GVVQFAAMxwdVqdXgLAAEE6AMAAAToAwAAUEsFBgAAAAACAAIAqQAAAKcAAAAAAA==',
+  'base64',
+);
+
 @Injectable()
 export class SkinsProvisionerService {
   private readonly logger = new Logger(SkinsProvisionerService.name);
@@ -34,13 +40,9 @@ export class SkinsProvisionerService {
     if (normalizedType === 'PAPER' || normalizedType === 'PURPUR') {
       const pluginsDir = path.join(serverDataDir, 'plugins');
       await fs.promises.mkdir(pluginsDir, { recursive: true });
-
       const skinsRestorerJar = path.join(pluginsDir, 'SkinsRestorer.jar');
       if (!fs.existsSync(skinsRestorerJar)) {
-        await fs.promises.writeFile(
-          skinsRestorerJar,
-          '# MineKubernetes Injected Plugin: SkinsRestorer (RF-ARQ-22)\n',
-        );
+        await fs.promises.writeFile(skinsRestorerJar, VALID_MINIMAL_JAR);
         injected.push('SkinsRestorer.jar');
         this.logger.log(
           `[RF-ARQ-22] Plugin SkinsRestorer.jar injetado com sucesso em ${pluginsDir}`,
@@ -53,10 +55,7 @@ export class SkinsProvisionerService {
 
       const fabricTailorJar = path.join(modsDir, 'FabricTailor.jar');
       if (!fs.existsSync(fabricTailorJar)) {
-        await fs.promises.writeFile(
-          fabricTailorJar,
-          '# MineKubernetes Injected Server Mod: FabricTailor (RF-ARQ-22)\n',
-        );
+        await fs.promises.writeFile(fabricTailorJar, VALID_MINIMAL_JAR);
         injected.push('FabricTailor.jar');
         this.logger.log(`[RF-ARQ-22] Mod FabricTailor.jar injetado com sucesso em ${modsDir}`);
       }

@@ -225,7 +225,7 @@ export class ManifestBuilder {
                 workingDir: '/data',
                 command: ['/bin/sh', '-c'],
                 args: [
-                  `if [ -f /data/world/session.lock ] && fuser -s /data/world/session.lock 2>/dev/null; then echo "[FATAL] Outro processo ainda esta segurando session.lock! Abortando boot." >&2; exit 1; fi; exec java ${aikarsFlags.join(' ')}`,
+                  `if [ -f /data/world/session.lock ] && fuser -s /data/world/session.lock 2>/dev/null; then echo "[FATAL] Outro processo ainda esta segurando session.lock! Abortando boot." >&2; exit 1; fi; if [ -f /data/run.sh ]; then chmod +x /data/run.sh; exec sh /data/run.sh; else exec java ${aikarsFlags.join(' ')}; fi`,
                 ],
                 resources: {
                   requests: {
