@@ -122,15 +122,13 @@ describe('TasksGateway (RF-STO-18, #92)', () => {
       expect(res).toEqual({ status: 'subscribed', taskId: TASK_ID });
     });
 
-    it('joins a user that was granted access to the server the task belongs to', async () => {
+    it('refuses a PLAYER user even if granted access to the server the task belongs to (#209)', async () => {
       const client = await connected(player);
 
       const res = await gateway.handleSubscribeToTask(client, { taskId: TASK_ID });
 
-      expect(res).toEqual({ status: 'subscribed', taskId: TASK_ID });
-      expect(accessRepo.findOne).toHaveBeenCalledWith({
-        where: { user_id: player.id, server_id: 'srv-1' },
-      });
+      expect(client.join).not.toHaveBeenCalled();
+      expect(res).toEqual({ status: 'error', message: `Task "${TASK_ID}" not found` });
     });
 
     it('refuses a user without access to that server, answering like for a task that does not exist', async () => {
