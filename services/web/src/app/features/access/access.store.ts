@@ -1,4 +1,4 @@
-import { Injectable, computed, inject } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
 
 import { AdminApi, ServersApi, SettingsApi, TailscaleApi } from '../../core/api';
@@ -36,4 +36,18 @@ export class AccessStore {
     const snapshot = this.settings.value();
     return snapshot ? inviteKeyEnabled(snapshot) : null;
   });
+
+  readonly probePrefill = signal<{
+    tailscaleUserId?: string;
+    ip?: string;
+    minecraftNick?: string;
+  } | null>(null);
+
+  prefillIdentityProbe(prefill: {
+    tailscaleUserId?: string;
+    ip?: string;
+    minecraftNick?: string;
+  }): void {
+    this.probePrefill.set(prefill);
+  }
 }

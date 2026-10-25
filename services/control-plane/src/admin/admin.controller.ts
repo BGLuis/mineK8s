@@ -8,6 +8,7 @@ import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 import { AccessMatrixDto } from './dto/access-matrix.dto';
+import { IdentityProbeDto, IdentityProbeResultDto } from './dto/identity-probe.dto';
 
 @ApiTags('Admin & ACL Management')
 @ApiBearerAuth()
@@ -57,6 +58,20 @@ export class AdminController {
   })
   async getAccessMatrix(): Promise<AccessMatrixDto> {
     return this.adminService.getAccessMatrix();
+  }
+
+  @Post('access/identity-probe')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sondagem dry-run de identidade por ID Tailscale ou IP (#215)',
+  })
+  @ApiResponse({
+    status: 200,
+    type: IdentityProbeResultDto,
+    description: 'Resultado da sonda de identidade, WhoIs, anti-impersonação e mundos acessíveis',
+  })
+  async probeIdentity(@Body() dto: IdentityProbeDto): Promise<IdentityProbeResultDto> {
+    return this.adminService.probeIdentity(dto);
   }
 
   @Post('users/:id/servers')

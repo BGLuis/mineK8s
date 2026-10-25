@@ -532,6 +532,55 @@ export interface AccessMatrixResponse {
   cells: Record<string, Record<string, AccessMatrixCell>>;
 }
 
+export type IdentityMatchedBy =
+  | 'TAILSCALE_USER_ID'
+  | 'NODE_ID'
+  | 'SHARED_EMAIL'
+  | 'SHARED_GITHUB'
+  | 'PENDING_INVITE'
+  | 'NONE';
+
+export interface WhoIsIdentity {
+  userId?: string;
+  loginName?: string;
+  displayName?: string;
+  nodeId?: string;
+  nodeName?: string;
+  nodeIp?: string;
+  tags?: string[];
+  isOwner?: boolean;
+}
+
+export interface NicknameCheckResult {
+  allowed: boolean;
+  autoAdopted: boolean;
+  reason?: string;
+}
+
+export interface ProbedUser {
+  id: string;
+  minecraftNick: string;
+  realName: string | null;
+  email: string | null;
+  githubUsername: string | null;
+  role: string;
+}
+
+export interface IdentityProbeResult {
+  whois: WhoIsIdentity | null;
+  user: ProbedUser | null;
+  matchedBy: IdentityMatchedBy;
+  wouldBind: boolean;
+  nicknameCheck: NicknameCheckResult | null;
+  servers: UserWorldAccess[];
+}
+
+export interface IdentityProbeRequest {
+  tailscaleUserId?: string;
+  ip?: string;
+  minecraftNick?: string;
+}
+
 export type AccessChangeItem =
   | { type: 'addUserToGroup'; userId: string; groupId: string }
   | { type: 'removeUserFromGroup'; userId: string; groupId: string }

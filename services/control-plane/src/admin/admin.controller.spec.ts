@@ -24,6 +24,7 @@ describe('AdminController', () => {
       revokeServerFromUser: jest.fn(),
       simulateAccessChanges: jest.fn(),
       getAccessMatrix: jest.fn(),
+      probeIdentity: jest.fn(),
       smartKick: jest.fn(),
     };
     controller = new AdminController(adminService as AdminService);
@@ -131,6 +132,26 @@ describe('AdminController', () => {
 
       expect(adminService.getAccessMatrix).toHaveBeenCalled();
       expect(result).toEqual(mockMatrix);
+    });
+  });
+
+  describe('probeIdentity', () => {
+    it('delegates to adminService.probeIdentity', async () => {
+      const mockResult = {
+        whois: null,
+        user: null,
+        matchedBy: 'NONE' as const,
+        wouldBind: false,
+        nicknameCheck: null,
+        servers: [],
+      };
+      (adminService.probeIdentity as jest.Mock).mockResolvedValue(mockResult);
+
+      const dto = { ip: '100.64.0.1', minecraftNick: 'Steve' };
+      const result = await controller.probeIdentity(dto);
+
+      expect(adminService.probeIdentity).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(mockResult);
     });
   });
 });

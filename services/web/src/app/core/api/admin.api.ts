@@ -8,6 +8,8 @@ import {
   AccessibleServer,
   CreateGroupRequest,
   Group,
+  IdentityProbeRequest,
+  IdentityProbeResult,
   RemoveUserFromGroupResponse,
   SimulatedUserAccessResult,
   SmartKickRequest,
@@ -16,7 +18,7 @@ import {
   UserWorldAccess,
 } from './models';
 
-export type { AccessMatrixResponse };
+export type { AccessMatrixResponse, IdentityProbeRequest, IdentityProbeResult };
 
 /** admin.controller.ts, `api/admin`. */
 @Injectable({ providedIn: 'root' })
@@ -37,6 +39,10 @@ export class AdminApi {
 
   getAccessMatrix(): Observable<AccessMatrixResponse> {
     return this.api.get('/api/admin/access/matrix');
+  }
+
+  probeIdentity(dto: IdentityProbeRequest): Observable<IdentityProbeResult> {
+    return this.api.post('/api/admin/access/identity-probe', dto);
   }
 
   grantUserServer(userId: string, serverId: string): Observable<SuccessResponse> {

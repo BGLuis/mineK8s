@@ -200,6 +200,14 @@ import { ToggleChange, ToggleGroup } from './toggle-group';
                   <mc-button
                     size="sm"
                     variant="neutral"
+                    (click)="store.prefillIdentityProbe({ tailscaleUserId: attempt.tailscaleUserId, ip: attempt.clientIp, minecraftNick: attempt.minecraftNick })"
+                  >
+                    Testar identidade
+                  </mc-button>
+
+                  <mc-button
+                    size="sm"
+                    variant="neutral"
                     icon="close"
                     [ariaLabel]="'Ignorar tentativa de ' + attempt.loginName"
                     (click)="dismissAttempt(attempt)"

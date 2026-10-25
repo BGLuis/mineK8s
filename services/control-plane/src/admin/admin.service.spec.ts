@@ -61,6 +61,12 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     mockAccessDecisionEngine = {
       evaluateAccess: jest.fn(() => ({ allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' })),
+      evaluateNickname: jest.fn((declared: string, registered?: string) => {
+        if (!registered) return { allowed: true, autoAdopted: true };
+        if (declared.toLowerCase() === registered.toLowerCase())
+          return { allowed: true, autoAdopted: false };
+        return { allowed: false, autoAdopted: false, reason: 'IMPERSONATION_DETECTED' };
+      }),
     };
 
     mockGatewayIpcService = {
@@ -69,6 +75,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         terminated_connections_count: 1,
       })),
       publishRoute: jest.fn(async () => {}),
+      probePlayerIdentity: jest.fn(),
     };
 
     mockConsoleDriver = {
@@ -1063,6 +1070,136 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
           expect(cell.grantedBy).toEqual(expl!.grantedBy);
         }
       }
+    });
+  });
+
+  describe('probeIdentity (#215)', () => {
+    it('returns full inspection result with WhoIs, user, matchedBy, wouldBind, nicknameCheck and accessible servers', async () => {
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'Steve',
+        real_name: 'Steve Rogers',
+        email: 'steve@example.com',
+        github_username: null,
+        role: 'PLAYER' as const,
+      };
+
+      const server = {
+        id: 's-1',
+        name: 'Survival',
+        subdomain: 'survival',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user,
+        matchedBy: 'SHARED_EMAIL',
+        wouldBind: true,
+        networkIdentity: {
+          userId: 'ts-123',
+          loginName: 'steve@example.com',
+          displayName: 'Steve R',
+          nodeId: 'node-1',
+          nodeName: 'steve-pc',
+          nodeIp: '100.64.0.10',
+          tags: [],
+          isOwner: true,
+        },
+        pendingDevice: null,
+      });
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: true,
+        reason: 'PUBLIC_POLICY',
+      });
+
+      const result = await service.probeIdentity({
+        ip: '100.64.0.10',
+        minecraftNick: 'Steve',
+      });
+
+      expect(mockGatewayIpcService.probePlayerIdentity).toHaveBeenCalledWith({
+        clientIp: '100.64.0.10',
+        tailscaleUserId: undefined,
+      });
+
+      expect(result.whois).toMatchObject({
+        loginName: 'steve@example.com',
+        nodeIp: '100.64.0.10',
+      });
+      expect(result.user).toMatchObject({
+        id: 'u-1',
+        minecraftNick: 'Steve',
+        realName: 'Steve Rogers',
+      });
+      expect(result.matchedBy).toBe('SHARED_EMAIL');
+      expect(result.wouldBind).toBe(true);
+      expect(result.nicknameCheck).toEqual({
+        allowed: true,
+        autoAdopted: false,
+      });
+      expect(result.servers).toHaveLength(1);
+      expect(result.servers[0]).toMatchObject({
+        id: 's-1',
+        allowed: true,
+      });
+    });
+
+    it('a minecraftNick different from the registered user nick returns reason: IMPERSONATION_DETECTED (allowed: false)', async () => {
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'Steve',
+        role: 'PLAYER' as const,
+      };
+
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user,
+        matchedBy: 'TAILSCALE_USER_ID',
+        wouldBind: false,
+        networkIdentity: null,
+        pendingDevice: null,
+      });
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([]);
+
+      const result = await service.probeIdentity({
+        tailscaleUserId: 'ts-1',
+        minecraftNick: 'ImpostorNick',
+      });
+
+      expect(result.nicknameCheck).toEqual({
+        allowed: false,
+        autoAdopted: false,
+        reason: 'IMPERSONATION_DETECTED',
+      });
+    });
+
+    it('probing with no matched user returns user: null and empty servers list', async () => {
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user: null,
+        matchedBy: 'NONE',
+        wouldBind: false,
+        networkIdentity: null,
+        pendingDevice: null,
+      });
+
+      const result = await service.probeIdentity({
+        ip: '100.99.99.99',
+      });
+
+      expect(result.user).toBeNull();
+      expect(result.matchedBy).toBe('NONE');
+      expect(result.wouldBind).toBe(false);
+      expect(result.nicknameCheck).toBeNull();
+      expect(result.servers).toEqual([]);
     });
   });
 });

@@ -641,6 +641,160 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
         minecraftNick: 'AnonNick',
       });
     });
+
+    it('probePlayerIdentity não grava tailscale_user_id e não registra tentativa não vinculada (#215)', async () => {
+      const unlinked = new UnlinkedAttemptsService();
+      const unlinkedSpy = jest.spyOn(unlinked, 'record');
+
+      service = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        identityProvider as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        unlinked,
+      );
+
+      const probeResult = await service.probePlayerIdentity({
+        clientIp: '100.88.1.1',
+      });
+
+      expect(probeResult.user).toMatchObject({ id: 'user-shared', minecraft_nick: 'Amigo' });
+      expect(probeResult.matchedBy).toBe('SHARED_EMAIL');
+      expect(probeResult.wouldBind).toBe(true);
+      expect(saveUser).not.toHaveBeenCalled();
+      expect(unlinkedSpy).not.toHaveBeenCalled();
+    });
+
+    it('probePlayerIdentity e resolvePlayerIdentity reconhecem o mesmo usuário em todas as 6 rotas de matchedBy (#215)', async () => {
+      const userTs = {
+        id: 'u-ts',
+        minecraft_nick: 'NickTs',
+        role: 'PLAYER',
+        tailscale_user_id: 'ts-direct',
+      };
+      const userNode = { id: 'u-node', minecraft_nick: 'NickNode', role: 'PLAYER' };
+      const userEmail = {
+        id: 'u-email',
+        email: 'email@test.com',
+        minecraft_nick: 'NickEmail',
+        role: 'PLAYER',
+        tailscale_user_id: null,
+      };
+      const userGh = {
+        id: 'u-gh',
+        github_username: 'ghuser',
+        minecraft_nick: 'NickGh',
+        role: 'PLAYER',
+        tailscale_user_id: null,
+      };
+      const userPending = { id: 'u-pending', minecraft_nick: 'NickPending', role: 'PLAYER' };
+
+      const pendingDevice = {
+        id: 'dev-p',
+        user: userPending,
+        status: 'PENDING',
+        node_id: null,
+      };
+
+      const deviceRepo = {
+        find: jest.fn(async () => [pendingDevice]),
+        save: jest.fn(async (d) => d),
+      };
+
+      mockUserRepo.findOne = jest.fn(async ({ where }: any) => {
+        if (Array.isArray(where)) {
+          for (const clause of where) {
+            if (clause.github_username === 'ghuser') return userGh;
+            if (clause.email === 'email@test.com') return userEmail;
+          }
+        }
+        if (where?.tailscale_user_id === 'ts-direct') return userTs;
+        if (where?.devices?.node_id === 'node-direct') return userNode;
+        if (where?.email === 'email@test.com') return userEmail;
+        if (where?.github_username === 'ghuser') return userGh;
+        return null;
+      });
+      mockUserRepo.save = jest.fn(async (u) => u);
+
+      const idProvider = {
+        resolveIdentity: jest.fn(async (ip: string) => {
+          if (ip === '100.1.1.1') return { userId: 'ts-direct', tags: [] };
+          if (ip === '100.1.1.2') return { nodeId: 'node-direct', tags: [] };
+          if (ip === '100.1.1.3')
+            return { userId: 'ts-email-whois', loginName: 'email@test.com', tags: [] };
+          if (ip === '100.1.1.4')
+            return { userId: 'ts-gh-whois', loginName: 'ghuser@github', tags: [] };
+          if (ip === '100.1.1.5')
+            return { nodeId: 'node-pend', tags: ['tag:mc-player'], isOwner: false };
+          return null;
+        }),
+      };
+
+      const testService = new GatewayIpcService(
+        mockServerRepo,
+        mockUserRepo,
+        mockServerGroupRepo,
+        mockUserServerAccessRepo,
+        mockUserGroupRepo,
+        idProvider as any,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        deviceRepo as any,
+      );
+
+      // 1. TAILSCALE_USER_ID
+      const probe1 = await testService.probePlayerIdentity({ tailscaleUserId: 'ts-direct' });
+      const resolve1 = await testService.resolvePlayerIdentity({
+        tailscale_user_id: 'ts-direct',
+      } as any);
+      expect(probe1.matchedBy).toBe('TAILSCALE_USER_ID');
+      expect(probe1.user?.id).toBe(userTs.id);
+      expect(resolve1.user_id).toBe(userTs.id);
+
+      // 2. NODE_ID
+      const probe2 = await testService.probePlayerIdentity({ nodeId: 'node-direct' });
+      const resolve2 = await testService.resolvePlayerIdentity({ node_id: 'node-direct' } as any);
+      expect(probe2.matchedBy).toBe('NODE_ID');
+      expect(probe2.user?.id).toBe(userNode.id);
+      expect(resolve2.user_id).toBe(userNode.id);
+
+      // 3. SHARED_EMAIL
+      const probe3 = await testService.probePlayerIdentity({ clientIp: '100.1.1.3' });
+      const resolve3 = await testService.resolvePlayerIdentity({ client_ip: '100.1.1.3' } as any);
+      expect(probe3.matchedBy).toBe('SHARED_EMAIL');
+      expect(probe3.user?.id).toBe(userEmail.id);
+      expect(resolve3.user_id).toBe(userEmail.id);
+
+      // 4. SHARED_GITHUB
+      const probe4 = await testService.probePlayerIdentity({ clientIp: '100.1.1.4' });
+      const resolve4 = await testService.resolvePlayerIdentity({ client_ip: '100.1.1.4' } as any);
+      expect(probe4.matchedBy).toBe('SHARED_GITHUB');
+      expect(probe4.user?.id).toBe(userGh.id);
+      expect(resolve4.user_id).toBe(userGh.id);
+
+      // 5. PENDING_INVITE
+      const probe5 = await testService.probePlayerIdentity({ clientIp: '100.1.1.5' });
+      const resolve5 = await testService.resolvePlayerIdentity({ client_ip: '100.1.1.5' } as any);
+      expect(probe5.matchedBy).toBe('PENDING_INVITE');
+      expect(probe5.user?.id).toBe(userPending.id);
+      expect(resolve5.user_id).toBe(userPending.id);
+
+      // 6. NONE
+      const probe6 = await testService.probePlayerIdentity({ clientIp: '100.1.1.99' });
+      const resolve6 = await testService.resolvePlayerIdentity({ client_ip: '100.1.1.99' } as any);
+      expect(probe6.matchedBy).toBe('NONE');
+      expect(probe6.user).toBeNull();
+      expect(resolve6.found).toBe(false);
+    });
   });
 
   describe('Comandos de revogação enviados ao Gateway (Smart Kick, ban de rede)', () => {

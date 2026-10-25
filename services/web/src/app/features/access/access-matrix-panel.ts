@@ -117,7 +117,7 @@ import { AccessStore } from './access.store';
                     @for (server of filteredServers(); track server.id) {
                       @let cell = getCell(player.id, server.id);
                       @let reason = getCellReason(cell);
-                      @let cellLabel = getCellLabel(player, server, cell);
+                      @let cellLabel = getCellLabel(cell);
                       <td class="text-center">
                         <span
                           class="inline-flex items-center justify-center gap-1 rounded px-2 py-1 text-center t-label-sm"
@@ -209,11 +209,7 @@ export class AccessMatrixPanel {
     return formatAccessReason(cell, this.groupNameById());
   }
 
-  getCellLabel(
-    player: AccessMatrixUser,
-    server: AccessMatrixServer,
-    cell?: AccessMatrixCell,
-  ): string {
+  getCellLabel(cell?: AccessMatrixCell): string {
     const reason = this.getCellReason(cell);
     const status = cell?.allowed ? 'Permitido' : 'Negado';
     return `${status}: ${reason}`;

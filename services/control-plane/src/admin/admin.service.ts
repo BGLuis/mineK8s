@@ -23,6 +23,7 @@ import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 import { AccessMatrixDto } from './dto/access-matrix.dto';
+import { IdentityProbeDto, IdentityProbeResultDto } from './dto/identity-probe.dto';
 
 @Injectable()
 export class AdminService {
@@ -225,7 +226,7 @@ export class AdminService {
     return {
       users: users.map((user) => {
         const fromMap = userGroupsByUserId.get(user.id) || [];
-        const fromRel = (user.user_groups || []).map((ug: any) => ug.group_id ?? ug.id);
+        const fromRel = (user.user_groups || []).map((ug) => ug.group_id);
         const groupIds = Array.from(new Set([...fromMap, ...fromRel]));
         return {
           id: user.id,
@@ -244,6 +245,44 @@ export class AdminService {
         is_maintenance: Boolean(server.is_maintenance),
       })),
       cells,
+    };
+  }
+
+  /**
+   * Sondagem dry-run de identidade por ID Tailscale ou IP (#215).
+   * Consulta WhoIs, usuário correspondente, anti-impersonação e permissão de acesso a mundos.
+   */
+  async probeIdentity(dto: IdentityProbeDto): Promise<IdentityProbeResultDto> {
+    const lookup = await this.gatewayIpcService.probePlayerIdentity({
+      tailscaleUserId: dto.tailscaleUserId?.trim() || undefined,
+      clientIp: dto.ip?.trim() || undefined,
+    });
+
+    const nicknameCheck = dto.minecraftNick?.trim()
+      ? this.accessDecisionEngine.evaluateNickname(
+          dto.minecraftNick.trim(),
+          lookup.user?.minecraft_nick ?? undefined,
+        )
+      : null;
+
+    const servers = lookup.user ? await this.explainUserAccess(lookup.user.id) : [];
+
+    return {
+      whois: lookup.networkIdentity,
+      user: lookup.user
+        ? {
+            id: lookup.user.id,
+            minecraftNick: lookup.user.minecraft_nick,
+            realName: lookup.user.real_name ?? null,
+            email: lookup.user.email ?? null,
+            githubUsername: lookup.user.github_username ?? null,
+            role: lookup.user.role,
+          }
+        : null,
+      matchedBy: lookup.matchedBy,
+      wouldBind: lookup.wouldBind,
+      nicknameCheck,
+      servers,
     };
   }
 
