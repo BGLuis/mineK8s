@@ -46,6 +46,23 @@ import {
   SessionLifecycleEvent,
 } from './gateway-ipc.interfaces';
 
+export type IdentityMatchedBy =
+  | 'TAILSCALE_USER_ID'
+  | 'NODE_ID'
+  | 'SHARED_EMAIL'
+  | 'SHARED_GITHUB'
+  | 'PENDING_INVITE'
+  | 'NONE';
+
+export interface IdentityProbeLookupResult {
+  user: User | null;
+  matchedBy: IdentityMatchedBy;
+  wouldBind: boolean;
+  networkIdentity: NetworkIdentity | null;
+  pendingDevice: TailscaleDevice | null;
+  warning?: string | null;
+}
+
 /** Prazo para o Gateway responder um comando; derrubar sockets é imediato, então passar disso é falha. */
 const COMMAND_TIMEOUT_MS = 5000;
 
@@ -191,6 +208,166 @@ export class GatewayIpcService {
   }
 
   /**
+   * Resolução pura de identidade (sem efeitos colaterais).
+   * Não salva tailscale_user_id, não vincula dispositivos e não registra tentativas não vinculadas.
+   */
+  async probePlayerIdentity(input: {
+    tailscaleUserId?: string;
+    nodeId?: string;
+    clientIp?: string;
+  }): Promise<IdentityProbeLookupResult> {
+    let user: User | null = null;
+    let netId: NetworkIdentity | null = null;
+    let warning: string | null = null;
+
+    // 1. Busca por tailscaleUserId direto
+    if (input.tailscaleUserId) {
+      user = await this.userRepository.findOne({
+        where: { tailscale_user_id: input.tailscaleUserId },
+      });
+      if (user) {
+        return {
+          user,
+          matchedBy: 'TAILSCALE_USER_ID',
+          wouldBind: false,
+          networkIdentity: null,
+          pendingDevice: null,
+        };
+      }
+    }
+
+    // 2. Busca por nodeId direto
+    if (input.nodeId) {
+      user = await this.findUserByNodeId(input.nodeId);
+      if (user) {
+        return {
+          user,
+          matchedBy: 'NODE_ID',
+          wouldBind: false,
+          networkIdentity: null,
+          pendingDevice: null,
+        };
+      }
+    }
+
+    // 3. Busca por IP com WhoIs
+    if (input.clientIp && this.identityProvider) {
+      try {
+        netId = await this.identityProvider.resolveIdentity(input.clientIp);
+        if (netId) {
+          if (netId.userId) {
+            user = await this.userRepository.findOne({
+              where: { tailscale_user_id: netId.userId },
+            });
+            if (user) {
+              return {
+                user,
+                matchedBy: 'TAILSCALE_USER_ID',
+                wouldBind: false,
+                networkIdentity: netId,
+                pendingDevice: null,
+              };
+            }
+          }
+
+          if (netId.nodeId) {
+            user = await this.findUserByNodeId(netId.nodeId);
+            if (user) {
+              return {
+                user,
+                matchedBy: 'NODE_ID',
+                wouldBind: false,
+                networkIdentity: netId,
+                pendingDevice: null,
+              };
+            }
+          }
+
+          // Verificação de nó compartilhado (dry-run de bindSharedUser)
+          /**
+           * Quem recebeu o nó compartilhado entra com a própria conta Tailscale, então o e-mail do login (que o
+           * Tailscale já verificou) liga a conta ao cadastro feito pelo admin. O ID da conta fica gravado no
+           * primeiro acesso e as buscas seguintes usam só ele.
+           */
+          const login = netId.loginName?.trim().toLowerCase();
+          if (
+            this.configService?.tailscale?.nodeSharingEnabled !== false &&
+            login &&
+            netId.userId &&
+            !netId.tags?.length
+          ) {
+            const ghUser = login.endsWith('@github') ? login.slice(0, -7) : null;
+            let candidate: User | null = null;
+            let matchedBy: IdentityMatchedBy = 'NONE';
+
+            if (ghUser) {
+              candidate = await this.userRepository.findOne({
+                where: [{ github_username: ghUser }, { email: login }],
+              });
+              matchedBy = candidate?.github_username === ghUser ? 'SHARED_GITHUB' : 'SHARED_EMAIL';
+            } else if (login.includes('@')) {
+              candidate = await this.userRepository.findOne({ where: { email: login } });
+              matchedBy = 'SHARED_EMAIL';
+            }
+
+            if (candidate) {
+              if (!candidate.tailscale_user_id || candidate.tailscale_user_id === netId.userId) {
+                return {
+                  user: candidate,
+                  matchedBy,
+                  wouldBind: !candidate.tailscale_user_id,
+                  networkIdentity: netId,
+                  pendingDevice: null,
+                };
+              }
+              warning = `Cadastro de ${login} já pertence a outra conta Tailscale; acesso não vinculado`;
+            }
+          }
+
+          // Verificação de convite pendente (dry-run de bindPendingDevice)
+          /**
+           * O convite entrega uma chave com a tag estática dos jogadores e nada diz qual nó a usou. Então o
+           * primeiro nó com essa tag que o Gateway apresenta fica com o convite pendente, desde que haja
+           * exatamente um: com vários, qualquer palpite daria a um jogador as permissões de outro.
+           */
+          if (this.deviceRepository && netId.nodeId && netId.tags?.includes(PLAYER_TAG)) {
+            const pending = await this.deviceRepository.find({
+              where: { status: 'PENDING', node_id: IsNull() },
+              relations: { user: true },
+              take: 2,
+            });
+            if (pending.length === 1 && pending[0].user) {
+              return {
+                user: pending[0].user,
+                matchedBy: 'PENDING_INVITE',
+                wouldBind: true,
+                networkIdentity: netId,
+                pendingDevice: pending[0],
+              };
+            }
+            if (pending.length !== 1) {
+              warning = `Nó ${netId.nodeId} com a tag ${PLAYER_TAG} não foi vinculado: ${pending.length} convites pendentes`;
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(
+          `Falha na resolução de identidade de rede para IP ${input.clientIp}: ${err.message}`,
+        );
+      }
+    }
+
+    return {
+      user: null,
+      matchedBy: 'NONE',
+      wouldBind: false,
+      networkIdentity: netId ?? null,
+      pendingDevice: null,
+      warning,
+    };
+  }
+
+  /**
    * Resolução pontual sob demanda de identidade do jogador (WhoIs -> User, Grupos, Nick).
    */
   async resolvePlayerIdentity(req: ResolvePlayerRequest): Promise<ResolvePlayerResponse> {
@@ -198,53 +375,54 @@ export class GatewayIpcService {
       `Resolvendo identidade gRPC: tailscale_user_id=${req.tailscale_user_id}, node_id=${req.node_id}, ip=${req.client_ip}`,
     );
 
-    let user: User | null = null;
-    let netId: NetworkIdentity | null = null;
+    const lookup = await this.probePlayerIdentity({
+      tailscaleUserId: req.tailscale_user_id || undefined,
+      nodeId: req.node_id || undefined,
+      clientIp: req.client_ip || undefined,
+    });
 
-    if (req.tailscale_user_id) {
-      user = await this.userRepository.findOne({
-        where: { tailscale_user_id: req.tailscale_user_id },
-      });
-    }
+    let user = lookup.user;
 
-    if (!user && req.node_id) {
-      user = await this.findUserByNodeId(req.node_id);
-    }
-
-    if (!user && req.client_ip && this.identityProvider) {
-      try {
-        netId = await this.identityProvider.resolveIdentity(req.client_ip);
-        if (netId) {
-          if (netId.userId) {
-            user = await this.userRepository.findOne({
-              where: { tailscale_user_id: netId.userId },
-            });
+    if (user && lookup.wouldBind) {
+      if (lookup.matchedBy === 'SHARED_EMAIL' || lookup.matchedBy === 'SHARED_GITHUB') {
+        const netId = lookup.networkIdentity;
+        if (netId?.userId) {
+          user.tailscale_user_id = netId.userId;
+          const login = netId.loginName?.trim().toLowerCase();
+          const ghUser = login?.endsWith('@github') ? login.slice(0, -7) : null;
+          if (ghUser && !user.github_username) {
+            user.github_username = ghUser;
           }
-          if (!user && netId.nodeId) {
-            user = await this.findUserByNodeId(netId.nodeId);
-          }
-          if (!user) {
-            user = await this.bindSharedUser(netId);
-          }
-          if (!user) {
-            user = await this.bindPendingDevice(netId);
-          }
+          user = await this.userRepository.save(user);
         }
-      } catch (err: any) {
-        this.logger.warn(
-          `Falha na resolução de identidade de rede para IP ${req.client_ip}: ${err.message}`,
+      } else if (lookup.matchedBy === 'PENDING_INVITE' && lookup.pendingDevice) {
+        const device = lookup.pendingDevice;
+        const netId = lookup.networkIdentity;
+        device.node_id = netId?.nodeId || req.node_id || null;
+        device.node_ip = netId?.nodeIp || req.client_ip || null;
+        device.device_name = netId?.nodeName || null;
+        device.status = 'ACTIVE';
+        device.last_seen_at = new Date();
+        await this.deviceRepository!.save(device);
+        this.logger.log(
+          `Nó ${device.node_id} vinculado ao convite resgatado por ${device.user.minecraft_nick}`,
         );
+        user = device.user;
       }
     }
 
     if (!user) {
+      if (lookup.warning) {
+        this.logger.warn(lookup.warning);
+      }
+
       this.unlinkedAttempts?.record({
-        tailscaleUserId: netId?.userId || req.tailscale_user_id || '',
-        loginName: netId?.loginName || '',
-        displayName: netId?.displayName || '',
+        tailscaleUserId: lookup.networkIdentity?.userId || req.tailscale_user_id || '',
+        loginName: lookup.networkIdentity?.loginName || '',
+        displayName: lookup.networkIdentity?.displayName || '',
         clientIp: req.client_ip || '',
-        nodeId: netId?.nodeId || req.node_id || '',
-        nodeName: netId?.nodeName || '',
+        nodeId: lookup.networkIdentity?.nodeId || req.node_id || '',
+        nodeName: lookup.networkIdentity?.nodeName || '',
         minecraftNick: req.minecraft_nick || '',
       });
 
@@ -272,84 +450,6 @@ export class GatewayIpcService {
       is_active: true,
       is_mojang_verified: (user as any).is_mojang_verified || false,
     };
-  }
-
-  /**
-   * Quem recebeu o nó compartilhado entra com a própria conta Tailscale, então o e-mail do login (que o
-   * Tailscale já verificou) ou usuário do GitHub liga a conta ao cadastro feito pelo admin. O ID da conta
-   * fica gravado no primeiro acesso e as buscas seguintes usam só ele.
-   */
-  private async bindSharedUser(netId: NetworkIdentity): Promise<User | null> {
-    const login = netId.loginName?.trim().toLowerCase();
-    if (
-      this.configService?.tailscale?.nodeSharingEnabled === false ||
-      !login ||
-      !netId.userId ||
-      netId.tags?.length
-    ) {
-      return null;
-    }
-
-    const ghUser = login.endsWith('@github') ? login.slice(0, -7) : null;
-    let user: User | null = null;
-
-    if (ghUser) {
-      user = await this.userRepository.findOne({
-        where: [{ github_username: ghUser }, { email: login }],
-      });
-    } else {
-      user = await this.userRepository.findOne({ where: { email: login } });
-    }
-
-    if (!user) {
-      return null;
-    }
-    if (user.tailscale_user_id && user.tailscale_user_id !== netId.userId) {
-      this.logger.warn(
-        `Cadastro de ${login} já pertence a outra conta Tailscale; acesso não vinculado`,
-      );
-      return null;
-    }
-
-    user.tailscale_user_id = netId.userId;
-    if (ghUser && !user.github_username) {
-      user.github_username = ghUser;
-    }
-    return this.userRepository.save(user);
-  }
-
-  /**
-   * O convite entrega uma chave com a tag estática dos jogadores e nada diz qual nó a usou. Então o
-   * primeiro nó com essa tag que o Gateway apresenta fica com o convite pendente, desde que haja
-   * exatamente um: com vários, qualquer palpite daria a um jogador as permissões de outro.
-   */
-  private async bindPendingDevice(netId: NetworkIdentity): Promise<User | null> {
-    if (!this.deviceRepository || !netId.nodeId || !netId.tags?.includes(PLAYER_TAG)) {
-      return null;
-    }
-
-    const pending = await this.deviceRepository.find({
-      where: { status: 'PENDING', node_id: IsNull() },
-      relations: { user: true },
-    });
-    if (pending.length !== 1) {
-      this.logger.warn(
-        `Nó ${netId.nodeId} com a tag ${PLAYER_TAG} não foi vinculado: ${pending.length} convites pendentes`,
-      );
-      return null;
-    }
-
-    const [device] = pending;
-    device.node_id = netId.nodeId;
-    device.node_ip = netId.nodeIp || null;
-    device.device_name = netId.nodeName || null;
-    device.status = 'ACTIVE';
-    device.last_seen_at = new Date();
-    await this.deviceRepository.save(device);
-    this.logger.log(
-      `Nó ${netId.nodeId} vinculado ao convite resgatado por ${device.user.minecraft_nick}`,
-    );
-    return device.user;
   }
 
   /** O `where` tipado pela entidade faz o compilador acusar se a coluna do dispositivo mudar de nome. */

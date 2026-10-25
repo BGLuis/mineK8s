@@ -55,9 +55,16 @@ describe('AccessPage', () => {
       '/api/tailscale/devices',
       '/api/admin/users',
       '/api/tailscale/shares/unlinked-attempts',
+      '/api/admin/access/matrix',
     ]) {
       for (const req of http.match((r) => r.url.startsWith(url))) {
-        req.flush(url === '/api/admin/users' ? users : []);
+        req.flush(
+          url === '/api/admin/users'
+            ? users
+            : url === '/api/admin/access/matrix'
+              ? { users: [], servers: [], cells: {} }
+              : [],
+        );
       }
     }
     const request = http.expectOne('/api/settings');
@@ -103,6 +110,7 @@ describe('AccessPage', () => {
       role: 'PLAYER',
       devices: [],
       groupIds: [],
+      serverIds: [],
     });
     const el = await render(settings(false), [
       player('u1', 'Linked', true),

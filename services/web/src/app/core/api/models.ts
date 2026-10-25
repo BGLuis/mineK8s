@@ -480,6 +480,122 @@ export interface UserSummary {
     lastSeenAt: string | null;
   }[];
   groupIds: string[];
+  serverIds: string[];
+}
+
+export type AdminUser = UserSummary;
+
+export type AccessGrantedBy =
+  | { kind: 'ADMIN' }
+  | { kind: 'POLICY'; policy: 'PUBLIC' | 'INTERNET' }
+  | { kind: 'GROUP'; groupIds: string[]; groupNames?: string[] }
+  | { kind: 'DIRECT' };
+
+export interface UserWorldAccess {
+  id: string;
+  name: string;
+  subdomain: string;
+  state: ServerState | string;
+  access_policy: string;
+  is_maintenance: boolean;
+  allowed: boolean;
+  reason: string;
+  grantedBy: AccessGrantedBy | null;
+}
+
+export interface AccessMatrixUser {
+  id: string;
+  minecraftNick: string;
+  realName: string | null;
+  role: 'ADMIN' | 'PLAYER';
+  groupIds: string[];
+}
+
+export interface AccessMatrixServer {
+  id: string;
+  name: string;
+  subdomain: string;
+  state: ServerState | string;
+  access_policy: string;
+  is_maintenance: boolean;
+}
+
+export interface AccessMatrixCell {
+  allowed: boolean;
+  reason: string;
+  grantedBy: AccessGrantedBy | null;
+}
+
+export interface AccessMatrixResponse {
+  users: AccessMatrixUser[];
+  servers: AccessMatrixServer[];
+  cells: Record<string, Record<string, AccessMatrixCell>>;
+}
+
+export type IdentityMatchedBy =
+  | 'TAILSCALE_USER_ID'
+  | 'NODE_ID'
+  | 'SHARED_EMAIL'
+  | 'SHARED_GITHUB'
+  | 'PENDING_INVITE'
+  | 'NONE';
+
+export interface WhoIsIdentity {
+  userId?: string;
+  loginName?: string;
+  displayName?: string;
+  nodeId?: string;
+  nodeName?: string;
+  nodeIp?: string;
+  tags?: string[];
+  isOwner?: boolean;
+}
+
+export interface NicknameCheckResult {
+  allowed: boolean;
+  autoAdopted: boolean;
+  reason?: string;
+}
+
+export interface ProbedUser {
+  id: string;
+  minecraftNick: string;
+  realName: string | null;
+  email: string | null;
+  githubUsername: string | null;
+  role: string;
+}
+
+export interface IdentityProbeResult {
+  whois: WhoIsIdentity | null;
+  user: ProbedUser | null;
+  matchedBy: IdentityMatchedBy;
+  wouldBind: boolean;
+  nicknameCheck: NicknameCheckResult | null;
+  servers: UserWorldAccess[];
+}
+
+export interface IdentityProbeRequest {
+  tailscaleUserId?: string;
+  ip?: string;
+  minecraftNick?: string;
+}
+
+export type AccessChangeItem =
+  | { type: 'addUserToGroup'; userId: string; groupId: string }
+  | { type: 'removeUserFromGroup'; userId: string; groupId: string }
+  | { type: 'addServerToGroup'; serverId: string; groupId: string }
+  | { type: 'removeServerFromGroup'; serverId: string; groupId: string }
+  | { type: 'grantServer'; userId: string; serverId: string }
+  | { type: 'revokeServer'; userId: string; serverId: string }
+  | { type: 'deleteGroup'; groupId: string };
+
+export interface SimulatedUserAccessResult {
+  userId: string;
+  minecraftNick: string;
+  gains: string[];
+  losses: string[];
+  wouldBeKicked: string[];
 }
 
 /** GET /api/admin/users/:id/servers: servers the user may join, by the gateway's own access rules. */
@@ -778,3 +894,12 @@ export interface SettingsSnapshot {
 
 /** PATCH /api/settings: null removes the saved value, so the environment (or the default) applies again. */
 export type SettingsChanges = Record<string, string | number | boolean | null>;
+
+/** GET /api/me/servers (Player area card, #216). */
+export interface PlayerServer {
+  name: string;
+  address: string;
+  state: ServerState | 'MAINTENANCE';
+  playersOnline: number;
+  icon: string | null;
+}

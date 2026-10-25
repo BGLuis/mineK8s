@@ -3,14 +3,22 @@ import { Observable } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import {
+  AccessChangeItem,
+  AccessMatrixResponse,
   AccessibleServer,
   CreateGroupRequest,
   Group,
+  IdentityProbeRequest,
+  IdentityProbeResult,
   RemoveUserFromGroupResponse,
+  SimulatedUserAccessResult,
   SmartKickRequest,
   SuccessResponse,
   UserSummary,
+  UserWorldAccess,
 } from './models';
+
+export type { AccessMatrixResponse, IdentityProbeRequest, IdentityProbeResult };
 
 /** admin.controller.ts, `api/admin`. */
 @Injectable({ providedIn: 'root' })
@@ -23,6 +31,26 @@ export class AdminApi {
 
   listAccessibleServers(userId: string): Observable<AccessibleServer[]> {
     return this.api.get(`/api/admin/users/${userId}/servers`);
+  }
+
+  explainUserAccess(userId: string): Observable<UserWorldAccess[]> {
+    return this.api.get(`/api/admin/users/${userId}/access`);
+  }
+
+  getAccessMatrix(): Observable<AccessMatrixResponse> {
+    return this.api.get('/api/admin/access/matrix');
+  }
+
+  probeIdentity(dto: IdentityProbeRequest): Observable<IdentityProbeResult> {
+    return this.api.post('/api/admin/access/identity-probe', dto);
+  }
+
+  grantUserServer(userId: string, serverId: string): Observable<SuccessResponse> {
+    return this.api.post(`/api/admin/users/${userId}/servers`, { serverId });
+  }
+
+  revokeUserServer(userId: string, serverId: string): Observable<{ kickedServers: string[] }> {
+    return this.api.delete(`/api/admin/users/${userId}/servers/${serverId}`);
   }
 
   createGroup(dto: CreateGroupRequest): Observable<Group> {
@@ -56,5 +84,9 @@ export class AdminApi {
 
   smartKick(dto: SmartKickRequest): Observable<SuccessResponse> {
     return this.api.post('/api/admin/smart-kick', dto);
+  }
+
+  simulateAccess(changes: AccessChangeItem[]): Observable<SimulatedUserAccessResult[]> {
+    return this.api.post('/api/admin/access/simulate', { changes });
   }
 }

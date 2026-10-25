@@ -18,10 +18,16 @@ export const authGuard: CanActivateFn = (_route, state) => {
     .pipe(map((user) => (user ? true : login)));
 };
 
-/** The SPA only has an admin area: PLAYER users have no usable REST routes. */
+/** Protects admin-only routes: redirects unauthenticated users to /login and PLAYER users to /meus-mundos. */
 export const adminGuard: CanActivateFn = () => {
   const router = inject(Router);
   return inject(AuthSession)
     .restore()
-    .pipe(map((user) => user?.role === 'ADMIN' || router.createUrlTree(['/login'])));
+    .pipe(
+      map((user) => {
+        if (!user) return router.createUrlTree(['/login']);
+        if (user.role !== 'ADMIN') return router.createUrlTree(['/meus-mundos']);
+        return true;
+      }),
+    );
 };

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { SharedPlayerSummary, TailscaleApi, UnlinkedAttempt, UserSummary } from '../../core/api';
 import { DialogService, McBanner, McButton, McPanel, McTextField, ToastService } from '../../ui';
@@ -11,7 +12,7 @@ import { ToggleChange, ToggleGroup } from './toggle-group';
 @Component({
   selector: 'mc-shared-players-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McBanner, McButton, McPanel, McTextField, ToggleGroup],
+  imports: [FormsModule, RouterLink, McBanner, McButton, McPanel, McTextField, ToggleGroup],
   template: `
     <mc-panel title="Jogadores por compartilhamento de nó">
       <p class="t-body-md mb-4 text-text-muted">
@@ -97,7 +98,12 @@ import { ToggleChange, ToggleGroup } from './toggle-group';
           @for (player of players(); track player.id) {
             <li class="bevel-panel flex items-center justify-between gap-3 bg-surface-default p-3">
               <div class="min-w-0">
-                <p class="t-label-md truncate">{{ player.minecraftNick }}</p>
+                <a
+                  [routerLink]="['/access/users', player.id]"
+                  class="t-label-md truncate hover:underline text-text-primary block"
+                >
+                  {{ player.minecraftNick }}
+                </a>
                 <p class="t-caption truncate text-text-muted">
                   @if (player.email && player.githubUsername) {
                     {{ player.email }} • &#64;{{ player.githubUsername }}
@@ -189,6 +195,14 @@ import { ToggleChange, ToggleGroup } from './toggle-group';
                     (click)="linkAttempt(attempt)"
                   >
                     {{ linkingAttemptId() === attempt.tailscaleUserId ? 'Vinculando…' : 'Vincular' }}
+                  </mc-button>
+
+                  <mc-button
+                    size="sm"
+                    variant="neutral"
+                    (click)="store.prefillIdentityProbe({ tailscaleUserId: attempt.tailscaleUserId, ip: attempt.clientIp, minecraftNick: attempt.minecraftNick })"
+                  >
+                    Testar identidade
                   </mc-button>
 
                   <mc-button

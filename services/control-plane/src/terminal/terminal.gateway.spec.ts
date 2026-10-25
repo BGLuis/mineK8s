@@ -107,7 +107,6 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
     gateway = new TerminalGateway(
       mockServerRepo,
       mockAuditRepo,
-      mockAccessRepo,
       mockConsoleDriver,
       mockLogStreamer,
       mockK8sService,
@@ -262,6 +261,22 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
       expect(mockClient.join).not.toHaveBeenCalled();
       expect(mockClient.emit).toHaveBeenCalledWith('error', expect.any(Object));
     });
+
+    it('should deny PLAYER with direct server access from joining terminal (#209)', async () => {
+      const mockClient: any = {
+        data: { user: testPlayerUser },
+        join: jest.fn(),
+        emit: jest.fn(),
+      };
+
+      await gateway.handleJoinTerminal(mockClient, { serverId: testServer.id });
+
+      expect(mockClient.join).not.toHaveBeenCalled();
+      expect(mockClient.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringMatching(/unauthorized/i) }),
+      );
+    });
   });
 
   describe('send_command & audit logging (RF-RCON-12, RF-RCON-13, Critério de Aceite)', () => {
@@ -300,6 +315,26 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
           output: 'Executed: weather clear',
           durationMs: expect.any(Number),
         }),
+      );
+    });
+
+    it('should deny PLAYER with direct server access from sending commands (#209)', async () => {
+      const mockClient: any = {
+        data: { user: testPlayerUser },
+        handshake: { address: '192.168.1.100' },
+        emit: jest.fn(),
+      };
+
+      await gateway.handleSendCommand(mockClient, {
+        serverId: testServer.id,
+        command: 'weather clear',
+      });
+
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
+      expect(mockAuditRepo.save).not.toHaveBeenCalled();
+      expect(mockClient.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringMatching(/unauthorized/i) }),
       );
     });
   });

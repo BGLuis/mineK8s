@@ -54,6 +54,14 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       );
       expect(playerMcPort?.passed).toBe(true);
 
+      const playerPanelPort = outcomes.find(
+        (o) =>
+          o.src === 'tag:mc-player' &&
+          o.target === 'tag:mc-gateway:8080' &&
+          o.expected === 'accept',
+      );
+      expect(playerPanelPort?.passed).toBe(true);
+
       const playerSshPort = outcomes.find(
         (o) =>
           o.src === 'tag:mc-player' && o.target === 'tag:mc-gateway:22' && o.expected === 'deny',
@@ -127,6 +135,49 @@ describe('TailscalePostureService (RF-TS-01, RF-TS-12, RF-TS-13, RF-TS-17)', () 
       expect(report.findings.some((f) => f.description.includes('non-Minecraft port (22)'))).toBe(
         true,
       );
+    });
+
+    it('deve aceitar portas 25565 e 8080 para tag:mc-player sem apontar vulnerabilidades (#216)', () => {
+      const compliantPolicy: RawTailscalePolicy = {
+        acls: [
+          {
+            action: 'accept',
+            src: ['tag:mc-player'],
+            dst: ['tag:mc-gateway:25565', 'tag:mc-gateway:8080'],
+          },
+        ],
+        tests: [],
+      };
+
+      const report = service.evaluatePolicy(compliantPolicy);
+
+      expect(report.status).toBe(SecurityPostureStatus.COMPLIANT);
+      expect(report.findings).toHaveLength(0);
+      expect(report.testedRulesSummary.onlyGamePortExposed).toBe(true);
+    });
+
+    it('deve marcar HIGH para portas não autorizadas como 22, 3000 ou 9090 (#216)', () => {
+      for (const unauthorizedPort of ['22', '3000', '9090']) {
+        const policy: RawTailscalePolicy = {
+          acls: [
+            {
+              action: 'accept',
+              src: ['tag:mc-player'],
+              dst: [`tag:mc-gateway:${unauthorizedPort}`],
+            },
+          ],
+          tests: [],
+        };
+
+        const report = service.evaluatePolicy(policy);
+
+        expect(report.status).toBe(SecurityPostureStatus.VULNERABLE);
+        expect(report.testedRulesSummary.onlyGamePortExposed).toBe(false);
+        const highFinding = report.findings.find(
+          (f) => f.severity === 'HIGH' && f.description.includes(unauthorizedPort),
+        );
+        expect(highFinding).toBeDefined();
+      }
     });
 
     it('deve marcar VULNERABLE se os testes declarativos da policy falharem', () => {

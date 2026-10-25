@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
+import { AccessResolverService } from '../tailscale/decision/access-resolver.service';
 
 describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let service: AdminService;
@@ -13,6 +14,9 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let mockAccessDecisionEngine: any;
   let mockGatewayIpcService: any;
   let mockConsoleDriver: any;
+  let mockPlayerSessionsService: any;
+  let mockAppConfigService: any;
+  let mockServerIconService: any;
 
   beforeEach(() => {
     mockGroupRepo = {
@@ -50,11 +54,21 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     };
 
     mockUserServerAccessRepo = {
+      findOne: jest.fn(async () => null),
       find: jest.fn(async () => []),
+      create: jest.fn((dto) => dto),
+      save: jest.fn(async (dto) => dto),
+      delete: jest.fn(async () => ({ affected: 1 })),
     };
 
     mockAccessDecisionEngine = {
       evaluateAccess: jest.fn(() => ({ allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' })),
+      evaluateNickname: jest.fn((declared: string, registered?: string) => {
+        if (!registered) return { allowed: true, autoAdopted: true };
+        if (declared.toLowerCase() === registered.toLowerCase())
+          return { allowed: true, autoAdopted: false };
+        return { allowed: false, autoAdopted: false, reason: 'IMPERSONATION_DETECTED' };
+      }),
     };
 
     mockGatewayIpcService = {
@@ -62,11 +76,40 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         session_found: true,
         terminated_connections_count: 1,
       })),
+      publishRoute: jest.fn(async () => {}),
+      probePlayerIdentity: jest.fn(),
     };
 
     mockConsoleDriver = {
       sendCommand: jest.fn(async () => 'Kicked player'),
     };
+
+    mockPlayerSessionsService = {
+      list: jest.fn(() => []),
+      count: jest.fn(() => 0),
+    };
+
+    mockAppConfigService = {
+      access: {
+        worldsDomain: 'mc.example.com',
+      },
+    };
+
+    mockServerIconService = {
+      dataUri: jest.fn(async (server: any) =>
+        server.id === 's-icon' ? 'data:image/png;base64,mocked' : null,
+      ),
+    };
+
+    const accessResolver = new AccessResolverService(
+      mockUserRepo,
+      mockServerRepo,
+      mockServerGroupRepo,
+      mockUserGroupRepo,
+      mockUserServerAccessRepo,
+      mockGroupRepo,
+      mockAccessDecisionEngine,
+    );
 
     service = new AdminService(
       mockGroupRepo,
@@ -78,6 +121,10 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockAccessDecisionEngine,
       mockGatewayIpcService,
       mockConsoleDriver,
+      accessResolver,
+      mockPlayerSessionsService,
+      mockAppConfigService,
+      mockServerIconService,
     );
   });
 
@@ -142,7 +189,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         server_groups: [{ group_id: groupId }],
         minecraft_settings: {},
       };
-      mockServerRepo.findOne.mockResolvedValue(mockServer);
+      mockServerRepo.find.mockResolvedValue([mockServer]);
 
       // 4. Decision Engine avalia que o usuário perdeu o acesso após ser removido
       mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
@@ -216,6 +263,231 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
       expect(result.kickedServers).toHaveLength(0);
     });
+
+    it('user with direct access only to world A is not treated as allowed on INDIVIDUAL world B when removed from group (#211)', async () => {
+      const userId = 'u-player-1';
+      const groupId = 'grp-legacy';
+
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: groupId, user_id: userId });
+      mockUserRepo.findOne.mockResolvedValue({
+        id: userId,
+        minecraft_nick: 'Player1',
+        role: 'PLAYER',
+      });
+
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: groupId, server_id: 'world-b' }]);
+
+      const worldB = {
+        id: 'world-b',
+        subdomain: 'worldb',
+        access_policy: 'INDIVIDUAL',
+        is_maintenance: false,
+        state: 'READY',
+      };
+      mockServerRepo.find.mockResolvedValue([worldB]);
+
+      // User only has direct access to world-a, NOT world-b
+      mockUserServerAccessRepo.find.mockResolvedValue([{ user_id: userId, server_id: 'world-a' }]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+
+      const result = await service.removeUserFromGroup(groupId, userId);
+
+      expect(result.kickedServers).toContain('world-b');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        worldB,
+        expect.stringContaining('kick Player1'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'world-b',
+          minecraft_nick: 'Player1',
+        }),
+      );
+    });
+
+    it('non-admin online in a world in maintenance is kicked when removed from group (#211)', async () => {
+      const userId = 'u-player-2';
+      const groupId = 'grp-maint';
+
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: groupId, user_id: userId });
+      mockUserRepo.findOne.mockResolvedValue({
+        id: userId,
+        minecraft_nick: 'Player2',
+        role: 'PLAYER',
+      });
+
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: groupId, server_id: 'world-maint' }]);
+
+      const worldMaint = {
+        id: 'world-maint',
+        subdomain: 'maint',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+        state: 'READY',
+      };
+      mockServerRepo.find.mockResolvedValue([worldMaint]);
+      mockUserGroupRepo.find.mockResolvedValue([{ user_id: userId, group_id: 'other-group' }]);
+
+      const result = await service.removeUserFromGroup(groupId, userId);
+
+      expect(result.kickedServers).toContain('world-maint');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        worldMaint,
+        expect.stringContaining('kick Player2'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'world-maint',
+          minecraft_nick: 'Player2',
+        }),
+      );
+    });
+  });
+
+  describe('Atualizações de rota e Smart Kick ao alterar servidores do grupo (#210)', () => {
+    it('publica atualização de rota no gateway ao associar servidor ao grupo (#210)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 'srv-1', name: 'Survival' });
+      mockServerGroupRepo.findOne.mockResolvedValue(null);
+
+      await service.addServerToGroup('grp-1', 'srv-1');
+
+      expect(mockServerGroupRepo.save).toHaveBeenCalledWith({
+        group_id: 'grp-1',
+        server_id: 'srv-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('publica rota e chuta membros que perderam acesso ao remover servidor do grupo (#210)', async () => {
+      const userLost = {
+        id: 'u-lost',
+        minecraft_nick: 'LostPlayer',
+        role: 'PLAYER',
+        user_groups: [{ group_id: 'grp-1' }],
+        server_accesses: [],
+      };
+      const userKept = {
+        id: 'u-kept',
+        minecraft_nick: 'KeptPlayer',
+        role: 'PLAYER',
+        user_groups: [{ group_id: 'grp-1' }, { group_id: 'grp-2' }],
+        server_accesses: [],
+      };
+
+      mockUserGroupRepo.find.mockResolvedValue([
+        { user_id: 'u-lost', group_id: 'grp-1' },
+        { user_id: 'u-kept', group_id: 'grp-1' },
+      ]);
+
+      mockUserRepo.find.mockResolvedValue([userLost, userKept]);
+
+      const server = {
+        id: 'srv-1',
+        name: 'Survival',
+        state: 'READY',
+        access_policy: 'GROUP',
+        server_groups: [{ group_id: 'grp-2', server_id: 'srv-1' }],
+        is_maintenance: false,
+      };
+      mockServerRepo.findOne.mockResolvedValue(server);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((userCtx: any, serverCtx: any) => {
+        const match = userCtx.groupIds.some((g: string) => serverCtx.allowedGroupIds.includes(g));
+        return { allowed: match, reason: match ? 'MATCH' : 'NO_ACCESS' };
+      });
+
+      await service.removeServerFromGroup('grp-1', 'srv-1');
+
+      expect(mockServerGroupRepo.delete).toHaveBeenCalledWith({
+        group_id: 'grp-1',
+        server_id: 'srv-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+
+      // u-lost lost access -> kicked via RCON and gateway IPC
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick LostPlayer'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-1',
+          minecraft_nick: 'LostPlayer',
+        }),
+      );
+
+      // u-kept still has grp-2 -> NOT kicked
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick KeptPlayer'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          minecraft_nick: 'KeptPlayer',
+        }),
+      );
+    });
+
+    it('publica atualização de rota para cada servidor vinculado antes de deletar o grupo (#210)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerGroupRepo.find.mockResolvedValue([
+        { group_id: 'grp-1', server_id: 'srv-1' },
+        { group_id: 'grp-1', server_id: 'srv-2' },
+      ]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+
+      await service.deleteGroup('grp-1');
+
+      expect(mockGroupRepo.delete).toHaveBeenCalledWith({ id: 'grp-1' });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-2');
+    });
+
+    it('dispara Smart Kick em usuários online que perderam acesso ao excluir grupo (#210, #213)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'grp-1', server_id: 'srv-1' }]);
+      mockUserGroupRepo.find.mockResolvedValue([{ group_id: 'grp-1', user_id: 'u-1' }]);
+
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'PlayerOne',
+        role: 'PLAYER',
+        user_groups: [],
+        server_accesses: [],
+      };
+      const server = {
+        id: 'srv-1',
+        name: 'VIP Server',
+        state: 'READY',
+        access_policy: 'GROUP',
+        server_groups: [],
+        is_maintenance: false,
+      };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: false,
+        reason: 'NO_ACCESS',
+      });
+
+      await service.deleteGroup('grp-1');
+
+      expect(mockGroupRepo.delete).toHaveBeenCalledWith({ id: 'grp-1' });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick PlayerOne'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-1',
+          minecraft_nick: 'PlayerOne',
+        }),
+      );
+    });
   });
 
   describe('smartKick manual (RF-GW-15)', () => {
@@ -274,6 +546,15 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     const user = { id: 'user-1', minecraft_nick: 'LucasCraft', real_name: 'Lucas', role: 'PLAYER' };
 
     beforeEach(() => {
+      const accessResolver = new AccessResolverService(
+        mockGroupRepo,
+        mockServerRepo,
+        mockServerGroupRepo,
+        mockUserGroupRepo,
+        mockUserServerAccessRepo,
+        mockGroupRepo,
+        new AccessDecisionEngineService(),
+      );
       service = new AdminService(
         mockGroupRepo,
         mockUserRepo,
@@ -284,6 +565,8 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         new AccessDecisionEngineService(),
         mockGatewayIpcService,
         mockConsoleDriver,
+        accessResolver,
+        mockPlayerSessionsService,
       );
     });
 
@@ -303,6 +586,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
             },
           ],
           user_groups: [{ user_id: 'user-1', group_id: 'grp-1' }],
+          server_accesses: [{ user_id: 'user-1', server_id: 'srv-1' }],
         },
       ]);
 
@@ -317,6 +601,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         role: 'PLAYER',
         devices: [{ id: 'dev-1', deviceName: 'PC', status: 'ACTIVE', lastSeenAt: null }],
         groupIds: ['grp-1'],
+        serverIds: ['srv-1'],
       });
     });
 
@@ -415,6 +700,715 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     it('responde 404 para usuário inexistente', async () => {
       await expect(service.listAccessibleServers('nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('explainUserAccess (#211)', () => {
+    it('returns access explanation for all worlds', async () => {
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((_u: any, s: any) => {
+        if (s.policy === 'PUBLIC') return { allowed: true };
+        return { allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' };
+      });
+      const user = { id: 'u-1', role: 'PLAYER' };
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([
+        {
+          id: 's-1',
+          name: 'World 1',
+          subdomain: 'w1',
+          state: 'READY',
+          access_policy: 'PUBLIC',
+          is_maintenance: false,
+        },
+        {
+          id: 's-2',
+          name: 'World 2',
+          subdomain: 'w2',
+          state: 'STOPPED',
+          access_policy: 'GROUP',
+          is_maintenance: false,
+        },
+      ]);
+
+      const explanations = await service.explainUserAccess('u-1');
+
+      expect(explanations).toHaveLength(2);
+      expect(explanations[0]).toMatchObject({
+        id: 's-1',
+        allowed: true,
+        grantedBy: { kind: 'POLICY', policy: 'PUBLIC' },
+      });
+      expect(explanations[1]).toMatchObject({
+        id: 's-2',
+        allowed: false,
+        grantedBy: null,
+      });
+    });
+
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.explainUserAccess('u-none')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('grantServerToUser (#212)', () => {
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.grantServerToUser('u-bad', 's-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException if server does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue(null);
+      await expect(service.grantServerToUser('u-1', 's-bad')).rejects.toThrow(NotFoundException);
+    });
+
+    it('saves direct access and publishes route to gateway', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 's-1' });
+      mockUserServerAccessRepo.findOne.mockResolvedValue(null);
+
+      await service.grantServerToUser('u-1', 's-1');
+
+      expect(mockUserServerAccessRepo.save).toHaveBeenCalledWith({
+        user_id: 'u-1',
+        server_id: 's-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-1');
+    });
+
+    it('does not duplicate if already granted but still publishes route', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 's-1' });
+      mockUserServerAccessRepo.findOne.mockResolvedValue({ user_id: 'u-1', server_id: 's-1' });
+
+      await service.grantServerToUser('u-1', 's-1');
+
+      expect(mockUserServerAccessRepo.save).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-1');
+    });
+  });
+
+  describe('revokeServerFromUser (#212)', () => {
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.revokeServerFromUser('u-bad', 's-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException if server does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue(null);
+      await expect(service.revokeServerFromUser('u-1', 's-bad')).rejects.toThrow(NotFoundException);
+    });
+
+    it('deletes access and triggers smart kick if user loses access to INDIVIDUAL world', async () => {
+      const user = { id: 'u-1', minecraft_nick: 'Steve', role: 'PLAYER' };
+      const server = {
+        id: 's-indiv',
+        access_policy: 'INDIVIDUAL',
+        state: 'READY',
+        is_maintenance: false,
+      };
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+
+      const result = await service.revokeServerFromUser('u-1', 's-indiv');
+
+      expect(mockUserServerAccessRepo.delete).toHaveBeenCalledWith({
+        user_id: 'u-1',
+        server_id: 's-indiv',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-indiv');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick Steve'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 's-indiv',
+          minecraft_nick: 'Steve',
+        }),
+      );
+      expect(result).toEqual({ kickedServers: ['s-indiv'] });
+    });
+
+    it('does not trigger smart kick if user remains authorized', async () => {
+      const adminUser = { id: 'u-admin', minecraft_nick: 'AdminSteve', role: 'ADMIN' };
+      const server = {
+        id: 's-indiv',
+        access_policy: 'INDIVIDUAL',
+        state: 'READY',
+        is_maintenance: false,
+      };
+
+      mockUserRepo.findOne.mockResolvedValue(adminUser);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({ allowed: true });
+
+      const result = await service.revokeServerFromUser('u-admin', 's-indiv');
+
+      expect(mockUserServerAccessRepo.delete).toHaveBeenCalledWith({
+        user_id: 'u-admin',
+        server_id: 's-indiv',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-indiv');
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
+      expect(result).toEqual({ kickedServers: [] });
+    });
+  });
+
+  describe('simulateAccessChanges (#213)', () => {
+    it('simulating removeServerFromGroup does not modify server_groups and does not call publishRoute or revokePlayerSession', async () => {
+      const user = { id: 'u-1', minecraft_nick: 'PlayerOne', role: 'PLAYER' };
+      const server = { id: 's-1', name: 'Server One', access_policy: 'GROUP' };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'g-1', server_id: 's-1' }]);
+      mockUserGroupRepo.find.mockResolvedValue([{ user_id: 'u-1', group_id: 'g-1' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const allowed = sCtx.allowedGroupIds?.includes('g-1') && uCtx.groupIds?.includes('g-1');
+        return { allowed: Boolean(allowed) };
+      });
+
+      const results = await service.simulateAccessChanges({
+        changes: [{ type: 'removeServerFromGroup', serverId: 's-1', groupId: 'g-1' }],
+      });
+
+      // Verify no persistence or IPC calls were made
+      expect(mockServerGroupRepo.delete).not.toHaveBeenCalled();
+      expect(mockServerGroupRepo.save).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.publishRoute).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        userId: 'u-1',
+        minecraftNick: 'PlayerOne',
+        gains: [],
+        losses: ['s-1'],
+        wouldBeKicked: [],
+      });
+    });
+
+    it('simulating removeUserFromGroup returns in losses / wouldBeKicked the exact worlds that removeUserFromGroup would kick after saving under the same state', async () => {
+      const user = { id: 'u-2', minecraft_nick: 'OnlinePlayer', role: 'PLAYER' };
+      const server = {
+        id: 's-world',
+        name: 'Active World',
+        access_policy: 'GROUP',
+        state: 'READY',
+      };
+
+      let userGroups = [{ user_id: 'u-2', group_id: 'g-kick' }];
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'g-kick', server_id: 's-world' }]);
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: 'g-kick', user_id: 'u-2' });
+      mockUserGroupRepo.find.mockImplementation(async () => userGroups);
+      mockUserGroupRepo.delete.mockImplementation(async () => {
+        userGroups = [];
+        return { affected: 1 };
+      });
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // Active session in s-world
+      mockPlayerSessionsService.list.mockImplementation((sId: string) =>
+        sId === 's-world' ? [{ nick: 'OnlinePlayer', sessionId: 'sess-abc' }] : [],
+      );
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const hasGroup =
+          uCtx.groupIds?.includes('g-kick') && sCtx.allowedGroupIds?.includes('g-kick');
+        return { allowed: Boolean(hasGroup) };
+      });
+
+      // 1. Run simulation
+      const simResults = await service.simulateAccessChanges({
+        changes: [{ type: 'removeUserFromGroup', userId: 'u-2', groupId: 'g-kick' }],
+      });
+
+      expect(simResults).toHaveLength(1);
+      expect(simResults[0].losses).toEqual(['s-world']);
+      expect(simResults[0].wouldBeKicked).toEqual(['s-world']);
+
+      // 2. Run actual removeUserFromGroup with the same state and verify kick matches
+      const kickResult = await service.removeUserFromGroup('g-kick', 'u-2');
+      expect(kickResult.kickedServers).toEqual(simResults[0].wouldBeKicked);
+    });
+
+    it('a user who remains authorized through another group does not appear in losses', async () => {
+      const user = { id: 'u-3', minecraft_nick: 'DualGroupPlayer', role: 'PLAYER' };
+      const server = { id: 's-shared', name: 'Shared Server', access_policy: 'GROUP' };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([
+        { group_id: 'g-1', server_id: 's-shared' },
+        { group_id: 'g-2', server_id: 's-shared' },
+      ]);
+      mockUserGroupRepo.find.mockResolvedValue([
+        { user_id: 'u-3', group_id: 'g-1' },
+        { user_id: 'u-3', group_id: 'g-2' },
+      ]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // As long as the user has either g-1 or g-2, allowed is true
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const match = uCtx.groupIds?.some((gid: string) => sCtx.allowedGroupIds?.includes(gid));
+        return { allowed: Boolean(match) };
+      });
+
+      const results = await service.simulateAccessChanges({
+        changes: [{ type: 'removeUserFromGroup', userId: 'u-3', groupId: 'g-1' }],
+      });
+
+      const user3Result = results.find((r) => r.userId === 'u-3');
+      expect(user3Result).toBeUndefined();
+    });
+  });
+
+  describe('getAccessMatrix (#214)', () => {
+    it('makes the exact same number of repository queries (<= 5) with 3 users and with 30 users', async () => {
+      const servers = [
+        { id: 's-1', name: 'Server A', access_policy: 'GROUP' },
+        { id: 's-2', name: 'Server B', access_policy: 'PUBLIC' },
+      ];
+      mockServerRepo.find.mockResolvedValue(servers);
+      mockServerGroupRepo.find.mockResolvedValue([{ server_id: 's-1', group_id: 'g-1' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // 1. Run with 3 users
+      const users3 = Array.from({ length: 3 }, (_, i) => ({
+        id: `user-${i}`,
+        minecraft_nick: `Player${i}`,
+        role: 'PLAYER' as const,
+      }));
+      mockUserRepo.find.mockResolvedValue(users3);
+      mockUserGroupRepo.find.mockResolvedValue(
+        users3.map((u) => ({ user_id: u.id, group_id: 'g-1' })),
+      );
+
+      jest.clearAllMocks();
+      const matrix3 = await service.getAccessMatrix();
+
+      const queries3 =
+        mockUserRepo.find.mock.calls.length +
+        mockServerRepo.find.mock.calls.length +
+        mockServerGroupRepo.find.mock.calls.length +
+        mockUserGroupRepo.find.mock.calls.length +
+        mockUserServerAccessRepo.find.mock.calls.length;
+
+      expect(matrix3.users).toHaveLength(3);
+      expect(queries3).toBeLessThanOrEqual(5);
+
+      // 2. Run with 30 users
+      const users30 = Array.from({ length: 30 }, (_, i) => ({
+        id: `user-${i}`,
+        minecraft_nick: `Player${i}`,
+        role: 'PLAYER' as const,
+      }));
+      mockUserRepo.find.mockResolvedValue(users30);
+      mockUserGroupRepo.find.mockResolvedValue(
+        users30.map((u) => ({ user_id: u.id, group_id: 'g-1' })),
+      );
+
+      jest.clearAllMocks();
+      const matrix30 = await service.getAccessMatrix();
+
+      const queries30 =
+        mockUserRepo.find.mock.calls.length +
+        mockServerRepo.find.mock.calls.length +
+        mockServerGroupRepo.find.mock.calls.length +
+        mockUserGroupRepo.find.mock.calls.length +
+        mockUserServerAccessRepo.find.mock.calls.length;
+
+      expect(matrix30.users).toHaveLength(30);
+      expect(queries30).toBeLessThanOrEqual(5);
+      expect(queries30).toBe(queries3);
+    });
+
+    it('every cell[userId][serverId] matches what explainUserAccess(userId) returns for that pair', async () => {
+      const users = [
+        { id: 'u-admin', minecraft_nick: 'AdminUser', role: 'ADMIN' as const, real_name: 'Boss' },
+        { id: 'u-group', minecraft_nick: 'GroupPlayer', role: 'PLAYER' as const, real_name: null },
+        {
+          id: 'u-direct',
+          minecraft_nick: 'DirectPlayer',
+          role: 'PLAYER' as const,
+          real_name: null,
+        },
+      ];
+
+      const servers = [
+        {
+          id: 's-group',
+          name: 'Group World',
+          subdomain: 'group',
+          access_policy: 'GROUP',
+          state: 'READY',
+          is_maintenance: false,
+        },
+        {
+          id: 's-ind',
+          name: 'Individual World',
+          subdomain: 'ind',
+          access_policy: 'INDIVIDUAL',
+          state: 'READY',
+          is_maintenance: false,
+        },
+        {
+          id: 's-pub',
+          name: 'Public World',
+          subdomain: 'pub',
+          access_policy: 'PUBLIC',
+          state: 'READY',
+          is_maintenance: false,
+        },
+      ];
+
+      const serverGroups = [{ server_id: 's-group', group_id: 'g-1', group: { name: 'Vip' } }];
+      const userGroups = [{ user_id: 'u-group', group_id: 'g-1' }];
+      const userAccesses = [{ user_id: 'u-direct', server_id: 's-ind' }];
+
+      mockUserRepo.find.mockResolvedValue(users);
+      mockServerRepo.find.mockResolvedValue(servers);
+      mockServerGroupRepo.find.mockResolvedValue(serverGroups);
+      mockUserGroupRepo.find.mockResolvedValue(userGroups);
+      mockUserServerAccessRepo.find.mockResolvedValue(userAccesses);
+
+      mockUserRepo.findOne.mockImplementation(async ({ where }: any) => {
+        return users.find((u) => u.id === where?.id) || null;
+      });
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        if (uCtx.role === 'ADMIN') return { allowed: true, reason: 'ADMIN_BYPASS' };
+        if (sCtx.policy === 'PUBLIC') return { allowed: true, reason: 'PUBLIC_POLICY' };
+        if (sCtx.policy === 'GROUP') {
+          const match = uCtx.groupIds?.some((gid: string) => sCtx.allowedGroupIds?.includes(gid));
+          return match
+            ? { allowed: true, reason: 'GROUP_MATCH' }
+            : { allowed: false, reason: 'INSUFFICIENT_GROUPS' };
+        }
+        if (sCtx.policy === 'INDIVIDUAL') {
+          const direct = sCtx.allowedUserIds?.includes(uCtx.userId);
+          return direct
+            ? { allowed: true, reason: 'INDIVIDUAL_ALLOWED' }
+            : { allowed: false, reason: 'INDIVIDUAL_ACCESS_DENIED' };
+        }
+        return { allowed: false, reason: 'DENIED' };
+      });
+
+      const matrix = await service.getAccessMatrix();
+
+      expect(matrix.users).toHaveLength(3);
+      expect(matrix.servers).toHaveLength(3);
+
+      for (const u of users) {
+        const userExpl = await service.explainUserAccess(u.id);
+
+        for (const s of servers) {
+          const cell = matrix.cells[u.id][s.id];
+          const expl = userExpl.find((item) => item.id === s.id);
+
+          expect(cell).toBeDefined();
+          expect(expl).toBeDefined();
+          expect(cell.allowed).toBe(expl!.allowed);
+          expect(cell.reason).toBe(expl!.reason);
+          expect(cell.grantedBy).toEqual(expl!.grantedBy);
+        }
+      }
+    });
+  });
+
+  describe('probeIdentity (#215)', () => {
+    it('returns full inspection result with WhoIs, user, matchedBy, wouldBind, nicknameCheck and accessible servers', async () => {
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'Steve',
+        real_name: 'Steve Rogers',
+        email: 'steve@example.com',
+        github_username: null,
+        role: 'PLAYER' as const,
+      };
+
+      const server = {
+        id: 's-1',
+        name: 'Survival',
+        subdomain: 'survival',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user,
+        matchedBy: 'SHARED_EMAIL',
+        wouldBind: true,
+        networkIdentity: {
+          userId: 'ts-123',
+          loginName: 'steve@example.com',
+          displayName: 'Steve R',
+          nodeId: 'node-1',
+          nodeName: 'steve-pc',
+          nodeIp: '100.64.0.10',
+          tags: [],
+          isOwner: true,
+        },
+        pendingDevice: null,
+      });
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: true,
+        reason: 'PUBLIC_POLICY',
+      });
+
+      const result = await service.probeIdentity({
+        ip: '100.64.0.10',
+        minecraftNick: 'Steve',
+      });
+
+      expect(mockGatewayIpcService.probePlayerIdentity).toHaveBeenCalledWith({
+        clientIp: '100.64.0.10',
+        tailscaleUserId: undefined,
+      });
+
+      expect(result.whois).toMatchObject({
+        loginName: 'steve@example.com',
+        nodeIp: '100.64.0.10',
+      });
+      expect(result.user).toMatchObject({
+        id: 'u-1',
+        minecraftNick: 'Steve',
+        realName: 'Steve Rogers',
+      });
+      expect(result.matchedBy).toBe('SHARED_EMAIL');
+      expect(result.wouldBind).toBe(true);
+      expect(result.nicknameCheck).toEqual({
+        allowed: true,
+        autoAdopted: false,
+      });
+      expect(result.servers).toHaveLength(1);
+      expect(result.servers[0]).toMatchObject({
+        id: 's-1',
+        allowed: true,
+      });
+    });
+
+    it('a minecraftNick different from the registered user nick returns reason: IMPERSONATION_DETECTED (allowed: false)', async () => {
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'Steve',
+        role: 'PLAYER' as const,
+      };
+
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user,
+        matchedBy: 'TAILSCALE_USER_ID',
+        wouldBind: false,
+        networkIdentity: null,
+        pendingDevice: null,
+      });
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([]);
+
+      const result = await service.probeIdentity({
+        tailscaleUserId: 'ts-1',
+        minecraftNick: 'ImpostorNick',
+      });
+
+      expect(result.nicknameCheck).toEqual({
+        allowed: false,
+        autoAdopted: false,
+        reason: 'IMPERSONATION_DETECTED',
+      });
+    });
+
+    it('probing with no matched user returns user: null and empty servers list', async () => {
+      mockGatewayIpcService.probePlayerIdentity.mockResolvedValue({
+        user: null,
+        matchedBy: 'NONE',
+        wouldBind: false,
+        networkIdentity: null,
+        pendingDevice: null,
+      });
+
+      const result = await service.probeIdentity({
+        ip: '100.99.99.99',
+      });
+
+      expect(result.user).toBeNull();
+      expect(result.matchedBy).toBe('NONE');
+      expect(result.wouldBind).toBe(false);
+      expect(result.nicknameCheck).toBeNull();
+      expect(result.servers).toEqual([]);
+    });
+  });
+
+  describe('listMyServers (#216)', () => {
+    it('returns only allowed worlds for a PLAYER user and omits internal IDs', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const server1 = {
+        id: 's-allowed',
+        name: 'Survival',
+        subdomain: 'survival',
+        resource_name: 'srv-res-1',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      const server2 = {
+        id: 's-forbidden',
+        name: 'VIP Only',
+        subdomain: 'vip',
+        resource_name: 'srv-res-2',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+      };
+
+      mockServerRepo.find.mockResolvedValue([server1, server2]);
+      mockPlayerSessionsService.count.mockReturnValue(3);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation(
+        (_userCtx: any, serverCtx: any) => {
+          if (serverCtx.serverId === 's-allowed') {
+            return { allowed: true, reason: 'PUBLIC_POLICY' };
+          }
+          return { allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' };
+        },
+      );
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      const card = result[0];
+      expect(card.name).toBe('Survival');
+      expect(card.address).toBe('survival.mc.example.com');
+      expect(card.state).toBe('READY');
+      expect(card.playersOnline).toBe(3);
+      // Sanitized: must NOT contain id or resource_name
+      expect(card).not.toHaveProperty('id');
+      expect(card).not.toHaveProperty('resource_name');
+    });
+
+    it('marks a world in maintenance as state MAINTENANCE if the player has base access to it', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const maintenanceServer = {
+        id: 's-maint',
+        name: 'Creative World',
+        subdomain: 'creative',
+        resource_name: 'srv-res-maint',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+      };
+
+      mockServerRepo.find.mockResolvedValue([maintenanceServer]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation(
+        (_userCtx: any, serverCtx: any) => {
+          if (serverCtx.policy === 'MAINTENANCE') {
+            return { allowed: false, reason: 'MAINTENANCE_MODE' };
+          }
+          return { allowed: true, reason: 'ALLOWED_BY_GROUP' };
+        },
+      );
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Creative World');
+      expect(result[0].state).toBe('MAINTENANCE');
+      expect(result[0]).not.toHaveProperty('id');
+      expect(result[0]).not.toHaveProperty('resource_name');
+    });
+
+    it('does NOT include a maintenance world if the player has no base access to it', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const maintenanceServer = {
+        id: 's-maint-unauthorized',
+        name: 'Admin Build',
+        subdomain: 'adminbuild',
+        resource_name: 'srv-res-admin',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+      };
+
+      mockServerRepo.find.mockResolvedValue([maintenanceServer]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: false,
+        reason: 'NOT_IN_ALLOWED_GROUPS',
+      });
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('includes icon dataUri when serverIconService provides one', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const serverWithIcon = {
+        id: 's-icon',
+        name: 'Icon Server',
+        subdomain: 'iconic',
+        resource_name: 'srv-res-icon',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      mockServerRepo.find.mockResolvedValue([serverWithIcon]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({ allowed: true });
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].icon).toBe('data:image/png;base64,mocked');
     });
   });
 });

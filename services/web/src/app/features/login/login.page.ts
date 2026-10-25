@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -120,7 +127,7 @@ import { safeRedirect } from './login.logic';
     </div>
   `,
 })
-export class LoginPage {
+export class LoginPage implements OnInit {
   private readonly session = inject(AuthSession);
   private readonly router = inject(Router);
   /** Read once: a 401 from the session request makes the interceptor navigate to a bare /login. */
@@ -148,20 +155,24 @@ export class LoginPage {
   );
   protected readonly visibleNickError = computed(() => (this.submitted() ? this.nickError() : ''));
 
+  ngOnInit(): void {
+    this.session.restore().subscribe((user) => {
+      if (user && user.role !== 'ADMIN') {
+        void this.router.navigateByUrl('/meus-mundos');
+      }
+    });
+  }
+
   protected signInWithVpn(): void {
     this.vpnError.set('');
     this.vpnBusy.set(true);
     this.session.login().subscribe({
       next: (user) => {
+        this.identity.set(user.minecraft_nick);
         if (user.role !== 'ADMIN') {
-          this.session.logout();
-          this.vpnBusy.set(false);
-          this.vpnError.set(
-            'Esta conta não é de administrador. Peça acesso a quem administra o painel.',
-          );
+          void this.router.navigateByUrl('/meus-mundos');
           return;
         }
-        this.identity.set(user.minecraft_nick);
         void this.router.navigateByUrl(this.target);
       },
       error: (error: unknown) => this.failVpn(error),

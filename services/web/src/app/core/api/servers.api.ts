@@ -21,6 +21,7 @@ import {
   UpdateVersionResponse,
   CompatibilityPreviewResponse,
   ServerContentItem,
+  PlayerServer,
 } from './models';
 
 /** servers.controller.ts, `api/servers`. */
@@ -139,5 +140,9 @@ export class ServersApi {
     return this.api.get('/api/minecraft/versions', {
       params: { type, snapshots: String(snapshots) },
     });
+  }
+
+  listMyServers(): Observable<PlayerServer[]> {
+    return this.api.get('/api/me/servers');
   }
 }

@@ -3,9 +3,13 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
+import { AddServerDto } from './dto/add-server.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
+import { AccessMatrixDto } from './dto/access-matrix.dto';
+import { IdentityProbeDto, IdentityProbeResultDto } from './dto/identity-probe.dto';
 
 @ApiTags('Admin & ACL Management')
 @ApiBearerAuth()
@@ -29,6 +33,74 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async listAccessibleServers(@Param('id') id: string): Promise<AccessibleServerDto[]> {
     return this.adminService.listAccessibleServers(id);
+  }
+
+  @Get('users/:id/access')
+  @ApiOperation({
+    summary: 'Explicar detalhadamente o acesso do usuário a todos os servidores (#211)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de mundos com avaliação de acesso e justificativa',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async explainUserAccess(@Param('id') id: string) {
+    return this.adminService.explainUserAccess(id);
+  }
+
+  @Get('access/matrix')
+  @ApiOperation({
+    summary: 'Matriz consolidada de acesso de usuários a servidores (#214)',
+  })
+  @ApiResponse({
+    status: 200,
+    type: AccessMatrixDto,
+    description: 'Matriz com usuários, servidores e células de permissão de acesso',
+  })
+  async getAccessMatrix(): Promise<AccessMatrixDto> {
+    return this.adminService.getAccessMatrix();
+  }
+
+  @Post('access/identity-probe')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sondagem dry-run de identidade por ID Tailscale ou IP (#215)',
+  })
+  @ApiResponse({
+    status: 200,
+    type: IdentityProbeResultDto,
+    description: 'Resultado da sonda de identidade, WhoIs, anti-impersonação e mundos acessíveis',
+  })
+  async probeIdentity(@Body() dto: IdentityProbeDto): Promise<IdentityProbeResultDto> {
+    return this.adminService.probeIdentity(dto);
+  }
+
+  @Post('users/:id/servers')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Conceder acesso direto de servidor a um usuário (#212)',
+  })
+  @ApiResponse({ status: 200, description: 'Acesso concedido com sucesso' })
+  @ApiResponse({ status: 404, description: 'User or server not found' })
+  async grantServerToUser(
+    @Param('id') id: string,
+    @Body() dto: AddServerDto,
+  ): Promise<{ success: boolean }> {
+    await this.adminService.grantServerToUser(id, dto.serverId);
+    return { success: true };
+  }
+
+  @Delete('users/:id/servers/:serverId')
+  @ApiOperation({
+    summary: 'Revogar acesso direto de servidor do usuário com Smart Kick caso perca acesso (#212)',
+  })
+  @ApiResponse({ status: 200, description: 'Acesso revogado com sucesso' })
+  @ApiResponse({ status: 404, description: 'User or server not found' })
+  async revokeServerFromUser(
+    @Param('id') id: string,
+    @Param('serverId') serverId: string,
+  ): Promise<{ kickedServers: string[] }> {
+    return this.adminService.revokeServerFromUser(id, serverId);
   }
 
   @Post('groups')
@@ -76,8 +148,8 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Associar servidor a um grupo de acesso' })
   @ApiResponse({ status: 200, description: 'Servidor associado ao grupo' })
-  async addServerToGroup(@Param('id') groupId: string, @Body('serverId') serverId: string) {
-    await this.adminService.addServerToGroup(groupId, serverId);
+  async addServerToGroup(@Param('id') groupId: string, @Body() dto: AddServerDto) {
+    await this.adminService.addServerToGroup(groupId, dto.serverId);
     return { success: true };
   }
 
@@ -87,6 +159,16 @@ export class AdminController {
   async removeServerFromGroup(@Param('id') groupId: string, @Param('serverId') serverId: string) {
     await this.adminService.removeServerFromGroup(groupId, serverId);
     return { success: true };
+  }
+
+  @Post('access/simulate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Simular alterações de permissões e impactos antes de aplicar (#213)',
+  })
+  @ApiResponse({ status: 200, type: [SimulatedUserAccessResultDto] })
+  async simulateAccess(@Body() dto: SimulateAccessDto): Promise<SimulatedUserAccessResultDto[]> {
+    return this.adminService.simulateAccessChanges(dto);
   }
 
   @Post('smart-kick')

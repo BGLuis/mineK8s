@@ -19,7 +19,6 @@ import { TrustedProxyService } from '../auth/trusted-proxy.service';
 import { Server } from '../database/entities/server.entity';
 import { ServerAuditLog } from '../database/entities/server-audit-log.entity';
 import { User } from '../database/entities/user.entity';
-import { UserServerAccess } from '../database/entities/user-server-access.entity';
 import { CONSOLE_DRIVER_TOKEN, ConsoleDriver } from '../console/console-driver.interface';
 import { KubernetesService } from '../k8s/k8s.service';
 import { K8sLogStreamerService } from '../logging/k8s-log-streamer.service';
@@ -53,8 +52,6 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly serverRepo: Repository<Server>,
     @InjectRepository(ServerAuditLog)
     private readonly auditRepo: Repository<ServerAuditLog>,
-    @InjectRepository(UserServerAccess)
-    private readonly accessRepo: Repository<UserServerAccess>,
     @Inject(CONSOLE_DRIVER_TOKEN)
     private readonly consoleDriver: ConsoleDriver,
     private readonly logStreamer: K8sLogStreamerService,
@@ -214,8 +211,8 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     return true;
   }
 
-  private checkUserAccess(user: User | undefined, serverId: string): Promise<boolean> {
-    return canAccessServer(user, serverId, this.accessRepo);
+  private checkUserAccess(user: User | undefined, _serverId?: string): Promise<boolean> {
+    return canAccessServer(user);
   }
 
   private ensureRoomLogStream(server: Server): void {

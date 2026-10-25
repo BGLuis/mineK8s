@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { AccessibleServer, AdminApi, TailscaleApi, TailscaleDevice } from '../../core/api';
 import {
@@ -23,7 +24,16 @@ const INACTIVE_DAYS = 30;
 @Component({
   selector: 'mc-devices-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McBanner, McButton, McDialog, McStatusChip, McTable, McTextField],
+  imports: [
+    FormsModule,
+    RouterLink,
+    McBanner,
+    McButton,
+    McDialog,
+    McStatusChip,
+    McTable,
+    McTextField,
+  ],
   template: `
     <section aria-labelledby="devices-title">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -59,7 +69,18 @@ const INACTIVE_DAYS = 30;
             <tbody>
               @for (device of list; track device.id) {
                 <tr>
-                  <td class="t-body-strong">{{ nick(device) }}</td>
+                  <td class="t-body-strong">
+                    @if (device.user_id) {
+                      <a
+                        [routerLink]="['/access/users', device.user_id]"
+                        class="hover:underline text-text-primary"
+                      >
+                        {{ nick(device) }}
+                      </a>
+                    } @else {
+                      {{ nick(device) }}
+                    }
+                  </td>
                   <td>{{ device.node_ip ?? '—' }}</td>
                   <td>{{ device.device_name ?? '—' }}</td>
                   <td>

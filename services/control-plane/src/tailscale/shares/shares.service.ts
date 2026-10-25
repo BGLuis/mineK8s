@@ -171,11 +171,15 @@ export class SharesService {
     for (const group_id of groupIds) {
       await this.userGroupRepo.save(this.userGroupRepo.create({ user_id: user.id, group_id }));
     }
-    for (const server_id of serverIds) {
+    const uniqueServerIds = Array.from(new Set(serverIds));
+    for (const server_id of uniqueServerIds) {
       await this.userServerAccessRepo.save(
         this.userServerAccessRepo.create({ user_id: user.id, server_id }),
       );
     }
+    await Promise.all(
+      uniqueServerIds.map((serverId) => this.gatewayIpcService.publishRoute(serverId)),
+    );
 
     return {
       id: user.id,

@@ -14,10 +14,17 @@ export const routes: Routes = [
     title: 'Entrar na rede · mineK8s',
     loadComponent: () => import('./features/join/join.page').then((m) => m.JoinPage),
   },
+  {
+    path: 'meus-mundos',
+    canActivate: [authGuard],
+    title: 'Meus mundos · mineK8s',
+    loadComponent: () =>
+      import('./features/player/player-worlds.page').then((m) => m.PlayerWorldsPage),
+  },
   ...devRoutes,
   {
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, adminGuard],
     loadComponent: () => import('./shell/shell').then((m) => m.ShellComponent),
     children: [
       {
@@ -44,6 +51,13 @@ export const routes: Routes = [
         path: 'access',
         title: 'Convidados e acesso · mineK8s',
         loadComponent: () => import('./features/access/access.page').then((m) => m.AccessPage),
+      },
+      {
+        path: 'access/users/:id',
+        title: 'Detalhes do usuário · mineK8s',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/access/user-detail.page').then((m) => m.UserDetailPage),
       },
       {
         path: 'health',

@@ -19,12 +19,12 @@
       "dst": ["*:*"]
     },
 
-    // Regra Zero-Trust (RF-TS-01): Jogadores/convidados acessam EXCLUSIVAMENTE a porta do Gateway (25565).
+    // Regra Zero-Trust (RF-TS-01): Jogadores/convidados acessam as portas do Gateway (25565) e do painel (8080).
     // Nenhuma porta de host, SSH (22), API (3000) ou métricas (9090) é acessível.
     {
       "action": "accept",
       "src": ["tag:mc-player"],
-      "dst": ["tag:mc-gateway:25565"]
+      "dst": ["tag:mc-gateway:25565", "tag:mc-gateway:8080"]
     }
   ],
 
@@ -34,7 +34,8 @@
     {
       "src": "tag:mc-player",
       "accept": [
-        "tag:mc-gateway:25565"
+        "tag:mc-gateway:25565",
+        "tag:mc-gateway:8080"
       ],
       "deny": [
         "tag:mc-gateway:22",

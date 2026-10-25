@@ -20,6 +20,7 @@ describe('InvitesService', () => {
   let mockTailscaleCloudDriver: any;
   let mockServerRepo: any;
   let mockAppConfig: any;
+  let mockGatewayIpcService: any;
 
   beforeEach(() => {
     mockInviteRepo = {
@@ -78,6 +79,10 @@ describe('InvitesService', () => {
       access: { publicUrl: 'https://mine.example.ts.net:3001', worldsDomain: 'mine.internal' },
     };
 
+    mockGatewayIpcService = {
+      publishRoute: jest.fn(async () => {}),
+    };
+
     service = new InvitesService(
       mockInviteRepo,
       mockInviteGroupRepo,
@@ -89,6 +94,7 @@ describe('InvitesService', () => {
       mockTailscaleCloudDriver,
       mockServerRepo,
       mockAppConfig,
+      mockGatewayIpcService,
     );
   });
 
@@ -456,6 +462,40 @@ describe('InvitesService', () => {
       expect(mockUserGroupRepo.save).toHaveBeenCalledTimes(1);
       expect(mockUserServerAccessRepo.save).toHaveBeenCalledTimes(1);
       expect(mockDeviceRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('publica rotas no gateway para servidores vinculados ao convite ao resgatar (#210)', async () => {
+      const inviteToken = 'valid-token-servers';
+      mockInviteRepo.createQueryBuilder.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      });
+
+      mockInviteRepo.findOne.mockResolvedValue({
+        id: 'inv-ok-2',
+        token: inviteToken,
+        name: 'VIP Amigos',
+        is_active: true,
+        used_count: 0,
+        max_uses: 5,
+        expires_at: new Date(Date.now() + 100000),
+        invite_groups: [],
+        invite_servers: [{ server_id: 'srv-1' }, { server_id: 'srv-2' }],
+      });
+
+      mockUserRepo.findOne.mockResolvedValue(null);
+
+      await service.claimInvite({
+        token: inviteToken,
+        realName: 'Lucas Henrique',
+        minecraftNick: 'LucasCraft',
+      });
+
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-2');
     });
   });
 
