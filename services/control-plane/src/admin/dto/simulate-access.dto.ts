@@ -1,19 +1,54 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsOptional, IsUUID, ValidateNested } from 'class-validator';
 
-export type AccessChangeItem =
-  | { type: 'addUserToGroup'; userId: string; groupId: string }
-  | { type: 'removeUserFromGroup'; userId: string; groupId: string }
-  | { type: 'addServerToGroup'; serverId: string; groupId: string }
-  | { type: 'removeServerFromGroup'; serverId: string; groupId: string }
-  | { type: 'grantServer'; userId: string; serverId: string }
-  | { type: 'revokeServer'; userId: string; serverId: string }
-  | { type: 'deleteGroup'; groupId: string };
+export const ACCESS_CHANGE_TYPES = [
+  'addUserToGroup',
+  'removeUserFromGroup',
+  'addServerToGroup',
+  'removeServerFromGroup',
+  'grantServer',
+  'revokeServer',
+  'deleteGroup',
+] as const;
+
+export type AccessChangeType = (typeof ACCESS_CHANGE_TYPES)[number];
+
+export class AccessChangeItemDto {
+  @ApiProperty({
+    enum: ACCESS_CHANGE_TYPES,
+    description: 'Tipo da mudança hipotética de acesso',
+  })
+  @IsIn(ACCESS_CHANGE_TYPES)
+  type: AccessChangeType;
+
+  @ApiProperty({ required: false, description: 'ID do usuário (UUID)' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+
+  @ApiProperty({ required: false, description: 'ID do grupo (UUID)' })
+  @IsOptional()
+  @IsUUID()
+  groupId?: string;
+
+  @ApiProperty({ required: false, description: 'ID do servidor (UUID)' })
+  @IsOptional()
+  @IsUUID()
+  serverId?: string;
+}
+
+export type AccessChangeItem = AccessChangeItemDto;
 
 export class SimulateAccessDto {
   @ApiProperty({
     description: 'Lista de mudanças hipotéticas de acesso a simular',
+    type: [AccessChangeItemDto],
   })
-  changes: AccessChangeItem[];
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AccessChangeItemDto)
+  changes: AccessChangeItemDto[];
 }
 
 export class SimulatedUserAccessResultDto {

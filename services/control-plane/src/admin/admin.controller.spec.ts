@@ -39,7 +39,7 @@ describe('AdminController', () => {
     it('calls adminService.grantServerToUser and returns { success: true }', async () => {
       (adminService.grantServerToUser as jest.Mock).mockResolvedValue(undefined);
 
-      const result = await controller.grantServerToUser('user-1', 'server-1');
+      const result = await controller.grantServerToUser('user-1', { serverId: 'server-1' });
 
       expect(adminService.grantServerToUser).toHaveBeenCalledWith('user-1', 'server-1');
       expect(result).toEqual({ success: true });
@@ -50,9 +50,20 @@ describe('AdminController', () => {
         new NotFoundException('User not found'),
       );
 
-      await expect(controller.grantServerToUser('bad-user', 'server-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.grantServerToUser('bad-user', { serverId: 'server-1' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('addServerToGroup', () => {
+    it('calls adminService.addServerToGroup and returns { success: true }', async () => {
+      (adminService.addServerToGroup as jest.Mock).mockResolvedValue(undefined);
+
+      const result = await controller.addServerToGroup('grp-1', { serverId: 'server-1' });
+
+      expect(adminService.addServerToGroup).toHaveBeenCalledWith('grp-1', 'server-1');
+      expect(result).toEqual({ success: true });
     });
   });
 

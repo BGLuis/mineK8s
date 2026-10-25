@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
+import { AddServerDto } from './dto/add-server.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
@@ -83,9 +84,9 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'User or server not found' })
   async grantServerToUser(
     @Param('id') id: string,
-    @Body('serverId') serverId: string,
+    @Body() dto: AddServerDto,
   ): Promise<{ success: boolean }> {
-    await this.adminService.grantServerToUser(id, serverId);
+    await this.adminService.grantServerToUser(id, dto.serverId);
     return { success: true };
   }
 
@@ -147,8 +148,8 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Associar servidor a um grupo de acesso' })
   @ApiResponse({ status: 200, description: 'Servidor associado ao grupo' })
-  async addServerToGroup(@Param('id') groupId: string, @Body('serverId') serverId: string) {
-    await this.adminService.addServerToGroup(groupId, serverId);
+  async addServerToGroup(@Param('id') groupId: string, @Body() dto: AddServerDto) {
+    await this.adminService.addServerToGroup(groupId, dto.serverId);
     return { success: true };
   }
 
