@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
-import { AdminApi, Group } from '../../core/api';
+import { AdminApi, Group, UserSummary } from '../../core/api';
 import { DialogService, McBanner, McButton, McDialog, McTextField, ToastService } from '../../ui';
 import { apiErrorMessage } from '../join/api-error';
 import { AccessStore } from './access.store';
@@ -25,7 +26,7 @@ export function groupSummary(group: Group, serverNames: ReadonlyMap<string, stri
 @Component({
   selector: 'mc-groups-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, McBanner, McButton, McDialog, McTextField, ToggleGroup],
+  imports: [FormsModule, RouterLink, McBanner, McButton, McDialog, McTextField, ToggleGroup],
   template: `
     <section aria-labelledby="groups-title">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -127,6 +128,21 @@ export function groupSummary(group: Group, serverNames: ReadonlyMap<string, stri
             [selected]="memberIds(group)"
             (toggled)="toggleUser(group, $event)"
           />
+          @if (memberIds(group).length > 0) {
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="t-caption text-text-muted">Ver detalhes:</span>
+              @for (userId of memberIds(group); track userId) {
+                @if (getUser(userId); as u) {
+                  <a
+                    [routerLink]="['/access/users', u.id]"
+                    class="t-caption text-action-primary hover:underline"
+                  >
+                    {{ u.minecraftNick }}
+                  </a>
+                }
+              }
+            </div>
+          }
           <mc-toggle-group
             label="Servidores"
             emptyText="Nenhum servidor criado ainda."
@@ -190,6 +206,10 @@ export class GroupsPanel {
 
   protected linkedServerIds(group: Group): string[] {
     return group.server_groups.map((link) => link.server_id);
+  }
+
+  protected getUser(userId: string): UserSummary | undefined {
+    return (this.store.users.value() ?? []).find((u) => u.id === userId);
   }
 
   protected openCreate(): void {

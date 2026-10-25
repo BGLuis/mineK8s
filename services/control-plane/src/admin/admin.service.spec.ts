@@ -51,7 +51,11 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     };
 
     mockUserServerAccessRepo = {
+      findOne: jest.fn(async () => null),
       find: jest.fn(async () => []),
+      create: jest.fn((dto) => dto),
+      save: jest.fn(async (dto) => dto),
+      delete: jest.fn(async () => ({ affected: 1 })),
     };
 
     mockAccessDecisionEngine = {
@@ -509,6 +513,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
             },
           ],
           user_groups: [{ user_id: 'user-1', group_id: 'grp-1' }],
+          server_accesses: [{ user_id: 'user-1', server_id: 'srv-1' }],
         },
       ]);
 
@@ -523,6 +528,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         role: 'PLAYER',
         devices: [{ id: 'dev-1', deviceName: 'PC', status: 'ACTIVE', lastSeenAt: null }],
         groupIds: ['grp-1'],
+        serverIds: ['srv-1'],
       });
     });
 
@@ -669,6 +675,118 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     it('throws NotFoundException if user does not exist', async () => {
       mockUserRepo.findOne.mockResolvedValue(null);
       await expect(service.explainUserAccess('u-none')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('grantServerToUser (#212)', () => {
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.grantServerToUser('u-bad', 's-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException if server does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue(null);
+      await expect(service.grantServerToUser('u-1', 's-bad')).rejects.toThrow(NotFoundException);
+    });
+
+    it('saves direct access and publishes route to gateway', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 's-1' });
+      mockUserServerAccessRepo.findOne.mockResolvedValue(null);
+
+      await service.grantServerToUser('u-1', 's-1');
+
+      expect(mockUserServerAccessRepo.save).toHaveBeenCalledWith({
+        user_id: 'u-1',
+        server_id: 's-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-1');
+    });
+
+    it('does not duplicate if already granted but still publishes route', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 's-1' });
+      mockUserServerAccessRepo.findOne.mockResolvedValue({ user_id: 'u-1', server_id: 's-1' });
+
+      await service.grantServerToUser('u-1', 's-1');
+
+      expect(mockUserServerAccessRepo.save).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-1');
+    });
+  });
+
+  describe('revokeServerFromUser (#212)', () => {
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.revokeServerFromUser('u-bad', 's-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException if server does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'u-1' });
+      mockServerRepo.findOne.mockResolvedValue(null);
+      await expect(service.revokeServerFromUser('u-1', 's-bad')).rejects.toThrow(NotFoundException);
+    });
+
+    it('deletes access and triggers smart kick if user loses access to INDIVIDUAL world', async () => {
+      const user = { id: 'u-1', minecraft_nick: 'Steve', role: 'PLAYER' };
+      const server = {
+        id: 's-indiv',
+        access_policy: 'INDIVIDUAL',
+        state: 'READY',
+        is_maintenance: false,
+      };
+
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+
+      const result = await service.revokeServerFromUser('u-1', 's-indiv');
+
+      expect(mockUserServerAccessRepo.delete).toHaveBeenCalledWith({
+        user_id: 'u-1',
+        server_id: 's-indiv',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-indiv');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick Steve'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 's-indiv',
+          minecraft_nick: 'Steve',
+        }),
+      );
+      expect(result).toEqual({ kickedServers: ['s-indiv'] });
+    });
+
+    it('does not trigger smart kick if user remains authorized', async () => {
+      const adminUser = { id: 'u-admin', minecraft_nick: 'AdminSteve', role: 'ADMIN' };
+      const server = {
+        id: 's-indiv',
+        access_policy: 'INDIVIDUAL',
+        state: 'READY',
+        is_maintenance: false,
+      };
+
+      mockUserRepo.findOne.mockResolvedValue(adminUser);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({ allowed: true });
+
+      const result = await service.revokeServerFromUser('u-admin', 's-indiv');
+
+      expect(mockUserServerAccessRepo.delete).toHaveBeenCalledWith({
+        user_id: 'u-admin',
+        server_id: 's-indiv',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('s-indiv');
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
+      expect(result).toEqual({ kickedServers: [] });
     });
   });
 });

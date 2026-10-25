@@ -103,6 +103,7 @@ describe('AccessPage', () => {
       role: 'PLAYER',
       devices: [],
       groupIds: [],
+      serverIds: [],
     });
     const el = await render(settings(false), [
       player('u1', 'Linked', true),

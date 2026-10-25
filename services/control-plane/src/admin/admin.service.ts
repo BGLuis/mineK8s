@@ -67,6 +67,7 @@ export class AdminService {
       relations: {
         devices: true,
         user_groups: true,
+        server_accesses: true,
       },
       order: { minecraft_nick: 'ASC' },
     });
@@ -86,6 +87,7 @@ export class AdminService {
         lastSeenAt: device.last_seen_at,
       })),
       groupIds: (user.user_groups || []).map((ug) => ug.group_id),
+      serverIds: (user.server_accesses || []).map((sa) => sa.server_id),
     }));
   }
 
@@ -159,6 +161,99 @@ export class AdminService {
         grantedBy: exp?.grantedBy ?? null,
       };
     });
+  }
+
+  /**
+   * Concede acesso direto de servidor a um usuário (RF-ARQ-20, #212).
+   */
+  async grantServerToUser(userId: string, serverId: string): Promise<void> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const server = await this.serverRepo.findOne({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException('Server not found');
+    }
+
+    const existing = await this.userServerAccessRepo.findOne({
+      where: { user_id: userId, server_id: serverId },
+    });
+    if (!existing) {
+      await this.userServerAccessRepo.save(
+        this.userServerAccessRepo.create({ user_id: userId, server_id: serverId }),
+      );
+    }
+    await this.gatewayIpcService.publishRoute(serverId);
+  }
+
+  /**
+   * Revoga acesso direto de servidor de um usuário com Smart Kick caso perca o acesso (RF-ARQ-20, RF-TS-09, #212).
+   */
+  async revokeServerFromUser(
+    userId: string,
+    serverId: string,
+  ): Promise<{ kickedServers: string[] }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const server = await this.serverRepo.findOne({
+      where: { id: serverId },
+      relations: { minecraft_settings: true },
+    });
+    if (!server) {
+      throw new NotFoundException('Server not found');
+    }
+
+    await this.userServerAccessRepo.delete({ user_id: userId, server_id: serverId });
+    await this.gatewayIpcService.publishRoute(serverId);
+
+    const explanations = await this.accessResolver.explain([userId], {
+      servers: [server],
+      users: [user],
+    });
+
+    const kickedServers: string[] = [];
+    const exp = explanations.find((e) => e.serverId === serverId);
+
+    if (exp && !exp.allowed) {
+      this.logger.log(
+        `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
+      );
+
+      const kickReason = '§cPermissão revogada pelo administrador.';
+
+      if (!server.state || server.state === 'READY') {
+        try {
+          await this.consoleDriver.sendCommand(
+            server,
+            `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
+          );
+        } catch (rconErr: any) {
+          this.logger.debug(
+            `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
+          );
+        }
+      }
+
+      try {
+        await this.gatewayIpcService.revokePlayerSession({
+          server_id: server.id,
+          client_ip: '',
+          minecraft_nick: user.minecraft_nick,
+          reason_message: kickReason,
+        });
+      } catch (ipcErr: any) {
+        this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
+      }
+
+      kickedServers.push(server.id);
+    }
+
+    return { kickedServers };
   }
 
   /**

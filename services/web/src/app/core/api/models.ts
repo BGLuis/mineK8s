@@ -480,6 +480,27 @@ export interface UserSummary {
     lastSeenAt: string | null;
   }[];
   groupIds: string[];
+  serverIds: string[];
+}
+
+export type AdminUser = UserSummary;
+
+export type AccessGrantedBy =
+  | { kind: 'ADMIN' }
+  | { kind: 'POLICY'; policy: 'PUBLIC' | 'INTERNET' }
+  | { kind: 'GROUP'; groupIds: string[]; groupNames?: string[] }
+  | { kind: 'DIRECT' };
+
+export interface UserWorldAccess {
+  id: string;
+  name: string;
+  subdomain: string;
+  state: ServerState | string;
+  access_policy: string;
+  is_maintenance: boolean;
+  allowed: boolean;
+  reason: string;
+  grantedBy: AccessGrantedBy | null;
 }
 
 /** GET /api/admin/users/:id/servers: servers the user may join, by the gateway's own access rules. */

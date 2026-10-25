@@ -49,6 +49,9 @@ export class UserSummaryDto {
 
   @ApiProperty({ type: [String], example: ['b1a95e7c-88eb-4b2a-b60f-21f4df463e2a'] })
   groupIds: string[];
+
+  @ApiProperty({ type: [String], example: ['b1a95e7c-88eb-4b2a-b60f-21f4df463e2a'] })
+  serverIds: string[];
 }
 
 export class AccessibleServerDto {

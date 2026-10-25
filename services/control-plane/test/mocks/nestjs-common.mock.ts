@@ -32,9 +32,16 @@ export const Catch =
   (..._types: any[]) =>
   (target: any) =>
     target;
-export const SetMetadata =
-  (_key: any, _val: any) => (_target: any, _keyName?: string, desc?: any) =>
-    desc || _target;
+export const SetMetadata = (key: any, val: any) => (target: any, keyName?: string, desc?: any) => {
+  if (typeof Reflect !== 'undefined' && typeof (Reflect as any).defineMetadata === 'function') {
+    if (keyName && desc) {
+      (Reflect as any).defineMetadata(key, val, desc.value);
+    } else {
+      (Reflect as any).defineMetadata(key, val, target);
+    }
+  }
+  return desc || target;
+};
 
 export class Logger {
   constructor(private context?: string) {}

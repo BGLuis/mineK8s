@@ -46,6 +46,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/access/access.page').then((m) => m.AccessPage),
       },
       {
+        path: 'access/users/:id',
+        title: 'Detalhes do usuário · mineK8s',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/access/user-detail.page').then((m) => m.UserDetailPage),
+      },
+      {
         path: 'health',
         title: 'Saúde do sistema · mineK8s',
         loadComponent: () => import('./features/health/health.page').then((m) => m.HealthPage),

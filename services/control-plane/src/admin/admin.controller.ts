@@ -44,6 +44,34 @@ export class AdminController {
     return this.adminService.explainUserAccess(id);
   }
 
+  @Post('users/:id/servers')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Conceder acesso direto de servidor a um usuário (#212)',
+  })
+  @ApiResponse({ status: 200, description: 'Acesso concedido com sucesso' })
+  @ApiResponse({ status: 404, description: 'User or server not found' })
+  async grantServerToUser(
+    @Param('id') id: string,
+    @Body('serverId') serverId: string,
+  ): Promise<{ success: boolean }> {
+    await this.adminService.grantServerToUser(id, serverId);
+    return { success: true };
+  }
+
+  @Delete('users/:id/servers/:serverId')
+  @ApiOperation({
+    summary: 'Revogar acesso direto de servidor do usuário com Smart Kick caso perca acesso (#212)',
+  })
+  @ApiResponse({ status: 200, description: 'Acesso revogado com sucesso' })
+  @ApiResponse({ status: 404, description: 'User or server not found' })
+  async revokeServerFromUser(
+    @Param('id') id: string,
+    @Param('serverId') serverId: string,
+  ): Promise<{ kickedServers: string[] }> {
+    return this.adminService.revokeServerFromUser(id, serverId);
+  }
+
   @Post('groups')
   @ApiOperation({ summary: 'Criar novo grupo de acesso de jogadores (RF-ARQ-20)' })
   @ApiResponse({ status: 201, description: 'Grupo criado com sucesso' })

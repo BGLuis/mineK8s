@@ -10,6 +10,7 @@ import {
   SmartKickRequest,
   SuccessResponse,
   UserSummary,
+  UserWorldAccess,
 } from './models';
 
 /** admin.controller.ts, `api/admin`. */
@@ -23,6 +24,18 @@ export class AdminApi {
 
   listAccessibleServers(userId: string): Observable<AccessibleServer[]> {
     return this.api.get(`/api/admin/users/${userId}/servers`);
+  }
+
+  explainUserAccess(userId: string): Observable<UserWorldAccess[]> {
+    return this.api.get(`/api/admin/users/${userId}/access`);
+  }
+
+  grantUserServer(userId: string, serverId: string): Observable<SuccessResponse> {
+    return this.api.post(`/api/admin/users/${userId}/servers`, { serverId });
+  }
+
+  revokeUserServer(userId: string, serverId: string): Observable<{ kickedServers: string[] }> {
+    return this.api.delete(`/api/admin/users/${userId}/servers/${serverId}`);
   }
 
   createGroup(dto: CreateGroupRequest): Observable<Group> {
