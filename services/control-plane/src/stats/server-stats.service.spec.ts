@@ -7,10 +7,11 @@ const TICK_QUERY = [
   'The game is running normally',
   'Target tick rate: 20.0 per second.',
   'Average time per tick: 25.0ms (Target: 50.0ms)',
+  'Percentiles: P50: 20.0ms P95: 45.0ms P99: 90.0ms, sample: 100',
 ].join('\n');
 
 describe('ServerStatsService', () => {
-  const ready = { id: 'srv-1', subdomain: 'alpha', state: 'READY' };
+  const ready = { id: 'srv-1', subdomain: 'alpha', state: 'READY', allocated_memory_mb: 4096 };
   let servers: any[];
   let commands: Record<string, string | Error>;
   let podStats: any;
@@ -69,6 +70,15 @@ describe('ServerStatsService', () => {
     });
     expect(stats.uptimeSeconds).toBeGreaterThanOrEqual(90);
     expect(stats.history).toHaveLength(1);
+  });
+
+  it('reports the tick percentiles and the configured heap, so the panel can tell spikes and heap from overhead', async () => {
+    await service.collect();
+
+    const stats = await service.getStats('srv-1');
+
+    expect(stats).toMatchObject({ msptP95: 45, msptP99: 90, heapMb: 4096 });
+    expect(stats.history[0].msptP95).toBe(45);
   });
 
   it('avisa o painel a cada amostra nova, e não quando nada respondeu', async () => {

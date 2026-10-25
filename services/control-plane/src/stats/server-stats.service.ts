@@ -18,7 +18,7 @@ import { KubernetesService } from '@k8s/k8s.service';
 
 import { ServerActivityBus } from '../server-events/server-activity.bus';
 import { ServerStatsDto, StatsSample } from './dto/server-stats.dto';
-import { parseTickQuery, parseTpsCommand } from './tick-output';
+import { parseTickQuery, parseTpsCommand, TickReading } from './tick-output';
 
 const MAX_WINDOW_MINUTES = 60;
 const RCON_TIMEOUT_MS = 5000;
@@ -99,8 +99,11 @@ export class ServerStatsService implements OnApplicationBootstrap, OnModuleDestr
       window,
       tps: latest?.tps ?? null,
       mspt: latest?.mspt ?? null,
+      msptP95: latest?.msptP95 ?? null,
+      msptP99: latest?.msptP99 ?? null,
       memoryUsedMb: latest?.memoryUsedMb ?? null,
       memoryLimitMb: pod?.memoryLimitMb ?? null,
+      heapMb: server.allocated_memory_mb,
       uptimeSeconds: pod?.startedAt
         ? Math.max(0, Math.floor((Date.now() - pod.startedAt.getTime()) / 1000))
         : null,
@@ -131,6 +134,8 @@ export class ServerStatsService implements OnApplicationBootstrap, OnModuleDestr
       timestamp: new Date().toISOString(),
       tps: tick.tps,
       mspt: tick.mspt,
+      msptP95: tick.p95,
+      msptP99: tick.p99,
       memoryUsedMb: pod.memoryUsedMb,
     });
     this.samples.set(server.id, kept);
@@ -138,15 +143,19 @@ export class ServerStatsService implements OnApplicationBootstrap, OnModuleDestr
   }
 
   /** `tps` exists on Paper and Purpur; `tick query` on vanilla 1.20.3+ and gives MSPT. Either may be missing. */
-  private async readTick(server: Server): Promise<{ tps: number | null; mspt: number | null }> {
+  private async readTick(server: Server): Promise<Omit<TickReading, 'p50'>> {
     const [tpsOutput, tickOutput] = await Promise.all([
       this.run(server, 'tps'),
       this.run(server, 'tick query'),
     ]);
-    const tick = tickOutput ? parseTickQuery(tickOutput) : { tps: null, mspt: null };
+    const tick = tickOutput
+      ? parseTickQuery(tickOutput)
+      : { tps: null, mspt: null, p95: null, p99: null };
     return {
       tps: (tpsOutput ? parseTpsCommand(tpsOutput) : null) ?? tick.tps,
       mspt: tick.mspt,
+      p95: tick.p95,
+      p99: tick.p99,
     };
   }
 
