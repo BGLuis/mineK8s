@@ -7,6 +7,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
+import { AccessMatrixDto } from './dto/access-matrix.dto';
 
 @ApiTags('Admin & ACL Management')
 @ApiBearerAuth()
@@ -43,6 +44,19 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async explainUserAccess(@Param('id') id: string) {
     return this.adminService.explainUserAccess(id);
+  }
+
+  @Get('access/matrix')
+  @ApiOperation({
+    summary: 'Matriz consolidada de acesso de usuários a servidores (#214)',
+  })
+  @ApiResponse({
+    status: 200,
+    type: AccessMatrixDto,
+    description: 'Matriz com usuários, servidores e células de permissão de acesso',
+  })
+  async getAccessMatrix(): Promise<AccessMatrixDto> {
+    return this.adminService.getAccessMatrix();
   }
 
   @Post('users/:id/servers')

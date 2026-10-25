@@ -912,4 +912,157 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(user3Result).toBeUndefined();
     });
   });
+
+  describe('getAccessMatrix (#214)', () => {
+    it('makes the exact same number of repository queries (<= 5) with 3 users and with 30 users', async () => {
+      const servers = [
+        { id: 's-1', name: 'Server A', access_policy: 'GROUP' },
+        { id: 's-2', name: 'Server B', access_policy: 'PUBLIC' },
+      ];
+      mockServerRepo.find.mockResolvedValue(servers);
+      mockServerGroupRepo.find.mockResolvedValue([{ server_id: 's-1', group_id: 'g-1' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // 1. Run with 3 users
+      const users3 = Array.from({ length: 3 }, (_, i) => ({
+        id: `user-${i}`,
+        minecraft_nick: `Player${i}`,
+        role: 'PLAYER' as const,
+      }));
+      mockUserRepo.find.mockResolvedValue(users3);
+      mockUserGroupRepo.find.mockResolvedValue(
+        users3.map((u) => ({ user_id: u.id, group_id: 'g-1' })),
+      );
+
+      jest.clearAllMocks();
+      const matrix3 = await service.getAccessMatrix();
+
+      const queries3 =
+        mockUserRepo.find.mock.calls.length +
+        mockServerRepo.find.mock.calls.length +
+        mockServerGroupRepo.find.mock.calls.length +
+        mockUserGroupRepo.find.mock.calls.length +
+        mockUserServerAccessRepo.find.mock.calls.length;
+
+      expect(matrix3.users).toHaveLength(3);
+      expect(queries3).toBeLessThanOrEqual(5);
+
+      // 2. Run with 30 users
+      const users30 = Array.from({ length: 30 }, (_, i) => ({
+        id: `user-${i}`,
+        minecraft_nick: `Player${i}`,
+        role: 'PLAYER' as const,
+      }));
+      mockUserRepo.find.mockResolvedValue(users30);
+      mockUserGroupRepo.find.mockResolvedValue(
+        users30.map((u) => ({ user_id: u.id, group_id: 'g-1' })),
+      );
+
+      jest.clearAllMocks();
+      const matrix30 = await service.getAccessMatrix();
+
+      const queries30 =
+        mockUserRepo.find.mock.calls.length +
+        mockServerRepo.find.mock.calls.length +
+        mockServerGroupRepo.find.mock.calls.length +
+        mockUserGroupRepo.find.mock.calls.length +
+        mockUserServerAccessRepo.find.mock.calls.length;
+
+      expect(matrix30.users).toHaveLength(30);
+      expect(queries30).toBeLessThanOrEqual(5);
+      expect(queries30).toBe(queries3);
+    });
+
+    it('every cell[userId][serverId] matches what explainUserAccess(userId) returns for that pair', async () => {
+      const users = [
+        { id: 'u-admin', minecraft_nick: 'AdminUser', role: 'ADMIN' as const, real_name: 'Boss' },
+        { id: 'u-group', minecraft_nick: 'GroupPlayer', role: 'PLAYER' as const, real_name: null },
+        {
+          id: 'u-direct',
+          minecraft_nick: 'DirectPlayer',
+          role: 'PLAYER' as const,
+          real_name: null,
+        },
+      ];
+
+      const servers = [
+        {
+          id: 's-group',
+          name: 'Group World',
+          subdomain: 'group',
+          access_policy: 'GROUP',
+          state: 'READY',
+          is_maintenance: false,
+        },
+        {
+          id: 's-ind',
+          name: 'Individual World',
+          subdomain: 'ind',
+          access_policy: 'INDIVIDUAL',
+          state: 'READY',
+          is_maintenance: false,
+        },
+        {
+          id: 's-pub',
+          name: 'Public World',
+          subdomain: 'pub',
+          access_policy: 'PUBLIC',
+          state: 'READY',
+          is_maintenance: false,
+        },
+      ];
+
+      const serverGroups = [{ server_id: 's-group', group_id: 'g-1', group: { name: 'Vip' } }];
+      const userGroups = [{ user_id: 'u-group', group_id: 'g-1' }];
+      const userAccesses = [{ user_id: 'u-direct', server_id: 's-ind' }];
+
+      mockUserRepo.find.mockResolvedValue(users);
+      mockServerRepo.find.mockResolvedValue(servers);
+      mockServerGroupRepo.find.mockResolvedValue(serverGroups);
+      mockUserGroupRepo.find.mockResolvedValue(userGroups);
+      mockUserServerAccessRepo.find.mockResolvedValue(userAccesses);
+
+      mockUserRepo.findOne.mockImplementation(async ({ where }: any) => {
+        return users.find((u) => u.id === where?.id) || null;
+      });
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        if (uCtx.role === 'ADMIN') return { allowed: true, reason: 'ADMIN_BYPASS' };
+        if (sCtx.policy === 'PUBLIC') return { allowed: true, reason: 'PUBLIC_POLICY' };
+        if (sCtx.policy === 'GROUP') {
+          const match = uCtx.groupIds?.some((gid: string) => sCtx.allowedGroupIds?.includes(gid));
+          return match
+            ? { allowed: true, reason: 'GROUP_MATCH' }
+            : { allowed: false, reason: 'INSUFFICIENT_GROUPS' };
+        }
+        if (sCtx.policy === 'INDIVIDUAL') {
+          const direct = sCtx.allowedUserIds?.includes(uCtx.userId);
+          return direct
+            ? { allowed: true, reason: 'INDIVIDUAL_ALLOWED' }
+            : { allowed: false, reason: 'INDIVIDUAL_ACCESS_DENIED' };
+        }
+        return { allowed: false, reason: 'DENIED' };
+      });
+
+      const matrix = await service.getAccessMatrix();
+
+      expect(matrix.users).toHaveLength(3);
+      expect(matrix.servers).toHaveLength(3);
+
+      for (const u of users) {
+        const userExpl = await service.explainUserAccess(u.id);
+
+        for (const s of servers) {
+          const cell = matrix.cells[u.id][s.id];
+          const expl = userExpl.find((item) => item.id === s.id);
+
+          expect(cell).toBeDefined();
+          expect(expl).toBeDefined();
+          expect(cell.allowed).toBe(expl!.allowed);
+          expect(cell.reason).toBe(expl!.reason);
+          expect(cell.grantedBy).toEqual(expl!.grantedBy);
+        }
+      }
+    });
+  });
 });

@@ -22,6 +22,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
+import { AccessMatrixDto } from './dto/access-matrix.dto';
 
 @Injectable()
 export class AdminService {
@@ -165,6 +166,85 @@ export class AdminService {
         grantedBy: exp?.grantedBy ?? null,
       };
     });
+  }
+
+  /**
+   * Matriz consolidada de acesso de usuários aos servidores (#214).
+   * Faz no máximo 5 consultas aos repositórios independentemente do número de usuários.
+   */
+  async getAccessMatrix(): Promise<AccessMatrixDto> {
+    const [users, servers, userGroups] = await Promise.all([
+      this.userRepo.find({
+        relations: { user_groups: true },
+        order: { minecraft_nick: 'ASC' },
+      }),
+      this.serverRepo.find({ order: { name: 'ASC' } }),
+      this.userGroupRepo.find(),
+    ]);
+
+    const explanations = await this.accessResolver.explain([], {
+      users,
+      servers,
+      userGroups,
+    });
+
+    const userGroupsByUserId = new Map<string, string[]>();
+    for (const ug of userGroups) {
+      const list = userGroupsByUserId.get(ug.user_id) || [];
+      list.push(ug.group_id);
+      userGroupsByUserId.set(ug.user_id, list);
+    }
+
+    const cells: Record<
+      string,
+      Record<
+        string,
+        {
+          allowed: boolean;
+          reason: string;
+          grantedBy: AccessGrantedBy | null;
+        }
+      >
+    > = {};
+
+    for (const user of users) {
+      cells[user.id] = {};
+    }
+
+    for (const exp of explanations) {
+      if (!cells[exp.userId]) {
+        cells[exp.userId] = {};
+      }
+      cells[exp.userId][exp.serverId] = {
+        allowed: exp.allowed,
+        reason: exp.reason,
+        grantedBy: exp.grantedBy,
+      };
+    }
+
+    return {
+      users: users.map((user) => {
+        const fromMap = userGroupsByUserId.get(user.id) || [];
+        const fromRel = (user.user_groups || []).map((ug: any) => ug.group_id ?? ug.id);
+        const groupIds = Array.from(new Set([...fromMap, ...fromRel]));
+        return {
+          id: user.id,
+          minecraftNick: user.minecraft_nick,
+          realName: user.real_name ?? null,
+          role: user.role,
+          groupIds,
+        };
+      }),
+      servers: servers.map((server) => ({
+        id: server.id,
+        name: server.name,
+        subdomain: server.subdomain,
+        state: server.state,
+        access_policy: server.access_policy || 'GROUP',
+        is_maintenance: Boolean(server.is_maintenance),
+      })),
+      cells,
+    };
   }
 
   /**

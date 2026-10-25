@@ -64,6 +64,7 @@ export class AccessResolverService {
       hypothetical?: HypotheticalAccessDiff;
       users?: User[];
       servers?: Server[];
+      userGroups?: UserGroup[];
     },
   ): Promise<AccessExplanation[]> {
     const [users, servers] = await Promise.all([
@@ -79,9 +80,10 @@ export class AccessResolverService {
 
     const [serverGroups, userGroups, userAccesses] = await Promise.all([
       this.serverGroupRepo.find({ relations: { group: true } }),
-      userIds.length > 0
-        ? this.userGroupRepo.find({ where: { user_id: In(userIds) } })
-        : this.userGroupRepo.find(),
+      opts?.userGroups ??
+        (userIds.length > 0
+          ? this.userGroupRepo.find({ where: { user_id: In(userIds) } })
+          : this.userGroupRepo.find()),
       userIds.length > 0
         ? this.userServerAccessRepo.find({ where: { user_id: In(userIds) } })
         : this.userServerAccessRepo.find(),

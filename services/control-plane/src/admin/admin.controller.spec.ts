@@ -23,6 +23,7 @@ describe('AdminController', () => {
       grantServerToUser: jest.fn(),
       revokeServerFromUser: jest.fn(),
       simulateAccessChanges: jest.fn(),
+      getAccessMatrix: jest.fn(),
       smartKick: jest.fn(),
     };
     controller = new AdminController(adminService as AdminService);
@@ -97,6 +98,39 @@ describe('AdminController', () => {
 
       expect(adminService.simulateAccessChanges).toHaveBeenCalledWith(dto);
       expect(result).toEqual(mockResult);
+    });
+  });
+
+  describe('getAccessMatrix', () => {
+    it('delegates to adminService.getAccessMatrix', async () => {
+      const mockMatrix = {
+        users: [
+          {
+            id: 'u-1',
+            minecraftNick: 'Steve',
+            realName: null,
+            role: 'PLAYER' as const,
+            groupIds: [],
+          },
+        ],
+        servers: [
+          {
+            id: 's-1',
+            name: 'Survival',
+            subdomain: 'survival',
+            state: 'READY',
+            access_policy: 'PUBLIC',
+            is_maintenance: false,
+          },
+        ],
+        cells: { 'u-1': { 's-1': { allowed: true, reason: 'ALLOWED', grantedBy: null } } },
+      };
+      (adminService.getAccessMatrix as jest.Mock).mockResolvedValue(mockMatrix);
+
+      const result = await controller.getAccessMatrix();
+
+      expect(adminService.getAccessMatrix).toHaveBeenCalled();
+      expect(result).toEqual(mockMatrix);
     });
   });
 });

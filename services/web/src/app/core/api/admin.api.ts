@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { ApiClient } from './api-client';
 import {
   AccessChangeItem,
+  AccessMatrixResponse,
   AccessibleServer,
   CreateGroupRequest,
   Group,
@@ -14,6 +15,8 @@ import {
   UserSummary,
   UserWorldAccess,
 } from './models';
+
+export type { AccessMatrixResponse };
 
 /** admin.controller.ts, `api/admin`. */
 @Injectable({ providedIn: 'root' })
@@ -30,6 +33,10 @@ export class AdminApi {
 
   explainUserAccess(userId: string): Observable<UserWorldAccess[]> {
     return this.api.get(`/api/admin/users/${userId}/access`);
+  }
+
+  getAccessMatrix(): Observable<AccessMatrixResponse> {
+    return this.api.get('/api/admin/access/matrix');
   }
 
   grantUserServer(userId: string, serverId: string): Observable<SuccessResponse> {

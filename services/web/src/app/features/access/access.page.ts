@@ -5,6 +5,7 @@ import { McBanner } from '../../ui';
 import { AccessStore } from './access.store';
 import { DevicesPanel } from './devices-panel';
 import { GroupsPanel } from './groups-panel';
+import { AccessMatrixPanel } from './access-matrix-panel';
 import { InviteForm } from './invite-form';
 import { InviteList } from './invite-list';
 import { SharedPlayersPanel } from './shared-players-panel';
@@ -17,6 +18,7 @@ import { SharedPlayersPanel } from './shared-players-panel';
     InviteList,
     DevicesPanel,
     GroupsPanel,
+    AccessMatrixPanel,
     SharedPlayersPanel,
     McBanner,
     RouterLink,
@@ -55,6 +57,7 @@ import { SharedPlayersPanel } from './shared-players-panel';
 
       <mc-devices-panel />
       <mc-groups-panel />
+      <mc-access-matrix-panel />
     </div>
   `,
 })

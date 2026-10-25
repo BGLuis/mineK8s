@@ -503,6 +503,35 @@ export interface UserWorldAccess {
   grantedBy: AccessGrantedBy | null;
 }
 
+export interface AccessMatrixUser {
+  id: string;
+  minecraftNick: string;
+  realName: string | null;
+  role: 'ADMIN' | 'PLAYER';
+  groupIds: string[];
+}
+
+export interface AccessMatrixServer {
+  id: string;
+  name: string;
+  subdomain: string;
+  state: ServerState | string;
+  access_policy: string;
+  is_maintenance: boolean;
+}
+
+export interface AccessMatrixCell {
+  allowed: boolean;
+  reason: string;
+  grantedBy: AccessGrantedBy | null;
+}
+
+export interface AccessMatrixResponse {
+  users: AccessMatrixUser[];
+  servers: AccessMatrixServer[];
+  cells: Record<string, Record<string, AccessMatrixCell>>;
+}
+
 export type AccessChangeItem =
   | { type: 'addUserToGroup'; userId: string; groupId: string }
   | { type: 'removeUserFromGroup'; userId: string; groupId: string }
