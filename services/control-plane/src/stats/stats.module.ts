@@ -7,6 +7,7 @@ import { Server } from '@database/entities/server.entity';
 import { KubernetesModule } from '@k8s/k8s.module';
 
 import { ServerActivityModule } from '../server-events/server-activity.module';
+import { LagSnapshotService } from './lag-snapshot.service';
 import { ServerStatsController } from './server-stats.controller';
 import { ServerStatsService } from './server-stats.service';
 
@@ -19,6 +20,6 @@ import { ServerStatsService } from './server-stats.service';
     ServerActivityModule,
   ],
   controllers: [ServerStatsController],
-  providers: [ServerStatsService],
+  providers: [ServerStatsService, LagSnapshotService],
 })
 export class StatsModule {}
