@@ -1,3 +1,4 @@
+export const forwardRef = (fn: any) => ({ forwardRef: fn });
 export const Injectable = () => (target: any) => target;
 export const Module = (_options?: any) => (target: any) => target;
 export const Global = () => (target: any) => target;

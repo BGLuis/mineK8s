@@ -147,7 +147,12 @@ export class AdminService {
     if (!group) {
       throw new NotFoundException(`Group with ID "${id}" not found`);
     }
+    const serverGroups = await this.serverGroupRepo.find({ where: { group_id: id } });
     await this.groupRepo.delete({ id });
+    const affectedServerIds = Array.from(new Set(serverGroups.map((sg) => sg.server_id)));
+    await Promise.all(
+      affectedServerIds.map((serverId) => this.gatewayIpcService.publishRoute(serverId)),
+    );
   }
 
   /**
@@ -295,13 +300,103 @@ export class AdminService {
         this.serverGroupRepo.create({ group_id: groupId, server_id: serverId }),
       );
     }
+    await this.gatewayIpcService.publishRoute(serverId);
   }
 
   /**
    * Desassocia um servidor de um grupo de acesso (RF-ARQ-20).
    */
   async removeServerFromGroup(groupId: string, serverId: string): Promise<void> {
+    const userGroups = await this.userGroupRepo.find({
+      where: { group_id: groupId },
+    });
+
     await this.serverGroupRepo.delete({ group_id: groupId, server_id: serverId });
+    await this.gatewayIpcService.publishRoute(serverId);
+
+    if (userGroups.length === 0) {
+      return;
+    }
+
+    const server = await this.serverRepo.findOne({
+      where: { id: serverId },
+      relations: {
+        server_groups: true,
+        minecraft_settings: true,
+      },
+    });
+
+    if (!server) {
+      return;
+    }
+
+    const remainingAllowedGroupIds = (server.server_groups || [])
+      .filter((sg) => sg.group_id !== groupId)
+      .map((sg) => sg.group_id);
+
+    for (const ug of userGroups) {
+      const user = await this.userRepo.findOne({
+        where: { id: ug.user_id },
+        relations: {
+          user_groups: true,
+          server_accesses: true,
+        },
+      });
+
+      if (!user) continue;
+
+      const userContext = {
+        userId: user.id,
+        role: user.role,
+        groupIds: (user.user_groups || []).map((g) => g.group_id),
+        isTailscaleOwner: false,
+        isActive: true,
+      };
+
+      const serverContext = {
+        serverId: server.id,
+        policy: effectiveAccessPolicy(server),
+        allowedGroupIds: remainingAllowedGroupIds,
+        allowedUserIds: (user.server_accesses || [])
+          .filter((sa) => sa.server_id === server.id)
+          .map((sa) => sa.user_id),
+        isMaintenance: Boolean(server.is_maintenance),
+      };
+
+      const decision = this.accessDecisionEngine.evaluateAccess(userContext, serverContext);
+
+      if (!decision.allowed) {
+        this.logger.log(
+          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${decision.reason})`,
+        );
+
+        const kickReason = '§cPermissão revogada pelo administrador.';
+
+        if (server.state === 'READY') {
+          try {
+            await this.consoleDriver.sendCommand(
+              server,
+              `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
+            );
+          } catch (rconErr: any) {
+            this.logger.debug(
+              `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
+            );
+          }
+        }
+
+        try {
+          await this.gatewayIpcService.revokePlayerSession({
+            server_id: server.id,
+            client_ip: '',
+            minecraft_nick: user.minecraft_nick,
+            reason_message: kickReason,
+          });
+        } catch (ipcErr: any) {
+          this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
+        }
+      }
+    }
   }
 
   /**

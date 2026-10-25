@@ -62,6 +62,7 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
         tailscale: { inviteKeyEnabled: true },
         access: { publicUrl: 'http://localhost:3000', worldsDomain: '' },
       } as any,
+      { publishRoute: async () => {} } as any,
     );
     sessions = new PlayerSessionsService();
     gatewayIpc = new GatewayIpcService(

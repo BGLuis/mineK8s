@@ -62,6 +62,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         session_found: true,
         terminated_connections_count: 1,
       })),
+      publishRoute: jest.fn(async () => {}),
     };
 
     mockConsoleDriver = {
@@ -215,6 +216,110 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
       expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
       expect(result.kickedServers).toHaveLength(0);
+    });
+  });
+
+  describe('Atualizações de rota e Smart Kick ao alterar servidores do grupo (#210)', () => {
+    it('publica atualização de rota no gateway ao associar servidor ao grupo (#210)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerRepo.findOne.mockResolvedValue({ id: 'srv-1', name: 'Survival' });
+      mockServerGroupRepo.findOne.mockResolvedValue(null);
+
+      await service.addServerToGroup('grp-1', 'srv-1');
+
+      expect(mockServerGroupRepo.save).toHaveBeenCalledWith({
+        group_id: 'grp-1',
+        server_id: 'srv-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+    });
+
+    it('publica rota e chuta membros que perderam acesso ao remover servidor do grupo (#210)', async () => {
+      const userLost = {
+        id: 'u-lost',
+        minecraft_nick: 'LostPlayer',
+        role: 'PLAYER',
+        user_groups: [{ group_id: 'grp-1' }],
+        server_accesses: [],
+      };
+      const userKept = {
+        id: 'u-kept',
+        minecraft_nick: 'KeptPlayer',
+        role: 'PLAYER',
+        user_groups: [{ group_id: 'grp-1' }, { group_id: 'grp-2' }],
+        server_accesses: [],
+      };
+
+      mockUserGroupRepo.find.mockResolvedValue([
+        { user_id: 'u-lost', group_id: 'grp-1' },
+        { user_id: 'u-kept', group_id: 'grp-1' },
+      ]);
+
+      mockUserRepo.findOne.mockImplementation(async ({ where }: any) => {
+        if (where.id === 'u-lost') return userLost;
+        if (where.id === 'u-kept') return userKept;
+        return null;
+      });
+
+      const server = {
+        id: 'srv-1',
+        name: 'Survival',
+        state: 'READY',
+        access_policy: 'GROUP',
+        server_groups: [{ group_id: 'grp-2', server_id: 'srv-1' }],
+        is_maintenance: false,
+      };
+      mockServerRepo.findOne.mockResolvedValue(server);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((userCtx: any, serverCtx: any) => {
+        const match = userCtx.groupIds.some((g: string) => serverCtx.allowedGroupIds.includes(g));
+        return { allowed: match, reason: match ? 'MATCH' : 'NO_ACCESS' };
+      });
+
+      await service.removeServerFromGroup('grp-1', 'srv-1');
+
+      expect(mockServerGroupRepo.delete).toHaveBeenCalledWith({
+        group_id: 'grp-1',
+        server_id: 'srv-1',
+      });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+
+      // u-lost lost access -> kicked via RCON and gateway IPC
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick LostPlayer'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-1',
+          minecraft_nick: 'LostPlayer',
+        }),
+      );
+
+      // u-kept still has grp-2 -> NOT kicked
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick KeptPlayer'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          minecraft_nick: 'KeptPlayer',
+        }),
+      );
+    });
+
+    it('publica atualização de rota para cada servidor vinculado antes de deletar o grupo (#210)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerGroupRepo.find.mockResolvedValue([
+        { group_id: 'grp-1', server_id: 'srv-1' },
+        { group_id: 'grp-1', server_id: 'srv-2' },
+      ]);
+
+      await service.deleteGroup('grp-1');
+
+      expect(mockGroupRepo.delete).toHaveBeenCalledWith({ id: 'grp-1' });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-2');
     });
   });
 

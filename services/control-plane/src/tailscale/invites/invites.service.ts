@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -23,6 +25,7 @@ import { UserGroup } from '../../database/entities/user-group.entity';
 import { UserServerAccess } from '../../database/entities/user-server-access.entity';
 import { TailscaleDevice } from '../../database/entities/tailscale-device.entity';
 import { TailscaleCloudDriver } from '../drivers/tailscale-cloud.driver';
+import { GatewayIpcService } from '../../gateway-ipc/gateway-ipc.service';
 import { validateNicknameFormat } from '../decision/nickname-validator';
 import {
   CreateInviteDto,
@@ -55,6 +58,8 @@ export class InvitesService {
     @InjectRepository(Server)
     private readonly serverRepo: Repository<Server>,
     private readonly appConfig: AppConfigService,
+    @Inject(forwardRef(() => GatewayIpcService))
+    private readonly gatewayIpcService: GatewayIpcService,
   ) {}
 
   /** Key-based invites stay in the code but are off by default (see the `tailscale.inviteKeyEnabled` setting). */
@@ -347,6 +352,9 @@ export class InvitesService {
           }),
         );
       }
+      await Promise.all(
+        invite.invite_servers.map((is) => this.gatewayIpcService.publishRoute(is.server_id)),
+      );
     }
 
     // 5. Geração de AuthKey na Tailscale Cloud API (RF-TS-05, PR-11)

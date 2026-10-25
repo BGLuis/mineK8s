@@ -17,7 +17,7 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
   let serverRepo: any;
   let userGroupRepo: any;
   let userServerRepo: any;
-  let gatewayIpc: { revokePlayerSession: jest.Mock };
+  let gatewayIpc: { revokePlayerSession: jest.Mock; publishRoute: jest.Mock };
   let appConfig: { tailscale: { nodeSharingEnabled: boolean } };
 
   beforeEach(() => {
@@ -71,6 +71,7 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
     };
     gatewayIpc = {
       revokePlayerSession: jest.fn(async () => ({ terminated_connections_count: 1 })),
+      publishRoute: jest.fn(async () => {}),
     };
 
     appConfig = { tailscale: { nodeSharingEnabled: true } };
@@ -113,6 +114,21 @@ describe('SharesService: jogadores que recebem o nó compartilhado', () => {
 
     expect(userGroupRepo.save).toHaveBeenCalledWith({ user_id: 'user-new', group_id: 'g1' });
     expect(userServerRepo.save).toHaveBeenCalledWith({ user_id: 'user-new', server_id: 's1' });
+  });
+
+  it('publica rotas no gateway para cada servidor concedido diretamente (#210)', async () => {
+    const inputWithServers = {
+      email: 'direct@example.com',
+      minecraftNick: 'DirectCraft',
+      realName: 'Direct',
+      groupIds: [],
+      serverIds: ['s1', 's2'],
+    };
+
+    await service.register(inputWithServers);
+
+    expect(gatewayIpc.publishRoute).toHaveBeenCalledWith('s1');
+    expect(gatewayIpc.publishRoute).toHaveBeenCalledWith('s2');
   });
 
   it('com o compartilhamento de nó desativado nas configurações, não cadastra ninguém', async () => {
