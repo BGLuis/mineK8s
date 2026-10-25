@@ -348,36 +348,7 @@ export class AdminService {
     const exp = explanations.find((e) => e.serverId === serverId);
 
     if (exp && !exp.allowed) {
-      this.logger.log(
-        `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
-      );
-
-      const kickReason = '§cPermissão revogada pelo administrador.';
-
-      if (!server.state || server.state === 'READY') {
-        try {
-          await this.consoleDriver.sendCommand(
-            server,
-            `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
-          );
-        } catch (rconErr: any) {
-          this.logger.debug(
-            `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
-          );
-        }
-      }
-
-      try {
-        await this.gatewayIpcService.revokePlayerSession({
-          server_id: server.id,
-          client_ip: '',
-          minecraft_nick: user.minecraft_nick,
-          reason_message: kickReason,
-        });
-      } catch (ipcErr: any) {
-        this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
-      }
-
+      await this.executeSmartKick(server, user, exp.reason);
       kickedServers.push(server.id);
     }
 
@@ -401,34 +372,48 @@ export class AdminService {
     for (const change of dto.changes || []) {
       switch (change.type) {
         case 'addUserToGroup':
-          hypothetical.addUserToGroup!.push({ userId: change.userId, groupId: change.groupId });
+          if (change.userId && change.groupId) {
+            hypothetical.addUserToGroup!.push({ userId: change.userId, groupId: change.groupId });
+          }
           break;
         case 'removeUserFromGroup':
-          hypothetical.removeUserFromGroup!.push({
-            userId: change.userId,
-            groupId: change.groupId,
-          });
+          if (change.userId && change.groupId) {
+            hypothetical.removeUserFromGroup!.push({
+              userId: change.userId,
+              groupId: change.groupId,
+            });
+          }
           break;
         case 'addServerToGroup':
-          hypothetical.addServerToGroup!.push({
-            serverId: change.serverId,
-            groupId: change.groupId,
-          });
+          if (change.serverId && change.groupId) {
+            hypothetical.addServerToGroup!.push({
+              serverId: change.serverId,
+              groupId: change.groupId,
+            });
+          }
           break;
         case 'removeServerFromGroup':
-          hypothetical.removeServerFromGroup!.push({
-            serverId: change.serverId,
-            groupId: change.groupId,
-          });
+          if (change.serverId && change.groupId) {
+            hypothetical.removeServerFromGroup!.push({
+              serverId: change.serverId,
+              groupId: change.groupId,
+            });
+          }
           break;
         case 'grantServer':
-          hypothetical.grantServer!.push({ userId: change.userId, serverId: change.serverId });
+          if (change.userId && change.serverId) {
+            hypothetical.grantServer!.push({ userId: change.userId, serverId: change.serverId });
+          }
           break;
         case 'revokeServer':
-          hypothetical.revokeServer!.push({ userId: change.userId, serverId: change.serverId });
+          if (change.userId && change.serverId) {
+            hypothetical.revokeServer!.push({ userId: change.userId, serverId: change.serverId });
+          }
           break;
         case 'deleteGroup':
-          hypothetical.deleteGroupIds!.push(change.groupId);
+          if (change.groupId) {
+            hypothetical.deleteGroupIds!.push(change.groupId);
+          }
           break;
       }
     }
@@ -506,19 +491,50 @@ export class AdminService {
   }
 
   /**
-   * Remove um grupo de acesso.
+   * Remove um grupo de acesso e dispara Smart Kick para jogadores online que perderem o acesso (#210, #213).
    */
   async deleteGroup(id: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id } });
     if (!group) {
       throw new NotFoundException(`Group with ID "${id}" not found`);
     }
-    const serverGroups = await this.serverGroupRepo.find({ where: { group_id: id } });
+    const [serverGroups, userGroups] = await Promise.all([
+      this.serverGroupRepo.find({ where: { group_id: id } }),
+      this.userGroupRepo.find({ where: { group_id: id } }),
+    ]);
+
     await this.groupRepo.delete({ id });
+
     const affectedServerIds = Array.from(new Set(serverGroups.map((sg) => sg.server_id)));
     await Promise.all(
       affectedServerIds.map((serverId) => this.gatewayIpcService.publishRoute(serverId)),
     );
+
+    const affectedUserIds = Array.from(new Set(userGroups.map((ug) => ug.user_id)));
+    if (affectedServerIds.length > 0 && affectedUserIds.length > 0) {
+      const [servers, users] = await Promise.all([
+        this.serverRepo.find({
+          where: { id: In(affectedServerIds) },
+          relations: { minecraft_settings: true },
+        }),
+        this.userRepo.find({ where: { id: In(affectedUserIds) } }),
+      ]);
+
+      const explanations = await this.accessResolver.explain(affectedUserIds, {
+        servers,
+        users,
+      });
+
+      for (const exp of explanations) {
+        if (!exp.allowed) {
+          const server = servers.find((s) => s.id === exp.serverId);
+          const user = users.find((u) => u.id === exp.userId);
+          if (server && user) {
+            await this.executeSmartKick(server, user, exp.reason);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -570,21 +586,10 @@ export class AdminService {
     }
 
     const candidateServerIds = serverGroups.map((sg) => sg.server_id);
-    let candidateServers = await this.serverRepo.find({
+    const candidateServers = await this.serverRepo.find({
       where: { id: In(candidateServerIds) },
       relations: { minecraft_settings: true },
     });
-    if (candidateServers.length === 0 && candidateServerIds.length > 0) {
-      const fetched = await Promise.all(
-        candidateServerIds.map((id) =>
-          this.serverRepo.findOne({
-            where: { id },
-            relations: { minecraft_settings: true },
-          }),
-        ),
-      );
-      candidateServers = fetched.filter((s): s is Server => Boolean(s));
-    }
 
     const explanations = await this.accessResolver.explain([userId], {
       servers: candidateServers,
@@ -597,37 +602,7 @@ export class AdminService {
       if (!exp.allowed) {
         const server = candidateServers.find((s) => s.id === exp.serverId);
         if (!server) continue;
-
-        this.logger.log(
-          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
-        );
-
-        const kickReason = '§cPermissão revogada pelo administrador.';
-
-        if (!server.state || server.state === 'READY') {
-          try {
-            await this.consoleDriver.sendCommand(
-              server,
-              `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
-            );
-          } catch (rconErr: any) {
-            this.logger.debug(
-              `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
-            );
-          }
-        }
-
-        try {
-          await this.gatewayIpcService.revokePlayerSession({
-            server_id: server.id,
-            client_ip: '',
-            minecraft_nick: user.minecraft_nick,
-            reason_message: kickReason,
-          });
-        } catch (ipcErr: any) {
-          this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
-        }
-
+        await this.executeSmartKick(server, user, exp.reason);
         kickedServers.push(server.id);
       }
     }
@@ -683,15 +658,9 @@ export class AdminService {
     }
 
     const userIds = userGroups.map((ug) => ug.user_id);
-    let users = await this.userRepo.find({
+    const users = await this.userRepo.find({
       where: { id: In(userIds) },
     });
-    if (users.length === 0 && userIds.length > 0) {
-      const fetched = await Promise.all(
-        userIds.map((id) => this.userRepo.findOne({ where: { id } })),
-      );
-      users = fetched.filter((u): u is User => Boolean(u));
-    }
 
     const explanations = await this.accessResolver.explain(userIds, {
       servers: [server],
@@ -702,37 +671,48 @@ export class AdminService {
       if (!exp.allowed) {
         const user = users.find((u) => u.id === exp.userId);
         if (!user) continue;
-
-        this.logger.log(
-          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
-        );
-
-        const kickReason = '§cPermissão revogada pelo administrador.';
-
-        if (!server.state || server.state === 'READY') {
-          try {
-            await this.consoleDriver.sendCommand(
-              server,
-              `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
-            );
-          } catch (rconErr: any) {
-            this.logger.debug(
-              `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
-            );
-          }
-        }
-
-        try {
-          await this.gatewayIpcService.revokePlayerSession({
-            server_id: server.id,
-            client_ip: '',
-            minecraft_nick: user.minecraft_nick,
-            reason_message: kickReason,
-          });
-        } catch (ipcErr: any) {
-          this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
-        }
+        await this.executeSmartKick(server, user, exp.reason);
       }
+    }
+  }
+
+  /**
+   * Helper privado para executar o Smart Kick (RCON kick + revogação de sessão via IPC gRPC)
+   * quando um jogador perde o acesso a um servidor ativo (#210, #212, #213).
+   */
+  private async executeSmartKick(
+    server: Server,
+    user: User,
+    reason = '§cPermissão revogada pelo administrador.',
+  ): Promise<void> {
+    this.logger.log(
+      `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${reason})`,
+    );
+
+    const kickReason = '§cPermissão revogada pelo administrador.';
+
+    if (!server.state || server.state === 'READY') {
+      try {
+        await this.consoleDriver.sendCommand(
+          server,
+          `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
+        );
+      } catch (rconErr: any) {
+        this.logger.debug(
+          `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
+        );
+      }
+    }
+
+    try {
+      await this.gatewayIpcService.revokePlayerSession({
+        server_id: server.id,
+        client_ip: '',
+        minecraft_nick: user.minecraft_nick,
+        reason_message: kickReason,
+      });
+    } catch (ipcErr: any) {
+      this.logger.warn(`Falha ao revogar a sessão no Gateway via IPC: ${ipcErr.message}`);
     }
   }
 

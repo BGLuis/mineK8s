@@ -189,7 +189,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         server_groups: [{ group_id: groupId }],
         minecraft_settings: {},
       };
-      mockServerRepo.findOne.mockResolvedValue(mockServer);
+      mockServerRepo.find.mockResolvedValue([mockServer]);
 
       // 4. Decision Engine avalia que o usuário perdeu o acesso após ser removido
       mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
@@ -380,11 +380,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         { user_id: 'u-kept', group_id: 'grp-1' },
       ]);
 
-      mockUserRepo.findOne.mockImplementation(async ({ where }: any) => {
-        if (where.id === 'u-lost') return userLost;
-        if (where.id === 'u-kept') return userKept;
-        return null;
-      });
+      mockUserRepo.find.mockResolvedValue([userLost, userKept]);
 
       const server = {
         id: 'srv-1',
@@ -439,12 +435,58 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         { group_id: 'grp-1', server_id: 'srv-1' },
         { group_id: 'grp-1', server_id: 'srv-2' },
       ]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
 
       await service.deleteGroup('grp-1');
 
       expect(mockGroupRepo.delete).toHaveBeenCalledWith({ id: 'grp-1' });
       expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
       expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-2');
+    });
+
+    it('dispara Smart Kick em usuários online que perderam acesso ao excluir grupo (#210, #213)', async () => {
+      mockGroupRepo.findOne.mockResolvedValue({ id: 'grp-1', name: 'VIPs' });
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'grp-1', server_id: 'srv-1' }]);
+      mockUserGroupRepo.find.mockResolvedValue([{ group_id: 'grp-1', user_id: 'u-1' }]);
+
+      const user = {
+        id: 'u-1',
+        minecraft_nick: 'PlayerOne',
+        role: 'PLAYER',
+        user_groups: [],
+        server_accesses: [],
+      };
+      const server = {
+        id: 'srv-1',
+        name: 'VIP Server',
+        state: 'READY',
+        access_policy: 'GROUP',
+        server_groups: [],
+        is_maintenance: false,
+      };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: false,
+        reason: 'NO_ACCESS',
+      });
+
+      await service.deleteGroup('grp-1');
+
+      expect(mockGroupRepo.delete).toHaveBeenCalledWith({ id: 'grp-1' });
+      expect(mockGatewayIpcService.publishRoute).toHaveBeenCalledWith('srv-1');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        server,
+        expect.stringContaining('kick PlayerOne'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'srv-1',
+          minecraft_nick: 'PlayerOne',
+        }),
+      );
     });
   });
 
