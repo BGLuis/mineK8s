@@ -49,7 +49,6 @@ describe('TasksGateway (RF-STO-18, #92)', () => {
 
     gateway = new TasksGateway(
       taskRepo as any,
-      accessRepo as any,
       authService,
       jwtService,
       new TrustedProxyService({ authTrustedProxyIps: ['10.0.0.5'] } as any),

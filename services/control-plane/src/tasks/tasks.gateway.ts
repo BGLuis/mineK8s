@@ -18,7 +18,6 @@ import { authenticateSocket, canAccessServer } from '../common/ws-auth';
 import { UUID_PATTERN } from '../common/uuid';
 import { ModpackTaskEntity } from '../database/entities/modpack-task.entity';
 import { User } from '../database/entities/user.entity';
-import { UserServerAccess } from '../database/entities/user-server-access.entity';
 import { TaskExecutionService } from './task-execution.service';
 
 export interface TaskProgressPayload {
@@ -51,8 +50,6 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect, O
   constructor(
     @InjectRepository(ModpackTaskEntity)
     private readonly taskRepo: Repository<ModpackTaskEntity>,
-    @InjectRepository(UserServerAccess)
-    private readonly accessRepo: Repository<UserServerAccess>,
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
     private readonly trustedProxies: TrustedProxyService,
@@ -107,7 +104,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     const inMemory = this.taskExecutionService?.getTask(dto.taskId);
     const user: User | undefined = client.data?.user;
     if (inMemory) {
-      if (!(await canAccessServer(user, inMemory.serverId, this.accessRepo))) {
+      if (!(await canAccessServer(user))) {
         return { status: 'error', message: `Task "${dto.taskId}" not found` };
       }
       const room = `task:${dto.taskId}`;
@@ -121,7 +118,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect, O
     const task = UUID_PATTERN.test(dto.taskId)
       ? await this.taskRepo.findOne({ where: { id: dto.taskId } })
       : null;
-    if (!task || !(await canAccessServer(user, task.serverId, this.accessRepo))) {
+    if (!task || !(await canAccessServer(user))) {
       return { status: 'error', message: `Task "${dto.taskId}" not found` };
     }
 

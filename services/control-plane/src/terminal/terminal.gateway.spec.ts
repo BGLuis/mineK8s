@@ -107,7 +107,6 @@ describe('TerminalGateway (RF-RCON-12, RF-RCON-13, RF-RCON-14, Guarda L-01)', ()
     gateway = new TerminalGateway(
       mockServerRepo,
       mockAuditRepo,
-      mockAccessRepo,
       mockConsoleDriver,
       mockLogStreamer,
       mockK8sService,
