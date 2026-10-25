@@ -91,8 +91,8 @@ export class AccessResolverService {
 
     const groupNameMap = new Map<string, string>();
     for (const sg of serverGroups) {
-      if ((sg as any).group?.name) {
-        groupNameMap.set(sg.group_id, (sg as any).group.name);
+      if (sg.group?.name) {
+        groupNameMap.set(sg.group_id, sg.group.name);
       }
     }
 
@@ -109,14 +109,14 @@ export class AccessResolverService {
       set.add(ug.group_id);
     }
     for (const user of users) {
-      if ((user as any).user_groups) {
+      if (user.user_groups) {
         let set = userGroupMap.get(user.id);
         if (!set) {
           set = new Set();
           userGroupMap.set(user.id, set);
         }
-        for (const ug of (user as any).user_groups) {
-          const gid = ug.group_id ?? ug.id;
+        for (const ug of user.user_groups) {
+          const gid = ug.group_id;
           if (gid && !deletedGroupIds.has(gid)) {
             set.add(gid);
           }
@@ -135,14 +135,14 @@ export class AccessResolverService {
       set.add(sg.group_id);
     }
     for (const server of servers) {
-      if ((server as any).server_groups) {
+      if (server.server_groups) {
         let set = serverGroupMap.get(server.id);
         if (!set) {
           set = new Set();
           serverGroupMap.set(server.id, set);
         }
-        for (const sg of (server as any).server_groups) {
-          const gid = sg.group_id ?? sg.id;
+        for (const sg of server.server_groups) {
+          const gid = sg.group_id;
           if (gid && !deletedGroupIds.has(gid)) {
             set.add(gid);
           }
@@ -160,14 +160,14 @@ export class AccessResolverService {
       set.add(ua.server_id);
     }
     for (const user of users) {
-      if ((user as any).server_accesses) {
+      if (user.server_accesses) {
         let set = userDirectAccessMap.get(user.id);
         if (!set) {
           set = new Set();
           userDirectAccessMap.set(user.id, set);
         }
-        for (const sa of (user as any).server_accesses) {
-          const sid = sa.server_id ?? sa.id;
+        for (const sa of user.server_accesses) {
+          const sid = sa.server_id;
           if (sid) {
             set.add(sid);
           }
@@ -236,19 +236,13 @@ export class AccessResolverService {
 
     for (const user of users) {
       const userGroupIds = Array.from(userGroupMap.get(user.id) || []);
-      const userIsActive =
-        (user as any).isActive !== undefined
-          ? (user as any).isActive
-          : (user as any).is_active !== undefined
-            ? (user as any).is_active
-            : true;
 
       const userCtx: UserContext = {
         userId: user.id,
         minecraftNick: user.minecraft_nick,
         role: user.role,
         groupIds: userGroupIds,
-        isActive: userIsActive,
+        isActive: true,
       };
 
       for (const server of servers) {

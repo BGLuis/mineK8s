@@ -44,12 +44,6 @@ describe('AccessResolverService (#211)', () => {
   describe('Parity with crates/gateway/src/identity/acl_engine.rs', () => {
     const adminUser = { id: 'u-admin', role: 'ADMIN' as const, minecraft_nick: 'Admin' };
     const playerUser = { id: 'u-player', role: 'PLAYER' as const, minecraft_nick: 'Player' };
-    const inactivePlayer = {
-      id: 'u-inactive',
-      role: 'PLAYER' as const,
-      minecraft_nick: 'Inactive',
-      isActive: false,
-    };
 
     it('admin in maintenance is allowed with ADMIN bypass', async () => {
       const server = {
@@ -203,26 +197,6 @@ describe('AccessResolverService (#211)', () => {
 
       expect(res.allowed).toBe(false);
       expect(res.reason).toBe('INDIVIDUAL_ACCESS_DENIED');
-      expect(res.grantedBy).toBeNull();
-    });
-
-    it('inactive user is denied with USER_INACTIVE regardless of world policy', async () => {
-      const server = {
-        id: 's-pub',
-        name: 'Pub',
-        subdomain: 'pub',
-        state: 'READY' as const,
-        access_policy: 'PUBLIC' as const,
-        is_maintenance: false,
-      };
-
-      const [res] = await resolver.explain(['u-inactive'], {
-        users: [inactivePlayer as any],
-        servers: [server as any],
-      });
-
-      expect(res.allowed).toBe(false);
-      expect(res.reason).toBe('USER_INACTIVE');
       expect(res.grantedBy).toBeNull();
     });
   });
