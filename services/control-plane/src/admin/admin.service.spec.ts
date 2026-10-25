@@ -14,6 +14,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let mockAccessDecisionEngine: any;
   let mockGatewayIpcService: any;
   let mockConsoleDriver: any;
+  let mockPlayerSessionsService: any;
 
   beforeEach(() => {
     mockGroupRepo = {
@@ -74,6 +75,10 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       sendCommand: jest.fn(async () => 'Kicked player'),
     };
 
+    mockPlayerSessionsService = {
+      list: jest.fn(() => []),
+    };
+
     const accessResolver = new AccessResolverService(
       mockUserRepo,
       mockServerRepo,
@@ -95,6 +100,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockGatewayIpcService,
       mockConsoleDriver,
       accessResolver,
+      mockPlayerSessionsService,
     );
   });
 
@@ -494,6 +500,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         mockGatewayIpcService,
         mockConsoleDriver,
         accessResolver,
+        mockPlayerSessionsService,
       );
     });
 
@@ -787,6 +794,122 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
       expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
       expect(result).toEqual({ kickedServers: [] });
+    });
+  });
+
+  describe('simulateAccessChanges (#213)', () => {
+    it('simulating removeServerFromGroup does not modify server_groups and does not call publishRoute or revokePlayerSession', async () => {
+      const user = { id: 'u-1', minecraft_nick: 'PlayerOne', role: 'PLAYER' };
+      const server = { id: 's-1', name: 'Server One', access_policy: 'GROUP' };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'g-1', server_id: 's-1' }]);
+      mockUserGroupRepo.find.mockResolvedValue([{ user_id: 'u-1', group_id: 'g-1' }]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const allowed = sCtx.allowedGroupIds?.includes('g-1') && uCtx.groupIds?.includes('g-1');
+        return { allowed: Boolean(allowed) };
+      });
+
+      const results = await service.simulateAccessChanges({
+        changes: [{ type: 'removeServerFromGroup', serverId: 's-1', groupId: 'g-1' }],
+      });
+
+      // Verify no persistence or IPC calls were made
+      expect(mockServerGroupRepo.delete).not.toHaveBeenCalled();
+      expect(mockServerGroupRepo.save).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.publishRoute).not.toHaveBeenCalled();
+      expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
+      expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        userId: 'u-1',
+        minecraftNick: 'PlayerOne',
+        gains: [],
+        losses: ['s-1'],
+        wouldBeKicked: [],
+      });
+    });
+
+    it('simulating removeUserFromGroup returns in losses / wouldBeKicked the exact worlds that removeUserFromGroup would kick after saving under the same state', async () => {
+      const user = { id: 'u-2', minecraft_nick: 'OnlinePlayer', role: 'PLAYER' };
+      const server = {
+        id: 's-world',
+        name: 'Active World',
+        access_policy: 'GROUP',
+        state: 'READY',
+      };
+
+      let userGroups = [{ user_id: 'u-2', group_id: 'g-kick' }];
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerRepo.findOne.mockResolvedValue(server);
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: 'g-kick', server_id: 's-world' }]);
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: 'g-kick', user_id: 'u-2' });
+      mockUserGroupRepo.find.mockImplementation(async () => userGroups);
+      mockUserGroupRepo.delete.mockImplementation(async () => {
+        userGroups = [];
+        return { affected: 1 };
+      });
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // Active session in s-world
+      mockPlayerSessionsService.list.mockImplementation((sId: string) =>
+        sId === 's-world' ? [{ nick: 'OnlinePlayer', sessionId: 'sess-abc' }] : [],
+      );
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const hasGroup =
+          uCtx.groupIds?.includes('g-kick') && sCtx.allowedGroupIds?.includes('g-kick');
+        return { allowed: Boolean(hasGroup) };
+      });
+
+      // 1. Run simulation
+      const simResults = await service.simulateAccessChanges({
+        changes: [{ type: 'removeUserFromGroup', userId: 'u-2', groupId: 'g-kick' }],
+      });
+
+      expect(simResults).toHaveLength(1);
+      expect(simResults[0].losses).toEqual(['s-world']);
+      expect(simResults[0].wouldBeKicked).toEqual(['s-world']);
+
+      // 2. Run actual removeUserFromGroup with the same state and verify kick matches
+      const kickResult = await service.removeUserFromGroup('g-kick', 'u-2');
+      expect(kickResult.kickedServers).toEqual(simResults[0].wouldBeKicked);
+    });
+
+    it('a user who remains authorized through another group does not appear in losses', async () => {
+      const user = { id: 'u-3', minecraft_nick: 'DualGroupPlayer', role: 'PLAYER' };
+      const server = { id: 's-shared', name: 'Shared Server', access_policy: 'GROUP' };
+
+      mockUserRepo.find.mockResolvedValue([user]);
+      mockServerRepo.find.mockResolvedValue([server]);
+      mockServerGroupRepo.find.mockResolvedValue([
+        { group_id: 'g-1', server_id: 's-shared' },
+        { group_id: 'g-2', server_id: 's-shared' },
+      ]);
+      mockUserGroupRepo.find.mockResolvedValue([
+        { user_id: 'u-3', group_id: 'g-1' },
+        { user_id: 'u-3', group_id: 'g-2' },
+      ]);
+      mockUserServerAccessRepo.find.mockResolvedValue([]);
+
+      // As long as the user has either g-1 or g-2, allowed is true
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((uCtx: any, sCtx: any) => {
+        const match = uCtx.groupIds?.some((gid: string) => sCtx.allowedGroupIds?.includes(gid));
+        return { allowed: Boolean(match) };
+      });
+
+      const results = await service.simulateAccessChanges({
+        changes: [{ type: 'removeUserFromGroup', userId: 'u-3', groupId: 'g-1' }],
+      });
+
+      const user3Result = results.find((r) => r.userId === 'u-3');
+      expect(user3Result).toBeUndefined();
     });
   });
 });

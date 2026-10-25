@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 
 import {
+  AccessChangeItem,
   AdminApi,
   DeviceStatus,
   Group,
@@ -12,6 +13,7 @@ import {
   UserWorldAccess,
 } from '../../core/api';
 import {
+  DialogService,
   McBanner,
   McButton,
   McIcon,
@@ -24,6 +26,7 @@ import {
 import { apiErrorMessage } from '../join/api-error';
 import { formatAccessReason } from './access-reason';
 import { formatRelative } from './format';
+import { buildAccessLossConfirmationMessage } from './simulate-confirm';
 import { DEVICE_STATUS_VIEW, TONE_TEXT_CLASS } from './status-views';
 import { ToggleChange, ToggleGroup, ToggleOption } from './toggle-group';
 
@@ -229,6 +232,7 @@ export class UserDetailPage {
   private readonly admin = inject(AdminApi);
   private readonly serversApi = inject(ServersApi);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   readonly id = input.required<string>();
 
@@ -263,6 +267,14 @@ export class UserDetailPage {
     return map;
   });
 
+  protected readonly serverNamesMap = computed<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    for (const s of this.servers.value() ?? []) {
+      map.set(s.id, s.name);
+    }
+    return map;
+  });
+
   protected formatRelative(date: string | null): string {
     return date ? formatRelative(date) : 'Nunca';
   }
@@ -289,7 +301,7 @@ export class UserDetailPage {
     return apiErrorMessage(error, 'Ocorreu um erro ao carregar os dados.');
   }
 
-  protected toggleGroup(change: ToggleChange): void {
+  protected async toggleGroup(change: ToggleChange): Promise<void> {
     if (this.pending()) return;
     this.pending.set(change.id);
 
@@ -299,44 +311,72 @@ export class UserDetailPage {
       return;
     }
 
-    if (change.selected) {
-      this.admin.addUserToGroup(change.id, u.id).subscribe({
-        next: () => {
+    const changeItem: AccessChangeItem = change.selected
+      ? { type: 'addUserToGroup', userId: u.id, groupId: change.id }
+      : { type: 'removeUserFromGroup', userId: u.id, groupId: change.id };
+
+    try {
+      const simResults = await firstValueFrom(this.admin.simulateAccess([changeItem]));
+      if (simResults.some((r) => r.losses.length > 0)) {
+        const confirmed = await this.dialog.confirm({
+          title: 'Confirmar alteração de acesso',
+          message: buildAccessLossConfirmationMessage(
+            simResults,
+            (id) => this.serverNamesMap().get(id) ?? id,
+          ),
+          confirmLabel: 'Confirmar e aplicar',
+          confirmVariant: 'danger',
+        });
+        if (!confirmed) {
           this.pending.set(null);
-          this.toast.success('Grupo adicionado.');
-          this.users.reload();
-          this.access.reload();
-        },
-        error: (error: unknown) => {
-          this.pending.set(null);
-          this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o grupo.'));
-          this.users.reload();
-          this.access.reload();
-        },
-      });
-    } else {
-      this.admin.removeUserFromGroup(change.id, u.id).subscribe({
-        next: (res) => {
-          this.pending.set(null);
-          this.toast.success(
-            res.kickedServers.length > 0
-              ? `Pessoa removida e desconectada de ${res.kickedServers.length} servidor(es).`
-              : 'Grupo removido.',
-          );
-          this.users.reload();
-          this.access.reload();
-        },
-        error: (error: unknown) => {
-          this.pending.set(null);
-          this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o grupo.'));
-          this.users.reload();
-          this.access.reload();
-        },
-      });
+          return;
+        }
+      }
+
+      if (change.selected) {
+        this.admin.addUserToGroup(change.id, u.id).subscribe({
+          next: () => {
+            this.pending.set(null);
+            this.toast.success('Grupo adicionado.');
+            this.users.reload();
+            this.access.reload();
+          },
+          error: (error: unknown) => {
+            this.pending.set(null);
+            this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o grupo.'));
+            this.users.reload();
+            this.access.reload();
+          },
+        });
+      } else {
+        this.admin.removeUserFromGroup(change.id, u.id).subscribe({
+          next: (res) => {
+            this.pending.set(null);
+            this.toast.success(
+              res.kickedServers.length > 0
+                ? `Pessoa removida e desconectada de ${res.kickedServers.length} servidor(es).`
+                : 'Grupo removido.',
+            );
+            this.users.reload();
+            this.access.reload();
+          },
+          error: (error: unknown) => {
+            this.pending.set(null);
+            this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o grupo.'));
+            this.users.reload();
+            this.access.reload();
+          },
+        });
+      }
+    } catch (error: unknown) {
+      this.pending.set(null);
+      this.toast.error(apiErrorMessage(error, 'Não foi possível simular a alteração.'));
+      this.users.reload();
+      this.access.reload();
     }
   }
 
-  protected toggleServer(change: ToggleChange): void {
+  protected async toggleServer(change: ToggleChange): Promise<void> {
     if (this.pending()) return;
     this.pending.set(change.id);
 
@@ -346,40 +386,68 @@ export class UserDetailPage {
       return;
     }
 
-    if (change.selected) {
-      this.admin.grantUserServer(u.id, change.id).subscribe({
-        next: () => {
+    const changeItem: AccessChangeItem = change.selected
+      ? { type: 'grantServer', userId: u.id, serverId: change.id }
+      : { type: 'revokeServer', userId: u.id, serverId: change.id };
+
+    try {
+      const simResults = await firstValueFrom(this.admin.simulateAccess([changeItem]));
+      if (simResults.some((r) => r.losses.length > 0)) {
+        const confirmed = await this.dialog.confirm({
+          title: 'Confirmar alteração de acesso',
+          message: buildAccessLossConfirmationMessage(
+            simResults,
+            (id) => this.serverNamesMap().get(id) ?? id,
+          ),
+          confirmLabel: 'Confirmar e aplicar',
+          confirmVariant: 'danger',
+        });
+        if (!confirmed) {
           this.pending.set(null);
-          this.toast.success('Acesso ao servidor concedido.');
-          this.users.reload();
-          this.access.reload();
-        },
-        error: (error: unknown) => {
-          this.pending.set(null);
-          this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o acesso direto.'));
-          this.users.reload();
-          this.access.reload();
-        },
-      });
-    } else {
-      this.admin.revokeUserServer(u.id, change.id).subscribe({
-        next: (res: { kickedServers: string[] }) => {
-          this.pending.set(null);
-          if (res.kickedServers && res.kickedServers.length > 0) {
-            this.toast.success('Acesso revogado e jogador desconectado.');
-          } else {
-            this.toast.success('Acesso direto ao servidor revogado.');
-          }
-          this.users.reload();
-          this.access.reload();
-        },
-        error: (error: unknown) => {
-          this.pending.set(null);
-          this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o acesso direto.'));
-          this.users.reload();
-          this.access.reload();
-        },
-      });
+          return;
+        }
+      }
+
+      if (change.selected) {
+        this.admin.grantUserServer(u.id, change.id).subscribe({
+          next: () => {
+            this.pending.set(null);
+            this.toast.success('Acesso ao servidor concedido.');
+            this.users.reload();
+            this.access.reload();
+          },
+          error: (error: unknown) => {
+            this.pending.set(null);
+            this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o acesso direto.'));
+            this.users.reload();
+            this.access.reload();
+          },
+        });
+      } else {
+        this.admin.revokeUserServer(u.id, change.id).subscribe({
+          next: (res: { kickedServers: string[] }) => {
+            this.pending.set(null);
+            if (res.kickedServers && res.kickedServers.length > 0) {
+              this.toast.success('Acesso revogado e jogador desconectado.');
+            } else {
+              this.toast.success('Acesso direto ao servidor revogado.');
+            }
+            this.users.reload();
+            this.access.reload();
+          },
+          error: (error: unknown) => {
+            this.pending.set(null);
+            this.toast.error(apiErrorMessage(error, 'Não foi possível alterar o acesso direto.'));
+            this.users.reload();
+            this.access.reload();
+          },
+        });
+      }
+    } catch (error: unknown) {
+      this.pending.set(null);
+      this.toast.error(apiErrorMessage(error, 'Não foi possível simular a alteração.'));
+      this.users.reload();
+      this.access.reload();
     }
   }
 }

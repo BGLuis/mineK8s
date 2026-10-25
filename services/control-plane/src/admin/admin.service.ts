@@ -13,10 +13,13 @@ import { AccessDecisionEngineService } from '../tailscale/decision/access-decisi
 import {
   AccessGrantedBy,
   AccessResolverService,
+  HypotheticalAccessDiff,
 } from '../tailscale/decision/access-resolver.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
+import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 
@@ -41,6 +44,7 @@ export class AdminService {
     private readonly gatewayIpcService: GatewayIpcService,
     private readonly consoleDriver: MinecraftRconConsoleDriver,
     private readonly accessResolver: AccessResolverService,
+    private readonly playerSessionsService: PlayerSessionsService,
   ) {}
 
   /**
@@ -254,6 +258,114 @@ export class AdminService {
     }
 
     return { kickedServers };
+  }
+
+  /**
+   * Simula alterações de acesso sem persistir nem acionar Smart Kick (#213).
+   */
+  async simulateAccessChanges(dto: SimulateAccessDto): Promise<SimulatedUserAccessResultDto[]> {
+    const hypothetical: HypotheticalAccessDiff = {
+      addUserToGroup: [],
+      removeUserFromGroup: [],
+      addServerToGroup: [],
+      removeServerFromGroup: [],
+      grantServer: [],
+      revokeServer: [],
+      deleteGroupIds: [],
+    };
+
+    for (const change of dto.changes || []) {
+      switch (change.type) {
+        case 'addUserToGroup':
+          hypothetical.addUserToGroup!.push({ userId: change.userId, groupId: change.groupId });
+          break;
+        case 'removeUserFromGroup':
+          hypothetical.removeUserFromGroup!.push({
+            userId: change.userId,
+            groupId: change.groupId,
+          });
+          break;
+        case 'addServerToGroup':
+          hypothetical.addServerToGroup!.push({
+            serverId: change.serverId,
+            groupId: change.groupId,
+          });
+          break;
+        case 'removeServerFromGroup':
+          hypothetical.removeServerFromGroup!.push({
+            serverId: change.serverId,
+            groupId: change.groupId,
+          });
+          break;
+        case 'grantServer':
+          hypothetical.grantServer!.push({ userId: change.userId, serverId: change.serverId });
+          break;
+        case 'revokeServer':
+          hypothetical.revokeServer!.push({ userId: change.userId, serverId: change.serverId });
+          break;
+        case 'deleteGroup':
+          hypothetical.deleteGroupIds!.push(change.groupId);
+          break;
+      }
+    }
+
+    const [users, servers] = await Promise.all([
+      this.userRepo.find({ order: { minecraft_nick: 'ASC' } }),
+      this.serverRepo.find({ order: { name: 'ASC' } }),
+    ]);
+
+    const [baselineExplanations, simulatedExplanations] = await Promise.all([
+      this.accessResolver.explain([], { users, servers }),
+      this.accessResolver.explain([], { users, servers, hypothetical }),
+    ]);
+
+    const baselineMap = new Map<string, boolean>();
+    for (const exp of baselineExplanations) {
+      baselineMap.set(`${exp.userId}:${exp.serverId}`, exp.allowed);
+    }
+
+    const simulatedMap = new Map<string, boolean>();
+    for (const exp of simulatedExplanations) {
+      simulatedMap.set(`${exp.userId}:${exp.serverId}`, exp.allowed);
+    }
+
+    const results: SimulatedUserAccessResultDto[] = [];
+
+    for (const user of users) {
+      const gains: string[] = [];
+      const losses: string[] = [];
+
+      for (const server of servers) {
+        const key = `${user.id}:${server.id}`;
+        const wasAllowed = baselineMap.get(key) ?? false;
+        const isAllowed = simulatedMap.get(key) ?? false;
+
+        if (!wasAllowed && isAllowed) {
+          gains.push(server.id);
+        } else if (wasAllowed && !isAllowed) {
+          losses.push(server.id);
+        }
+      }
+
+      if (gains.length > 0 || losses.length > 0) {
+        const wouldBeKicked = losses.filter((serverId) => {
+          const activeSessions = this.playerSessionsService.list(serverId);
+          return activeSessions.some(
+            (s) => s.nick.toLowerCase() === user.minecraft_nick.toLowerCase(),
+          );
+        });
+
+        results.push({
+          userId: user.id,
+          minecraftNick: user.minecraft_nick,
+          gains,
+          losses,
+          wouldBeKicked,
+        });
+      }
+    }
+
+    return results;
   }
 
   /**

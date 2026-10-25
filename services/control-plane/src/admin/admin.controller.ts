@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 
@@ -128,6 +129,16 @@ export class AdminController {
   async removeServerFromGroup(@Param('id') groupId: string, @Param('serverId') serverId: string) {
     await this.adminService.removeServerFromGroup(groupId, serverId);
     return { success: true };
+  }
+
+  @Post('access/simulate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Simular alterações de permissões e impactos antes de aplicar (#213)',
+  })
+  @ApiResponse({ status: 200, type: [SimulatedUserAccessResultDto] })
+  async simulateAccess(@Body() dto: SimulateAccessDto): Promise<SimulatedUserAccessResultDto[]> {
+    return this.adminService.simulateAccessChanges(dto);
   }
 
   @Post('smart-kick')

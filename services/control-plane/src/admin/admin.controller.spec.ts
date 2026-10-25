@@ -22,6 +22,7 @@ describe('AdminController', () => {
       removeServerFromGroup: jest.fn(),
       grantServerToUser: jest.fn(),
       revokeServerFromUser: jest.fn(),
+      simulateAccessChanges: jest.fn(),
       smartKick: jest.fn(),
     };
     controller = new AdminController(adminService as AdminService);
@@ -73,6 +74,29 @@ describe('AdminController', () => {
       await expect(controller.revokeServerFromUser('user-1', 'bad-server')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('simulateAccess', () => {
+    it('delegates to adminService.simulateAccessChanges', async () => {
+      const mockResult = [
+        {
+          userId: 'u-1',
+          minecraftNick: 'Steve',
+          gains: [],
+          losses: ['s-1'],
+          wouldBeKicked: ['s-1'],
+        },
+      ];
+      (adminService.simulateAccessChanges as jest.Mock).mockResolvedValue(mockResult);
+
+      const dto = {
+        changes: [{ type: 'removeUserFromGroup' as const, userId: 'u-1', groupId: 'g-1' }],
+      };
+      const result = await controller.simulateAccess(dto);
+
+      expect(adminService.simulateAccessChanges).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(mockResult);
     });
   });
 });

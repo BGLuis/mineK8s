@@ -3,10 +3,12 @@ import { Observable } from 'rxjs';
 
 import { ApiClient } from './api-client';
 import {
+  AccessChangeItem,
   AccessibleServer,
   CreateGroupRequest,
   Group,
   RemoveUserFromGroupResponse,
+  SimulatedUserAccessResult,
   SmartKickRequest,
   SuccessResponse,
   UserSummary,
@@ -69,5 +71,9 @@ export class AdminApi {
 
   smartKick(dto: SmartKickRequest): Observable<SuccessResponse> {
     return this.api.post('/api/admin/smart-kick', dto);
+  }
+
+  simulateAccess(changes: AccessChangeItem[]): Observable<SimulatedUserAccessResult[]> {
+    return this.api.post('/api/admin/access/simulate', { changes });
   }
 }

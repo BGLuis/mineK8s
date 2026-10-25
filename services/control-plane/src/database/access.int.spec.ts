@@ -58,6 +58,7 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
       {} as any,
       {} as any,
       accessResolver,
+      new PlayerSessionsService(),
     );
     invites = new InvitesService(
       repo(Invite),

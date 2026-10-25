@@ -1,11 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 
-import { AdminApi, Group, UserSummary } from '../../core/api';
+import { AccessChangeItem, AdminApi, Group, UserSummary } from '../../core/api';
 import { DialogService, McBanner, McButton, McDialog, McTextField, ToastService } from '../../ui';
 import { apiErrorMessage } from '../join/api-error';
 import { AccessStore } from './access.store';
+import {
+  buildAccessLossConfirmationMessage,
+  buildDeleteGroupConfirmationMessage,
+} from './simulate-confirm';
 import { ToggleChange, ToggleGroup, ToggleOption } from './toggle-group';
 
 const NAME_MIN = 2;
@@ -238,62 +243,127 @@ export class GroupsPanel {
   }
 
   protected async remove(group: Group): Promise<void> {
-    const confirmed = await this.dialog.confirm({
-      title: 'Excluir grupo',
-      message: `O grupo "${group.name}" será apagado e quem dependia dele perde o acesso aos servidores ligados a ele.`,
-      confirmLabel: 'Excluir grupo',
-    });
-    if (!confirmed) {
-      return;
+    try {
+      const simResults = await firstValueFrom(
+        this.admin.simulateAccess([{ type: 'deleteGroup', groupId: group.id }]),
+      );
+      const message = buildDeleteGroupConfirmationMessage(
+        group.name,
+        simResults,
+        (id) => this.serverNames().get(id) ?? id,
+      );
+      const confirmed = await this.dialog.confirm({
+        title: 'Excluir grupo',
+        message,
+        confirmLabel: 'Excluir grupo',
+        confirmVariant: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+      this.admin.deleteGroup(group.id).subscribe({
+        next: () => {
+          this.toast.success(`Grupo "${group.name}" excluído.`);
+          this.groups.reload();
+        },
+        error: (error: unknown) =>
+          this.toast.error(apiErrorMessage(error, 'Não foi possível excluir o grupo.')),
+      });
+    } catch (error: unknown) {
+      this.toast.error(apiErrorMessage(error, 'Não foi possível simular a exclusão do grupo.'));
     }
-    this.admin.deleteGroup(group.id).subscribe({
-      next: () => {
-        this.toast.success(`Grupo "${group.name}" excluído.`);
-        this.groups.reload();
-      },
-      error: (error: unknown) =>
-        this.toast.error(apiErrorMessage(error, 'Não foi possível excluir o grupo.')),
-    });
   }
 
-  protected toggleUser(group: Group, change: ToggleChange): void {
+  protected async toggleUser(group: Group, change: ToggleChange): Promise<void> {
     if (this.pending()) {
       return;
     }
     this.pending.set(change.id);
-    if (change.selected) {
-      this.admin
-        .addUserToGroup(group.id, change.id)
-        .subscribe(this.settle('Pessoa adicionada ao grupo.'));
-      return;
+
+    const changeItem: AccessChangeItem = change.selected
+      ? { type: 'addUserToGroup', userId: change.id, groupId: group.id }
+      : { type: 'removeUserFromGroup', userId: change.id, groupId: group.id };
+
+    try {
+      const simResults = await firstValueFrom(this.admin.simulateAccess([changeItem]));
+      if (simResults.some((r) => r.losses.length > 0)) {
+        const confirmed = await this.dialog.confirm({
+          title: 'Confirmar alteração de acesso',
+          message: buildAccessLossConfirmationMessage(
+            simResults,
+            (id) => this.serverNames().get(id) ?? id,
+          ),
+          confirmLabel: 'Confirmar e aplicar',
+          confirmVariant: 'danger',
+        });
+        if (!confirmed) {
+          this.pending.set(null);
+          return;
+        }
+      }
+
+      if (change.selected) {
+        this.admin
+          .addUserToGroup(group.id, change.id)
+          .subscribe(this.settle('Pessoa adicionada ao grupo.'));
+        return;
+      }
+      this.admin.removeUserFromGroup(group.id, change.id).subscribe({
+        next: ({ kickedServers }) => {
+          this.pending.set(null);
+          this.toast.success(
+            kickedServers.length > 0
+              ? `Pessoa removida e desconectada de ${kickedServers.length} servidor(es).`
+              : 'Pessoa removida do grupo.',
+          );
+          this.groups.reload();
+        },
+        error: (error: unknown) => this.fail(error),
+      });
+    } catch (error: unknown) {
+      this.fail(error);
     }
-    this.admin.removeUserFromGroup(group.id, change.id).subscribe({
-      next: ({ kickedServers }) => {
-        this.pending.set(null);
-        this.toast.success(
-          kickedServers.length > 0
-            ? `Pessoa removida e desconectada de ${kickedServers.length} servidor(es).`
-            : 'Pessoa removida do grupo.',
-        );
-        this.groups.reload();
-      },
-      error: (error: unknown) => this.fail(error),
-    });
   }
 
-  protected toggleServer(group: Group, change: ToggleChange): void {
+  protected async toggleServer(group: Group, change: ToggleChange): Promise<void> {
     if (this.pending()) {
       return;
     }
     this.pending.set(change.id);
-    const request = change.selected
-      ? this.admin.addServerToGroup(group.id, change.id)
-      : this.admin.removeServerFromGroup(group.id, change.id);
-    request.subscribe(
-      this.settle(
-        change.selected ? 'Servidor liberado para o grupo.' : 'Servidor removido do grupo.',
-      ),
-    );
+
+    const changeItem: AccessChangeItem = change.selected
+      ? { type: 'addServerToGroup', serverId: change.id, groupId: group.id }
+      : { type: 'removeServerFromGroup', serverId: change.id, groupId: group.id };
+
+    try {
+      const simResults = await firstValueFrom(this.admin.simulateAccess([changeItem]));
+      if (simResults.some((r) => r.losses.length > 0)) {
+        const confirmed = await this.dialog.confirm({
+          title: 'Confirmar alteração de acesso',
+          message: buildAccessLossConfirmationMessage(
+            simResults,
+            (id) => this.serverNames().get(id) ?? id,
+          ),
+          confirmLabel: 'Confirmar e aplicar',
+          confirmVariant: 'danger',
+        });
+        if (!confirmed) {
+          this.pending.set(null);
+          return;
+        }
+      }
+
+      const request = change.selected
+        ? this.admin.addServerToGroup(group.id, change.id)
+        : this.admin.removeServerFromGroup(group.id, change.id);
+      request.subscribe(
+        this.settle(
+          change.selected ? 'Servidor liberado para o grupo.' : 'Servidor removido do grupo.',
+        ),
+      );
+    } catch (error: unknown) {
+      this.fail(error);
+    }
   }
 
   private settle(message: string) {

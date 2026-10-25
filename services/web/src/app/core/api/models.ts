@@ -503,6 +503,23 @@ export interface UserWorldAccess {
   grantedBy: AccessGrantedBy | null;
 }
 
+export type AccessChangeItem =
+  | { type: 'addUserToGroup'; userId: string; groupId: string }
+  | { type: 'removeUserFromGroup'; userId: string; groupId: string }
+  | { type: 'addServerToGroup'; serverId: string; groupId: string }
+  | { type: 'removeServerFromGroup'; serverId: string; groupId: string }
+  | { type: 'grantServer'; userId: string; serverId: string }
+  | { type: 'revokeServer'; userId: string; serverId: string }
+  | { type: 'deleteGroup'; groupId: string };
+
+export interface SimulatedUserAccessResult {
+  userId: string;
+  minecraftNick: string;
+  gains: string[];
+  losses: string[];
+  wouldBeKicked: string[];
+}
+
 /** GET /api/admin/users/:id/servers: servers the user may join, by the gateway's own access rules. */
 export interface AccessibleServer {
   id: string;

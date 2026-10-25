@@ -11,7 +11,7 @@ import {
   UserSummary,
   UserWorldAccess,
 } from '../../core/api';
-import { ToastService } from '../../ui';
+import { DialogService, ToastService } from '../../ui';
 import { UserDetailPage } from './user-detail.page';
 
 describe('UserDetailPage (#212)', () => {
@@ -151,6 +151,8 @@ describe('UserDetailPage (#212)', () => {
     explainUserAccessFn?: () => any;
     addUserToGroupFn?: () => any;
     removeUserFromGroupFn?: () => any;
+    simulateAccessFn?: () => any;
+    confirmFn?: () => any;
   }) {
     const listUsers = vi.fn(() => of([mockUser]));
     const listGroups = vi.fn(() => of(mockGroups));
@@ -161,6 +163,8 @@ describe('UserDetailPage (#212)', () => {
       options?.removeUserFromGroupFn ?? vi.fn(() => of({ kickedServers: [] }));
     const grantUserServer = vi.fn(() => of({ success: true }));
     const revokeUserServer = vi.fn(() => of({ kickedServers: [] }));
+    const simulateAccess = options?.simulateAccessFn ?? vi.fn(() => of([]));
+    const confirm = options?.confirmFn ?? vi.fn(async () => true);
 
     await TestBed.configureTestingModule({
       providers: [
@@ -175,12 +179,19 @@ describe('UserDetailPage (#212)', () => {
             removeUserFromGroup,
             grantUserServer,
             revokeUserServer,
+            simulateAccess,
           },
         },
         {
           provide: ServersApi,
           useValue: {
             list: listServers,
+          },
+        },
+        {
+          provide: DialogService,
+          useValue: {
+            confirm,
           },
         },
         {
@@ -268,5 +279,73 @@ describe('UserDetailPage (#212)', () => {
 
     // After toggle and refresh, the table now displays the updated reason for s-6
     expect(el.textContent).toContain('Pelo grupo Moderadores');
+  });
+
+  it('prompts confirmation with highlighted kicked worlds when simulated losses exist (#213)', async () => {
+    const simulateAccessFn = vi.fn(() =>
+      of([
+        {
+          userId: 'u-1',
+          minecraftNick: 'Steve',
+          gains: [],
+          losses: ['s-1'],
+          wouldBeKicked: ['s-1'],
+        },
+      ]),
+    );
+
+    const confirmFn = vi.fn(async () => true);
+    const removeUserFromGroupFn = vi.fn(() => of({ kickedServers: ['s-1'] }));
+
+    await createComponent({ simulateAccessFn, confirmFn, removeUserFromGroupFn });
+
+    // Click on VIP button (currently selected) to remove
+    const buttons = Array.from(el.querySelectorAll('button'));
+    const vipBtn = buttons.find((b) => b.textContent?.includes('VIP'));
+    expect(vipBtn).toBeDefined();
+
+    vipBtn!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(simulateAccessFn).toHaveBeenCalledWith([
+      { type: 'removeUserFromGroup', userId: 'u-1', groupId: 'g-vip' },
+    ]);
+    expect(confirmFn).toHaveBeenCalledTimes(1);
+    const confirmMessage = (confirmFn as any).mock.calls[0][0].message;
+    expect(confirmMessage).toContain('online agora, será expulso');
+    expect(confirmMessage).toContain('Steve');
+
+    expect(removeUserFromGroupFn).toHaveBeenCalledWith('g-vip', 'u-1');
+  });
+
+  it('aborts mutation when user cancels confirmation (#213)', async () => {
+    const simulateAccessFn = vi.fn(() =>
+      of([
+        {
+          userId: 'u-1',
+          minecraftNick: 'Steve',
+          gains: [],
+          losses: ['s-1'],
+          wouldBeKicked: ['s-1'],
+        },
+      ]),
+    );
+
+    const confirmFn = vi.fn(async () => false);
+    const removeUserFromGroupFn = vi.fn(() => of({ kickedServers: ['s-1'] }));
+
+    await createComponent({ simulateAccessFn, confirmFn, removeUserFromGroupFn });
+
+    const buttons = Array.from(el.querySelectorAll('button'));
+    const vipBtn = buttons.find((b) => b.textContent?.includes('VIP'));
+    expect(vipBtn).toBeDefined();
+
+    vipBtn!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(confirmFn).toHaveBeenCalledTimes(1);
+    expect(removeUserFromGroupFn).not.toHaveBeenCalled();
   });
 });
