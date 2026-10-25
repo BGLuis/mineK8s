@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     cargo build --release --locked -p gateway --bin gateway
 
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2 AS runtime
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:3ee00291cf386ec52a552e6a858d555debd74776eb4bfa53fa3df2cd6677515e AS runtime
 LABEL org.opencontainers.image.source="https://github.com/BGLuis/mineK8s" \
       org.opencontainers.image.title="minekubernetes-gateway"
 COPY --link --from=build /app/target/release/gateway /usr/local/bin/gateway
