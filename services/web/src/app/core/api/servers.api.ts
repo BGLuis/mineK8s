@@ -6,6 +6,7 @@ import {
   CommandResponse,
   CreateServerRequest,
   CreateServerResponse,
+  LagSnapshot,
   MessageResponse,
   MinecraftVersionItem,
   PublishResponse,
@@ -39,6 +40,10 @@ export class ServersApi {
 
   stats(id: string, window = '60m'): Observable<ServerRuntimeStats> {
     return this.api.get(`/api/servers/${id}/stats`, { params: { window } });
+  }
+
+  lagSnapshot(id: string): Observable<LagSnapshot> {
+    return this.api.get(`/api/servers/${id}/lag-snapshot`);
   }
 
   create(dto: CreateServerRequest): Observable<CreateServerResponse> {

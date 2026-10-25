@@ -35,10 +35,22 @@ describe('ServerDetailStore', () => {
     window: '60m',
     tps: 19.5,
     mspt: 25,
+    msptP95: null,
+    msptP99: null,
     memoryUsedMb: 3072,
     memoryLimitMb: 5632,
+    heapMb: 4096,
     uptimeSeconds: 90,
-    history: [{ timestamp: '2026-10-09T10:00:00Z', tps: 19.5, mspt: 25, memoryUsedMb: 3072 }],
+    history: [
+      {
+        timestamp: '2026-10-09T10:00:00Z',
+        tps: 19.5,
+        mspt: 25,
+        msptP95: null,
+        msptP99: null,
+        memoryUsedMb: 3072,
+      },
+    ],
   };
 
   function create(

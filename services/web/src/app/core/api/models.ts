@@ -783,6 +783,8 @@ export interface ServerStatSample {
   timestamp: string;
   tps: number | null;
   mspt: number | null;
+  msptP95: number | null;
+  msptP99: number | null;
   memoryUsedMb: number | null;
 }
 
@@ -791,11 +793,53 @@ export interface ServerRuntimeStats {
   window: string;
   tps: number | null;
   mspt: number | null;
+  /** Tick time percentiles from `tick query` (1.20.3+); null on servers that do not print them. */
+  msptP95: number | null;
+  msptP99: number | null;
   /** Working set of the container, which is more than the JVM heap. */
   memoryUsedMb: number | null;
   memoryLimitMb: number | null;
+  heapMb: number;
   uptimeSeconds: number | null;
   history: ServerStatSample[];
+}
+
+export interface LagEntityTypeCount {
+  type: string;
+  count: number;
+}
+
+export interface LagDimension {
+  id: string;
+  players: string[];
+  entities: number | null;
+  items: number | null;
+  /** Forge and NeoForge only. */
+  meanTickMs: number | null;
+  /** Paper and Purpur only. */
+  topEntities: LagEntityTypeCount[];
+}
+
+export interface LagPlayer {
+  nick: string;
+  dimension: string | null;
+  position: { x: number; y: number; z: number } | null;
+  nearbyEntities: number | null;
+  nearbyItems: number | null;
+}
+
+export interface LagFinding {
+  severity: 'warning' | 'info';
+  message: string;
+}
+
+/** GET /api/servers/:id/lag-snapshot. */
+export interface LagSnapshot {
+  takenAt: string;
+  radius: number;
+  dimensions: LagDimension[];
+  players: LagPlayer[];
+  findings: LagFinding[];
 }
 
 /** GET /api/servers/:id/players. */

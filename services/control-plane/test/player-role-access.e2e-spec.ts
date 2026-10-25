@@ -42,6 +42,7 @@ import { ModpacksController } from '../src/modpacks/modpacks.controller';
 import { ModpackInstallerService } from '../src/modpacks/modpack-installer.service';
 import { ModpackCatalogService } from '../src/modpacks/modpack-catalog.service';
 import { ServerStatsController } from '../src/stats/server-stats.controller';
+import { LagSnapshotService } from '../src/stats/lag-snapshot.service';
 import { ServerStatsService } from '../src/stats/server-stats.service';
 
 describe('Player Role Access & MeController E2E (#216)', () => {
@@ -168,6 +169,7 @@ describe('Player Role Access & MeController E2E (#216)', () => {
         { provide: ModpackInstallerService, useValue: {} },
         { provide: ModpackCatalogService, useValue: {} },
         { provide: ServerStatsService, useValue: { getStats: jest.fn() } },
+        { provide: LagSnapshotService, useValue: { take: jest.fn() } },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_GUARD, useClass: RolesGuard },
         { provide: APP_FILTER, useClass: ApiExceptionFilter },
