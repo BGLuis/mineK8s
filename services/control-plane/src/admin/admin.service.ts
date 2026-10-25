@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
@@ -18,12 +18,15 @@ import {
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
+import { AppConfigService } from '../config/app-config.service';
+import { ServerIconService } from '../servers/server-icon.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { SimulateAccessDto, SimulatedUserAccessResultDto } from './dto/simulate-access.dto';
 import { SmartKickDto } from './dto/smart-kick.dto';
 import { AccessibleServerDto, UserSummaryDto } from './dto/user-summary.dto';
 import { AccessMatrixDto } from './dto/access-matrix.dto';
 import { IdentityProbeDto, IdentityProbeResultDto } from './dto/identity-probe.dto';
+import { MyServerDto } from './dto/my-server.dto';
 
 @Injectable()
 export class AdminService {
@@ -47,6 +50,8 @@ export class AdminService {
     private readonly consoleDriver: MinecraftRconConsoleDriver,
     private readonly accessResolver: AccessResolverService,
     private readonly playerSessionsService: PlayerSessionsService,
+    @Optional() private readonly appConfig?: AppConfigService,
+    @Optional() private readonly serverIconService?: ServerIconService,
   ) {}
 
   /**
@@ -764,5 +769,64 @@ export class AdminService {
     });
 
     return { success: true, terminated_connections: revoked.terminated_connections_count };
+  }
+
+  /**
+   * Lista os servidores acessíveis pelo jogador logado para exibição na Área do Jogador (#216).
+   * Retorna apenas informações sanitizadas de cada mundo. Mundos em manutenção continuam
+   * visíveis com state 'MAINTENANCE' caso o usuário possua a concessão base subjacente.
+   */
+  async listMyServers(user: User): Promise<MyServerDto[]> {
+    const servers = await this.serverRepo.find({ order: { name: 'ASC' } });
+    if (servers.length === 0) {
+      return [];
+    }
+
+    const baseServers = servers.map(
+      (s) =>
+        ({
+          ...s,
+          is_maintenance: false,
+          access_policy: s.access_policy === 'MAINTENANCE' ? 'GROUP' : s.access_policy,
+        }) as Server,
+    );
+
+    const [baseExps, liveExps] = await Promise.all([
+      this.accessResolver.explain([user.id], { users: [user], servers: baseServers }),
+      this.accessResolver.explain([user.id], { users: [user], servers }),
+    ]);
+
+    const baseMap = new Map(baseExps.map((e) => [e.serverId, e]));
+    const liveMap = new Map(liveExps.map((e) => [e.serverId, e]));
+
+    const worldsDomain = this.appConfig?.access?.worldsDomain ?? '';
+    const results: MyServerDto[] = [];
+
+    for (const server of servers) {
+      const liveExp = liveMap.get(server.id);
+      const baseExp = baseMap.get(server.id);
+      const isMaintenance =
+        Boolean(server.is_maintenance) || server.access_policy === 'MAINTENANCE';
+
+      const isIncluded = Boolean(liveExp?.allowed) || (Boolean(baseExp?.allowed) && isMaintenance);
+      if (!isIncluded) {
+        continue;
+      }
+
+      const state = isMaintenance ? 'MAINTENANCE' : server.state;
+      const address = worldsDomain ? `${server.subdomain}.${worldsDomain}` : server.subdomain;
+      const playersOnline = this.playerSessionsService.count(server.id);
+      const icon = this.serverIconService ? await this.serverIconService.dataUri(server) : null;
+
+      results.push({
+        name: server.name,
+        address,
+        state,
+        playersOnline,
+        icon,
+      });
+    }
+
+    return results;
   }
 }

@@ -180,7 +180,7 @@ export class TailscalePostureService implements OnApplicationBootstrap {
                 description: `VULNERABILIDADE: Jogadores possuem acesso a todas as portas do host (${dst}).`,
                 rawRule: rule,
               });
-            } else if (port !== '25565') {
+            } else if (port !== '25565' && port !== '8080') {
               isVulnerable = true;
               onlyGamePortExposed = false;
               findings.push({
@@ -356,12 +356,16 @@ export class TailscalePostureService implements OnApplicationBootstrap {
       },
       acls: [
         { action: 'accept', src: ['autogroup:admin'], dst: ['*:*'] },
-        { action: 'accept', src: ['tag:mc-player'], dst: ['tag:mc-gateway:25565'] },
+        {
+          action: 'accept',
+          src: ['tag:mc-player'],
+          dst: ['tag:mc-gateway:25565', 'tag:mc-gateway:8080'],
+        },
       ],
       tests: [
         {
           src: 'tag:mc-player',
-          accept: ['tag:mc-gateway:25565'],
+          accept: ['tag:mc-gateway:25565', 'tag:mc-gateway:8080'],
           deny: ['tag:mc-gateway:22', 'tag:mc-gateway:3000', 'tag:mc-gateway:9090'],
         },
       ],

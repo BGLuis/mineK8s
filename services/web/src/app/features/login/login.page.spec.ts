@@ -20,8 +20,11 @@ describe('LoginPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.fn>;
 
-  async function setup(redirect?: string) {
+  async function setup(redirect?: string, initialToken?: string) {
     sessionStorage.clear();
+    if (initialToken) {
+      sessionStorage.setItem('mc.access_token', initialToken);
+    }
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -95,7 +98,7 @@ describe('LoginPage', () => {
     expect(navigate).toHaveBeenCalledWith('/');
   });
 
-  it('refuses a VPN identity that is not an admin and does not keep its session', async () => {
+  it('signs in as PLAYER via VPN, keeps the session, and navigates to /meus-mundos (#216)', async () => {
     const { fixture, el } = await setup();
 
     button(el, 'Entrar como admin').click();
@@ -104,9 +107,16 @@ describe('LoginPage', () => {
       .flush({ access_token: 'jwt', user: { ...admin, role: 'PLAYER' } });
     await fixture.whenStable();
 
-    expect(el.textContent).toContain('não é de administrador');
-    expect(navigate).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem('mc.access_token')).toBeNull();
+    expect(navigate).toHaveBeenCalledWith('/meus-mundos');
+    expect(sessionStorage.getItem('mc.access_token')).toBe('jwt');
+  });
+
+  it('navigates to /meus-mundos on init if restored user is a PLAYER (#216)', async () => {
+    const { fixture } = await setup(undefined, 'saved-jwt');
+    http.expectOne('/api/auth/me').flush({ ...admin, role: 'PLAYER' });
+    await fixture.whenStable();
+
+    expect(navigate).toHaveBeenCalledWith('/meus-mundos');
   });
 
   it('explains when the VPN does not identify the visitor', async () => {

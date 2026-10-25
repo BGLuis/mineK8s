@@ -10,6 +10,7 @@ import { UserServerAccess } from '../database/entities/user-server-access.entity
 import { TailscaleDevice } from '../database/entities/tailscale-device.entity';
 import { Group } from '../database/entities/group.entity';
 import { Server } from '../database/entities/server.entity';
+import { ServerGroup } from '../database/entities/server-group.entity';
 
 import { ConsoleModule } from '../console/console.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
@@ -40,6 +41,7 @@ import { TailscaleController } from './tailscale.controller';
       TailscaleDevice,
       Group,
       Server,
+      ServerGroup,
     ]),
     ConsoleModule,
     forwardRef(() => GatewayIpcModule),

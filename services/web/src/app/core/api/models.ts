@@ -894,3 +894,12 @@ export interface SettingsSnapshot {
 
 /** PATCH /api/settings: null removes the saved value, so the environment (or the default) applies again. */
 export type SettingsChanges = Record<string, string | number | boolean | null>;
+
+/** GET /api/me/servers (Player area card, #216). */
+export interface PlayerServer {
+  name: string;
+  address: string;
+  state: ServerState | 'MAINTENANCE';
+  playersOnline: number;
+  icon: string | null;
+}

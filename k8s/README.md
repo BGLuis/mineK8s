@@ -80,3 +80,17 @@ kubectl -n minekubernetes rollout restart deploy/control-plane deploy/gateway
 Cada pod novo do control plane roda as migrações pendentes no init container `migrate`, então não há passo manual; "No migrations are pending" no log do `migrate` significa que o banco já estava em dia. Se o `migrate` falhar (por exemplo, migração com erro), o pod não sobe e o `rollout status` não conclui; veja o log com o comando acima.
 
 Mudanças em `site.env` ou `control-plane.env` mudam o nome gerado do Secret ou do ConfigMap, e o `kubectl apply -k k8s` já reinicia o control plane.
+
+## Regras de ACL da Tailscale e nós compartilhados (`autogroup:shared`)
+
+De acordo com o modelo Zero-Trust (ver `k8s/tailscale/policy.hujson` e KB 1084 da Tailscale), dispositivos compartilhados com a Tailnet (`autogroup:shared`) ou tagueados com `tag:mc-player` devem ter acesso liberado às portas do Gateway Minecraft (`25565`) e da área do jogador no painel (`8080`):
+
+```hujson
+{
+  "action": "accept",
+  "src": ["autogroup:shared", "tag:mc-player"],
+  "dst": ["tag:mc-gateway:25565", "tag:mc-gateway:8080"]
+}
+```
+
+Isso garante que jogadores convidados via Tailscale Share possam acessar o servidor Minecraft e abrir a área do jogador no painel web sem permissão a outras portas administrativas do host (SSH `22`, API interna `3000`, etc.).

@@ -52,7 +52,7 @@ As versões anteriores da documentação propunham atribuir tags dinâmicas como
 ### 2.2 Política de Tag Única & Autorização em Camada de Aplicação
 A solução arquitetural definitiva estabelece:
 1. **Tag Estática Única na Policy:** Todos os convidados ingressam na Tailnet sob a tag compartilhada `tag:mc-player`.
-2. **Regra de Rede no huJSON:** A política de rede concede permissão para `tag:mc-player` conectar-se exclusivamente à porta `25565` do Gateway L7:
+2. **Regra de Rede no huJSON:** A política de rede concede permissão para `tag:mc-player` conectar-se às portas `25565` do Gateway L7 e `8080` do painel (área do jogador):
    ```json
    {
      "tagOwners": {
@@ -63,7 +63,7 @@ A solução arquitetural definitiva estabelece:
        {
          "action": "accept",
          "src": ["tag:mc-player"],
-         "dst": ["tag:mc-gateway:25565"]
+         "dst": ["tag:mc-gateway:25565", "tag:mc-gateway:8080"]
        }
      ]
    }

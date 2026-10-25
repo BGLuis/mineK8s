@@ -11,9 +11,12 @@ import { UserServerAccess } from '../database/entities/user-server-access.entity
 import { TailscaleModule } from '../tailscale/tailscale.module';
 import { GatewayIpcModule } from '../gateway-ipc/gateway-ipc.module';
 import { ConsoleModule } from '../console/console.module';
+import { AppConfigModule } from '../config/app-config.module';
+import { ServerIconModule } from '../servers/server-icon.module';
 
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
+import { MeController } from './me.controller';
 
 @Module({
   imports: [
@@ -21,8 +24,10 @@ import { AdminController } from './admin.controller';
     TailscaleModule,
     GatewayIpcModule,
     ConsoleModule,
+    AppConfigModule,
+    ServerIconModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, MeController],
   providers: [AdminService],
   exports: [AdminService],
 })

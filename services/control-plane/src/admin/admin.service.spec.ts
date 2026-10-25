@@ -15,6 +15,8 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let mockGatewayIpcService: any;
   let mockConsoleDriver: any;
   let mockPlayerSessionsService: any;
+  let mockAppConfigService: any;
+  let mockServerIconService: any;
 
   beforeEach(() => {
     mockGroupRepo = {
@@ -84,6 +86,19 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     mockPlayerSessionsService = {
       list: jest.fn(() => []),
+      count: jest.fn(() => 0),
+    };
+
+    mockAppConfigService = {
+      access: {
+        worldsDomain: 'mc.example.com',
+      },
+    };
+
+    mockServerIconService = {
+      dataUri: jest.fn(async (server: any) =>
+        server.id === 's-icon' ? 'data:image/png;base64,mocked' : null,
+      ),
     };
 
     const accessResolver = new AccessResolverService(
@@ -108,6 +123,8 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockConsoleDriver,
       accessResolver,
       mockPlayerSessionsService,
+      mockAppConfigService,
+      mockServerIconService,
     );
   });
 
@@ -1200,6 +1217,156 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(result.wouldBind).toBe(false);
       expect(result.nicknameCheck).toBeNull();
       expect(result.servers).toEqual([]);
+    });
+  });
+
+  describe('listMyServers (#216)', () => {
+    it('returns only allowed worlds for a PLAYER user and omits internal IDs', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const server1 = {
+        id: 's-allowed',
+        name: 'Survival',
+        subdomain: 'survival',
+        resource_name: 'srv-res-1',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      const server2 = {
+        id: 's-forbidden',
+        name: 'VIP Only',
+        subdomain: 'vip',
+        resource_name: 'srv-res-2',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: false,
+      };
+
+      mockServerRepo.find.mockResolvedValue([server1, server2]);
+      mockPlayerSessionsService.count.mockReturnValue(3);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation(
+        (_userCtx: any, serverCtx: any) => {
+          if (serverCtx.serverId === 's-allowed') {
+            return { allowed: true, reason: 'PUBLIC_POLICY' };
+          }
+          return { allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' };
+        },
+      );
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      const card = result[0];
+      expect(card.name).toBe('Survival');
+      expect(card.address).toBe('survival.mc.example.com');
+      expect(card.state).toBe('READY');
+      expect(card.playersOnline).toBe(3);
+      // Sanitized: must NOT contain id or resource_name
+      expect(card).not.toHaveProperty('id');
+      expect(card).not.toHaveProperty('resource_name');
+    });
+
+    it('marks a world in maintenance as state MAINTENANCE if the player has base access to it', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const maintenanceServer = {
+        id: 's-maint',
+        name: 'Creative World',
+        subdomain: 'creative',
+        resource_name: 'srv-res-maint',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+      };
+
+      mockServerRepo.find.mockResolvedValue([maintenanceServer]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation(
+        (_userCtx: any, serverCtx: any) => {
+          if (serverCtx.policy === 'MAINTENANCE') {
+            return { allowed: false, reason: 'MAINTENANCE_MODE' };
+          }
+          return { allowed: true, reason: 'ALLOWED_BY_GROUP' };
+        },
+      );
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Creative World');
+      expect(result[0].state).toBe('MAINTENANCE');
+      expect(result[0]).not.toHaveProperty('id');
+      expect(result[0]).not.toHaveProperty('resource_name');
+    });
+
+    it('does NOT include a maintenance world if the player has no base access to it', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const maintenanceServer = {
+        id: 's-maint-unauthorized',
+        name: 'Admin Build',
+        subdomain: 'adminbuild',
+        resource_name: 'srv-res-admin',
+        state: 'READY',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+      };
+
+      mockServerRepo.find.mockResolvedValue([maintenanceServer]);
+
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({
+        allowed: false,
+        reason: 'NOT_IN_ALLOWED_GROUPS',
+      });
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('includes icon dataUri when serverIconService provides one', async () => {
+      const player = {
+        id: 'u-player',
+        minecraft_nick: 'Alex',
+        role: 'PLAYER',
+        isActive: true,
+      };
+
+      const serverWithIcon = {
+        id: 's-icon',
+        name: 'Icon Server',
+        subdomain: 'iconic',
+        resource_name: 'srv-res-icon',
+        state: 'READY',
+        access_policy: 'PUBLIC',
+        is_maintenance: false,
+      };
+
+      mockServerRepo.find.mockResolvedValue([serverWithIcon]);
+      mockAccessDecisionEngine.evaluateAccess.mockReturnValue({ allowed: true });
+
+      const result = await service.listMyServers(player as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].icon).toBe('data:image/png;base64,mocked');
     });
   });
 });
