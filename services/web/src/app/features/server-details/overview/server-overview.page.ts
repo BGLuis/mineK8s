@@ -30,7 +30,18 @@ import { errorReason } from '../../dashboard/server-lifecycle';
 import { formatDuration } from '../format';
 import { ServerDetailStore } from '../server-detail.store';
 import { McUpdateVersionDialog } from '../update-version-dialog';
-import { formatMemory, TPS_TARGET, tpsLevel, tpsSeries } from './performance';
+import { McLagAnalysis } from './lag-analysis';
+import {
+  formatMemory,
+  METRIC_HELP,
+  MetricVerdict,
+  memoryVerdict,
+  msptVerdict,
+  TPS_TARGET,
+  tpsLevel,
+  tpsSeries,
+  tpsVerdict,
+} from './performance';
 import {
   QuickSettings,
   diffSettings,
@@ -79,6 +90,7 @@ function avatarColor(nick: string): string {
   imports: [
     FormsModule,
     McButton,
+    McLagAnalysis,
     McPanel,
     McPlayerHead,
     McRamSlider,
@@ -93,20 +105,40 @@ function avatarColor(nick: string): string {
           <mc-panel title="Desempenho">
             @if (store.stats(); as stats) {
               @if (stats.history.length > 0) {
-                <dl class="mb-4 flex flex-wrap gap-x-8 gap-y-2">
+                <dl class="mb-4 grid gap-4 sm:grid-cols-3">
                   <div>
                     <dt class="t-caption text-text-muted">TPS</dt>
                     <dd class="t-title-sm" [class]="tpsTextClass()">{{ tpsText() }}</dd>
+                    @if (verdicts().tps; as verdict) {
+                      <dd class="t-caption mt-1" [class]="verdictClass(verdict)">{{ verdict.text }}</dd>
+                    }
                   </div>
                   <div>
                     <dt class="t-caption text-text-muted">MSPT</dt>
                     <dd class="t-title-sm">{{ msptText() }}</dd>
+                    @if (percentilesText(); as percentiles) {
+                      <dd class="t-caption text-text-muted">{{ percentiles }}</dd>
+                    }
+                    @if (verdicts().mspt; as verdict) {
+                      <dd class="t-caption mt-1" [class]="verdictClass(verdict)">{{ verdict.text }}</dd>
+                    }
                   </div>
                   <div>
                     <dt class="t-caption text-text-muted">Memória do container</dt>
                     <dd class="t-title-sm">{{ formatMemory(stats.memoryUsedMb, stats.memoryLimitMb) }}</dd>
+                    @if (verdicts().memory; as verdict) {
+                      <dd class="t-caption mt-1" [class]="verdictClass(verdict)">{{ verdict.text }}</dd>
+                    }
                   </div>
                 </dl>
+                <details class="mb-4">
+                  <summary class="t-label-md cursor-pointer">O que significam esses números?</summary>
+                  <dl class="t-body-md mt-2 flex flex-col gap-2 text-text-muted">
+                    <div><dt class="t-body-strong text-text-primary">TPS</dt><dd>{{ help.tps }}</dd></div>
+                    <div><dt class="t-body-strong text-text-primary">MSPT</dt><dd>{{ help.mspt }} P95 e P99 são os ticks mais lentos: 5% e 1% deles passam desses valores; quando estão bem acima da média, o lag vem em engasgos.</dd></div>
+                    <div><dt class="t-body-strong text-text-primary">Memória</dt><dd>{{ help.memory }}</dd></div>
+                  </dl>
+                </details>
                 @if (tpsBars().length > 0) {
                   <div
                     class="bevel-sunken flex h-28 items-end gap-0.5 bg-bg-sunken p-2"
@@ -142,6 +174,10 @@ function avatarColor(nick: string): string {
               </p>
             }
           </mc-panel>
+
+          @if (server.state === 'READY') {
+            <mc-lag-analysis [serverId]="server.id" />
+          }
 
           <mc-panel [title]="'Jogadores online · ' + onlinePlayers().length">
             @if (onlinePlayers().length === 0) {
@@ -272,6 +308,7 @@ export class ServerOverviewPage {
 
   protected readonly tpsTarget = TPS_TARGET;
   protected readonly formatMemory = formatMemory;
+  protected readonly help = METRIC_HELP;
 
   protected readonly tpsText = computed(() => {
     const tps = this.store.stats()?.tps;
@@ -286,6 +323,22 @@ export class ServerOverviewPage {
   protected readonly msptText = computed(() => {
     const mspt = this.store.stats()?.mspt;
     return mspt == null ? '—' : `${mspt.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ms`;
+  });
+  protected readonly percentilesText = computed(() => {
+    const stats = this.store.stats();
+    if (stats?.msptP95 == null || stats.msptP99 == null) {
+      return null;
+    }
+    const format = (value: number) => value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+    return `P95 ${format(stats.msptP95)} ms · P99 ${format(stats.msptP99)} ms`;
+  });
+  protected readonly verdicts = computed(() => {
+    const stats = this.store.stats();
+    return {
+      tps: stats?.tps == null ? null : tpsVerdict(stats.tps),
+      mspt: stats ? msptVerdict(stats.mspt, stats.msptP99) : null,
+      memory: stats ? memoryVerdict(stats.memoryUsedMb, stats.memoryLimitMb, stats.heapMb) : null,
+    };
   });
   protected readonly tpsBars = computed(() => tpsSeries(this.store.stats()?.history ?? []));
   protected readonly chartLabel = computed(() => {
@@ -372,6 +425,10 @@ export class ServerOverviewPage {
         untracked(() => this.resetForm(server));
       }
     });
+  }
+
+  protected verdictClass(verdict: MetricVerdict): string {
+    return verdict.level === 'success' ? 'text-text-muted' : TEXT_CLASSES[verdict.level];
   }
 
   protected barClass(tps: number): string {
