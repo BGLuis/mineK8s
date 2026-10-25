@@ -93,4 +93,4 @@ De acordo com o modelo Zero-Trust (ver `k8s/tailscale/policy.hujson` e KB 1084 d
 }
 ```
 
-Isso garante que jogadores convidados via Tailscale Share possam acessar o servidor Minecraft e abrir a área do jogador no painel web sem permissão a outras portas administrativas do host (SSH `22`, API interna `3000`, etc.).
+Isso garante que jogadores convidados via Tailscale Share possam acessar o servidor Minecraft e abrir o painel web (`8080`). Como o control plane serve tanto a API administrativa quanto a área do jogador na porta `8080`, abrir essa porta expõe a superfície HTTP inteira aos jogadores, ficando a API administrativa protegida estritamente por autenticação JWT e `RolesGuard` (Risco 1 da epic #208), sem expor portas do host como SSH (`22`) ou gRPC (`50051`).
