@@ -425,13 +425,22 @@ describe('GatewayIpcService (RF-GW-16, RF-MG-04)', () => {
       expect(deviceRepo.save).not.toHaveBeenCalled();
     });
 
-    it('com mais de um convite pendente não adivinha de quem é o nó', async () => {
+    it('com mais de um convite pendente não adivinha de quem é o nó e emite aviso operacional', async () => {
       pending.push({ id: 'dev-2', user: { id: 'user-other' }, status: 'PENDING', node_id: null });
+      const warnSpy = jest.spyOn((service as any).logger, 'warn');
 
       const resp = await service.resolvePlayerIdentity(request);
 
       expect(resp.found).toBe(false);
       expect(deviceRepo.save).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('não foi vinculado: 2 convites pendentes'),
+      );
+
+      warnSpy.mockClear();
+      const probe = await service.probePlayerIdentity({ clientIp: request.client_ip });
+      expect(probe.warning).toContain('2 convites pendentes');
+      expect(warnSpy).not.toHaveBeenCalled();
     });
 
     it('sem convite pendente o nó segue não registrado', async () => {

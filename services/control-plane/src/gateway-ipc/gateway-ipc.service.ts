@@ -60,6 +60,7 @@ export interface IdentityProbeLookupResult {
   wouldBind: boolean;
   networkIdentity: NetworkIdentity | null;
   pendingDevice: TailscaleDevice | null;
+  warning?: string | null;
 }
 
 /** Prazo para o Gateway responder um comando; derrubar sockets é imediato, então passar disso é falha. */
@@ -217,6 +218,7 @@ export class GatewayIpcService {
   }): Promise<IdentityProbeLookupResult> {
     let user: User | null = null;
     let netId: NetworkIdentity | null = null;
+    let warning: string | null = null;
 
     // 1. Busca por tailscaleUserId direto
     if (input.tailscaleUserId) {
@@ -282,6 +284,11 @@ export class GatewayIpcService {
           }
 
           // Verificação de nó compartilhado (dry-run de bindSharedUser)
+          /**
+           * Quem recebeu o nó compartilhado entra com a própria conta Tailscale, então o e-mail do login (que o
+           * Tailscale já verificou) liga a conta ao cadastro feito pelo admin. O ID da conta fica gravado no
+           * primeiro acesso e as buscas seguintes usam só ele.
+           */
           const login = netId.loginName?.trim().toLowerCase();
           if (
             this.configService?.tailscale?.nodeSharingEnabled !== false &&
@@ -313,16 +320,17 @@ export class GatewayIpcService {
                   pendingDevice: null,
                 };
               }
+              warning = `Cadastro de ${login} já pertence a outra conta Tailscale; acesso não vinculado`;
             }
           }
 
           // Verificação de convite pendente (dry-run de bindPendingDevice)
-          if (
-            this.deviceRepository &&
-            netId.nodeId &&
-            !netId.isOwner &&
-            netId.tags?.includes(PLAYER_TAG)
-          ) {
+          /**
+           * O convite entrega uma chave com a tag estática dos jogadores e nada diz qual nó a usou. Então o
+           * primeiro nó com essa tag que o Gateway apresenta fica com o convite pendente, desde que haja
+           * exatamente um: com vários, qualquer palpite daria a um jogador as permissões de outro.
+           */
+          if (this.deviceRepository && netId.nodeId && netId.tags?.includes(PLAYER_TAG)) {
             const pending = await this.deviceRepository.find({
               where: { status: 'PENDING', node_id: IsNull() },
               relations: { user: true },
@@ -336,6 +344,9 @@ export class GatewayIpcService {
                 networkIdentity: netId,
                 pendingDevice: pending[0],
               };
+            }
+            if (pending.length !== 1) {
+              warning = `Nó ${netId.nodeId} com a tag ${PLAYER_TAG} não foi vinculado: ${pending.length} convites pendentes`;
             }
           }
         }
@@ -352,6 +363,7 @@ export class GatewayIpcService {
       wouldBind: false,
       networkIdentity: netId ?? null,
       pendingDevice: null,
+      warning,
     };
   }
 
@@ -400,6 +412,10 @@ export class GatewayIpcService {
     }
 
     if (!user) {
+      if (lookup.warning) {
+        this.logger.warn(lookup.warning);
+      }
+
       this.unlinkedAttempts?.record({
         tailscaleUserId: lookup.networkIdentity?.userId || req.tailscale_user_id || '',
         loginName: lookup.networkIdentity?.loginName || '',
