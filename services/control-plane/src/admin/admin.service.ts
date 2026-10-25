@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { Group } from '../database/entities/group.entity';
 import { User } from '../database/entities/user.entity';
@@ -10,6 +10,10 @@ import { ServerGroup } from '../database/entities/server-group.entity';
 import { UserServerAccess } from '../database/entities/user-server-access.entity';
 import { effectiveAccessPolicy } from '../tailscale/decision/effective-access-policy';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
+import {
+  AccessGrantedBy,
+  AccessResolverService,
+} from '../tailscale/decision/access-resolver.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { MinecraftRconConsoleDriver } from '../console/minecraft-rcon-console.driver';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -36,6 +40,7 @@ export class AdminService {
     private readonly accessDecisionEngine: AccessDecisionEngineService,
     private readonly gatewayIpcService: GatewayIpcService,
     private readonly consoleDriver: MinecraftRconConsoleDriver,
+    private readonly accessResolver: AccessResolverService,
   ) {}
 
   /**
@@ -93,37 +98,67 @@ export class AdminService {
       throw new NotFoundException('User not found');
     }
 
-    const [servers, serverGroups, userGroups, userAccesses] = await Promise.all([
-      this.serverRepo.find({ order: { name: 'ASC' } }),
-      this.serverGroupRepo.find(),
-      this.userGroupRepo.find({ where: { user_id: userId } }),
-      this.userServerAccessRepo.find({ where: { user_id: userId } }),
-    ]);
+    const servers = await this.serverRepo.find({ order: { name: 'ASC' } });
+    const explanations = await this.accessResolver.explain([userId], {
+      servers,
+      users: [user],
+    });
 
-    const groupIds = userGroups.map((ug) => ug.group_id);
-    const directServerIds = new Set(userAccesses.map((ua) => ua.server_id));
+    const allowedServerIds = new Set(explanations.filter((e) => e.allowed).map((e) => e.serverId));
 
     return servers
-      .filter(
-        (server) =>
-          this.accessDecisionEngine.evaluateAccess(
-            { userId: user.id, role: user.role, groupIds, isActive: true },
-            {
-              serverId: server.id,
-              policy: effectiveAccessPolicy(server),
-              allowedGroupIds: serverGroups
-                .filter((sg) => sg.server_id === server.id)
-                .map((sg) => sg.group_id),
-              allowedUserIds: directServerIds.has(server.id) ? [user.id] : [],
-            },
-          ).allowed,
-      )
+      .filter((s) => allowedServerIds.has(s.id))
       .map((server) => ({
         id: server.id,
         name: server.name,
         subdomain: server.subdomain,
         state: server.state,
       }));
+  }
+
+  /**
+   * Explicação detalhada do acesso do usuário a todos os servidores (#211).
+   */
+  async explainUserAccess(userId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      subdomain: string;
+      state: string;
+      access_policy: string;
+      is_maintenance: boolean;
+      allowed: boolean;
+      reason: string;
+      grantedBy: AccessGrantedBy | null;
+    }>
+  > {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const servers = await this.serverRepo.find({ order: { name: 'ASC' } });
+    const explanations = await this.accessResolver.explain([userId], {
+      servers,
+      users: [user],
+    });
+
+    const explanationMap = new Map(explanations.map((e) => [e.serverId, e]));
+
+    return servers.map((server) => {
+      const exp = explanationMap.get(server.id);
+      return {
+        id: server.id,
+        name: server.name,
+        subdomain: server.subdomain,
+        state: server.state,
+        access_policy: server.access_policy || 'GROUP',
+        is_maintenance: Boolean(server.is_maintenance),
+        allowed: exp?.allowed ?? false,
+        reason: exp?.reason ?? 'UNKNOWN',
+        grantedBy: exp?.grantedBy ?? null,
+      };
+    });
   }
 
   /**
@@ -190,14 +225,7 @@ export class AdminService {
     // 1. Remove o vínculo relacional do usuário com o grupo
     await this.userGroupRepo.delete({ group_id: groupId, user_id: userId });
 
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      relations: {
-        user_groups: true,
-        server_accesses: true,
-      },
-    });
-
+    const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) {
       return { kickedServers: [] };
     }
@@ -206,64 +234,58 @@ export class AdminService {
     const serverGroups = await this.serverGroupRepo.find({
       where: { group_id: groupId },
     });
+    if (serverGroups.length === 0) {
+      return { kickedServers: [] };
+    }
 
-    const remainingGroupIds = (user.user_groups || [])
-      .map((ug) => ug.group_id)
-      .filter((g) => g !== groupId);
+    const candidateServerIds = serverGroups.map((sg) => sg.server_id);
+    let candidateServers = await this.serverRepo.find({
+      where: { id: In(candidateServerIds) },
+      relations: { minecraft_settings: true },
+    });
+    if (candidateServers.length === 0 && candidateServerIds.length > 0) {
+      const fetched = await Promise.all(
+        candidateServerIds.map((id) =>
+          this.serverRepo.findOne({
+            where: { id },
+            relations: { minecraft_settings: true },
+          }),
+        ),
+      );
+      candidateServers = fetched.filter((s): s is Server => Boolean(s));
+    }
+
+    const explanations = await this.accessResolver.explain([userId], {
+      servers: candidateServers,
+      users: [user],
+    });
 
     const kickedServers: string[] = [];
 
-    // 3. Para cada servidor, verifica se o usuário perdeu o acesso total
-    for (const sg of serverGroups) {
-      const server = await this.serverRepo.findOne({
-        where: { id: sg.server_id },
-        relations: {
-          server_groups: true,
-          minecraft_settings: true,
-        },
-      });
+    for (const exp of explanations) {
+      if (!exp.allowed) {
+        const server = candidateServers.find((s) => s.id === exp.serverId);
+        if (!server) continue;
 
-      if (!server) continue;
-
-      const userContext = {
-        userId: user.id,
-        role: user.role,
-        groupIds: remainingGroupIds,
-        isTailscaleOwner: false,
-        isActive: true,
-      };
-
-      const serverContext = {
-        serverId: server.id,
-        policy: server.access_policy || 'GROUP',
-        allowedGroupIds: (server.server_groups || []).map((g) => g.group_id),
-        allowedUserIds: (user.server_accesses || []).map((sa) => sa.user_id),
-        isMaintenance: Boolean(server.is_maintenance),
-      };
-
-      const decision = this.accessDecisionEngine.evaluateAccess(userContext, serverContext);
-
-      // Se não é mais permitido acessar este servidor, executa Smart Kick imediato (RF-TS-09 Nível 1)
-      if (!decision.allowed) {
         this.logger.log(
-          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${decision.reason})`,
+          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
         );
 
         const kickReason = '§cPermissão revogada pelo administrador.';
 
-        // Lado A: RCON kick no Minecraft JVM (E-06 compressão tratada nativamente pelo servidor)
-        try {
-          await this.consoleDriver.sendCommand(
-            server,
-            `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
-          );
-        } catch (rconErr: any) {
-          this.logger.debug(
-            `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
-          );
+        if (!server.state || server.state === 'READY') {
+          try {
+            await this.consoleDriver.sendCommand(
+              server,
+              `kick ${user.minecraft_nick} Permissao revogada pelo administrador`,
+            );
+          } catch (rconErr: any) {
+            this.logger.debug(
+              `RCON kick não enviado (servidor pode estar offline/hibernado): ${rconErr.message}`,
+            );
+          }
         }
 
-        // Lado B: gRPC IPC no Gateway L7 para derrubar socket do proxy se ativo
         try {
           await this.gatewayIpcService.revokePlayerSession({
             server_id: server.id,
@@ -321,7 +343,6 @@ export class AdminService {
     const server = await this.serverRepo.findOne({
       where: { id: serverId },
       relations: {
-        server_groups: true,
         minecraft_settings: true,
       },
     });
@@ -330,49 +351,34 @@ export class AdminService {
       return;
     }
 
-    const remainingAllowedGroupIds = (server.server_groups || [])
-      .filter((sg) => sg.group_id !== groupId)
-      .map((sg) => sg.group_id);
+    const userIds = userGroups.map((ug) => ug.user_id);
+    let users = await this.userRepo.find({
+      where: { id: In(userIds) },
+    });
+    if (users.length === 0 && userIds.length > 0) {
+      const fetched = await Promise.all(
+        userIds.map((id) => this.userRepo.findOne({ where: { id } })),
+      );
+      users = fetched.filter((u): u is User => Boolean(u));
+    }
 
-    for (const ug of userGroups) {
-      const user = await this.userRepo.findOne({
-        where: { id: ug.user_id },
-        relations: {
-          user_groups: true,
-          server_accesses: true,
-        },
-      });
+    const explanations = await this.accessResolver.explain(userIds, {
+      servers: [server],
+      users,
+    });
 
-      if (!user) continue;
+    for (const exp of explanations) {
+      if (!exp.allowed) {
+        const user = users.find((u) => u.id === exp.userId);
+        if (!user) continue;
 
-      const userContext = {
-        userId: user.id,
-        role: user.role,
-        groupIds: (user.user_groups || []).map((g) => g.group_id),
-        isTailscaleOwner: false,
-        isActive: true,
-      };
-
-      const serverContext = {
-        serverId: server.id,
-        policy: effectiveAccessPolicy(server),
-        allowedGroupIds: remainingAllowedGroupIds,
-        allowedUserIds: (user.server_accesses || [])
-          .filter((sa) => sa.server_id === server.id)
-          .map((sa) => sa.user_id),
-        isMaintenance: Boolean(server.is_maintenance),
-      };
-
-      const decision = this.accessDecisionEngine.evaluateAccess(userContext, serverContext);
-
-      if (!decision.allowed) {
         this.logger.log(
-          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${decision.reason})`,
+          `Smart Kick disparado: Usuário ${user.minecraft_nick} perdeu acesso ao servidor ${server.id} (${exp.reason})`,
         );
 
         const kickReason = '§cPermissão revogada pelo administrador.';
 
-        if (server.state === 'READY') {
+        if (!server.state || server.state === 'READY') {
           try {
             await this.consoleDriver.sendCommand(
               server,

@@ -4,6 +4,7 @@ import { AdminService } from '../admin/admin.service';
 import { GatewayIpcService } from '../gateway-ipc/gateway-ipc.service';
 import { PlayerSessionsService } from '../gateway-ipc/player-sessions.service';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
+import { AccessResolverService } from '../tailscale/decision/access-resolver.service';
 import { InvitesService } from '../tailscale/invites/invites.service';
 import {
   Group,
@@ -37,6 +38,15 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
 
     const repo = <T extends object>(entity: new () => T) => ds.getRepository(entity);
     const engine = new AccessDecisionEngineService();
+    const accessResolver = new AccessResolverService(
+      repo(User),
+      repo(Server),
+      repo(ServerGroup),
+      repo(UserGroup),
+      repo(UserServerAccess),
+      repo(Group),
+      engine,
+    );
     admin = new AdminService(
       repo(Group),
       repo(User),
@@ -47,6 +57,7 @@ describeWithDatabase('Acesso e convites contra Postgres real', () => {
       engine,
       {} as any,
       {} as any,
+      accessResolver,
     );
     invites = new InvitesService(
       repo(Invite),

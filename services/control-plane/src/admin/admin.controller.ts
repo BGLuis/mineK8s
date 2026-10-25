@@ -31,6 +31,19 @@ export class AdminController {
     return this.adminService.listAccessibleServers(id);
   }
 
+  @Get('users/:id/access')
+  @ApiOperation({
+    summary: 'Explicar detalhadamente o acesso do usuário a todos os servidores (#211)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de mundos com avaliação de acesso e justificativa',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async explainUserAccess(@Param('id') id: string) {
+    return this.adminService.explainUserAccess(id);
+  }
+
   @Post('groups')
   @ApiOperation({ summary: 'Criar novo grupo de acesso de jogadores (RF-ARQ-20)' })
   @ApiResponse({ status: 201, description: 'Grupo criado com sucesso' })

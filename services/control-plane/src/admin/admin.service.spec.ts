@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AccessDecisionEngineService } from '../tailscale/decision/access-decision-engine.service';
+import { AccessResolverService } from '../tailscale/decision/access-resolver.service';
 
 describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
   let service: AdminService;
@@ -69,6 +70,16 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       sendCommand: jest.fn(async () => 'Kicked player'),
     };
 
+    const accessResolver = new AccessResolverService(
+      mockUserRepo,
+      mockServerRepo,
+      mockServerGroupRepo,
+      mockUserGroupRepo,
+      mockUserServerAccessRepo,
+      mockGroupRepo,
+      mockAccessDecisionEngine,
+    );
+
     service = new AdminService(
       mockGroupRepo,
       mockUserRepo,
@@ -79,6 +90,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       mockAccessDecisionEngine,
       mockGatewayIpcService,
       mockConsoleDriver,
+      accessResolver,
     );
   });
 
@@ -216,6 +228,85 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
       expect(mockConsoleDriver.sendCommand).not.toHaveBeenCalled();
       expect(mockGatewayIpcService.revokePlayerSession).not.toHaveBeenCalled();
       expect(result.kickedServers).toHaveLength(0);
+    });
+
+    it('user with direct access only to world A is not treated as allowed on INDIVIDUAL world B when removed from group (#211)', async () => {
+      const userId = 'u-player-1';
+      const groupId = 'grp-legacy';
+
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: groupId, user_id: userId });
+      mockUserRepo.findOne.mockResolvedValue({
+        id: userId,
+        minecraft_nick: 'Player1',
+        role: 'PLAYER',
+      });
+
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: groupId, server_id: 'world-b' }]);
+
+      const worldB = {
+        id: 'world-b',
+        subdomain: 'worldb',
+        access_policy: 'INDIVIDUAL',
+        is_maintenance: false,
+        state: 'READY',
+      };
+      mockServerRepo.find.mockResolvedValue([worldB]);
+
+      // User only has direct access to world-a, NOT world-b
+      mockUserServerAccessRepo.find.mockResolvedValue([{ user_id: userId, server_id: 'world-a' }]);
+      mockUserGroupRepo.find.mockResolvedValue([]);
+
+      const result = await service.removeUserFromGroup(groupId, userId);
+
+      expect(result.kickedServers).toContain('world-b');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        worldB,
+        expect.stringContaining('kick Player1'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'world-b',
+          minecraft_nick: 'Player1',
+        }),
+      );
+    });
+
+    it('non-admin online in a world in maintenance is kicked when removed from group (#211)', async () => {
+      const userId = 'u-player-2';
+      const groupId = 'grp-maint';
+
+      mockUserGroupRepo.findOne.mockResolvedValue({ group_id: groupId, user_id: userId });
+      mockUserRepo.findOne.mockResolvedValue({
+        id: userId,
+        minecraft_nick: 'Player2',
+        role: 'PLAYER',
+      });
+
+      mockServerGroupRepo.find.mockResolvedValue([{ group_id: groupId, server_id: 'world-maint' }]);
+
+      const worldMaint = {
+        id: 'world-maint',
+        subdomain: 'maint',
+        access_policy: 'GROUP',
+        is_maintenance: true,
+        state: 'READY',
+      };
+      mockServerRepo.find.mockResolvedValue([worldMaint]);
+      mockUserGroupRepo.find.mockResolvedValue([{ user_id: userId, group_id: 'other-group' }]);
+
+      const result = await service.removeUserFromGroup(groupId, userId);
+
+      expect(result.kickedServers).toContain('world-maint');
+      expect(mockConsoleDriver.sendCommand).toHaveBeenCalledWith(
+        worldMaint,
+        expect.stringContaining('kick Player2'),
+      );
+      expect(mockGatewayIpcService.revokePlayerSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          server_id: 'world-maint',
+          minecraft_nick: 'Player2',
+        }),
+      );
     });
   });
 
@@ -379,6 +470,15 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
     const user = { id: 'user-1', minecraft_nick: 'LucasCraft', real_name: 'Lucas', role: 'PLAYER' };
 
     beforeEach(() => {
+      const accessResolver = new AccessResolverService(
+        mockGroupRepo,
+        mockServerRepo,
+        mockServerGroupRepo,
+        mockUserGroupRepo,
+        mockUserServerAccessRepo,
+        mockGroupRepo,
+        new AccessDecisionEngineService(),
+      );
       service = new AdminService(
         mockGroupRepo,
         mockUserRepo,
@@ -389,6 +489,7 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
         new AccessDecisionEngineService(),
         mockGatewayIpcService,
         mockConsoleDriver,
+        accessResolver,
       );
     });
 
@@ -520,6 +621,54 @@ describe('AdminService (RF-ARQ-20, RF-TS-09, RF-GW-15)', () => {
 
     it('responde 404 para usuário inexistente', async () => {
       await expect(service.listAccessibleServers('nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('explainUserAccess (#211)', () => {
+    it('returns access explanation for all worlds', async () => {
+      mockAccessDecisionEngine.evaluateAccess.mockImplementation((_u: any, s: any) => {
+        if (s.policy === 'PUBLIC') return { allowed: true };
+        return { allowed: false, reason: 'NOT_IN_ALLOWED_GROUPS' };
+      });
+      const user = { id: 'u-1', role: 'PLAYER' };
+      mockUserRepo.findOne.mockResolvedValue(user);
+      mockServerRepo.find.mockResolvedValue([
+        {
+          id: 's-1',
+          name: 'World 1',
+          subdomain: 'w1',
+          state: 'READY',
+          access_policy: 'PUBLIC',
+          is_maintenance: false,
+        },
+        {
+          id: 's-2',
+          name: 'World 2',
+          subdomain: 'w2',
+          state: 'STOPPED',
+          access_policy: 'GROUP',
+          is_maintenance: false,
+        },
+      ]);
+
+      const explanations = await service.explainUserAccess('u-1');
+
+      expect(explanations).toHaveLength(2);
+      expect(explanations[0]).toMatchObject({
+        id: 's-1',
+        allowed: true,
+        grantedBy: { kind: 'POLICY', policy: 'PUBLIC' },
+      });
+      expect(explanations[1]).toMatchObject({
+        id: 's-2',
+        allowed: false,
+        grantedBy: null,
+      });
+    });
+
+    it('throws NotFoundException if user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+      await expect(service.explainUserAccess('u-none')).rejects.toThrow(NotFoundException);
     });
   });
 });
