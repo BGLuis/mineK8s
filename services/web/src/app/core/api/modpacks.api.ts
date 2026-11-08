@@ -7,9 +7,11 @@ import {
   InstallModpackResponse,
   ModpackSearchResponse,
   ModpackVersion,
+  UpdateModpackRequest,
+  UpdateVersionResponse,
 } from './models';
 
-/** modpacks.controller.ts, `api/modpacks/*` and `api/servers/:id/modpack/install`. */
+/** modpacks.controller.ts, `api/modpacks/*` and `api/servers/:id/modpack/{install,update}`. */
 @Injectable({ providedIn: 'root' })
 export class ModpacksApi {
   private readonly api = inject(ApiClient);
@@ -29,5 +31,9 @@ export class ModpacksApi {
 
   install(serverId: string, dto: InstallModpackRequest): Observable<InstallModpackResponse> {
     return this.api.post(`/api/servers/${serverId}/modpack/install`, dto);
+  }
+
+  update(serverId: string, dto: UpdateModpackRequest): Observable<UpdateVersionResponse> {
+    return this.api.post(`/api/servers/${serverId}/modpack/update`, dto);
   }
 }
