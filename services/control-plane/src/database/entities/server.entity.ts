@@ -65,6 +65,10 @@ export class Server {
   @Column({ type: 'varchar', length: 100, nullable: true })
   modpack_id: string | null;
 
+  /** Catalog version of the installed pack; null on servers installed before it was recorded. */
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  modpack_version_id: string | null;
+
   /** Java major of the runner image, chosen when the version was resolved; null on servers created before that. */
   @Column({ type: 'int', nullable: true })
   java_version: number | null;

@@ -50,6 +50,12 @@ import { DEFAULT_SERVER_LANGUAGE, defaultMotd } from './server-language';
 
 const MEMORY_RESIZABLE_STATES: ServerState[] = ['STOPPED', 'READY', 'CRASHED'];
 
+/** Swap of the installed pack version inside a version update: `install` runs after the pre-update backup and before boot. */
+export interface ModpackVersionChange {
+  versionId: string;
+  install: (server: Server) => Promise<void>;
+}
+
 @Injectable()
 export class ServersService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ServersService.name);
@@ -298,6 +304,8 @@ export class ServersService implements OnApplicationBootstrap {
       java_version: server.java_version,
       server_build: server.server_build,
       server_build_channel: server.server_build_channel,
+      modpack_id: server.modpack_id,
+      modpack_version_id: server.modpack_version_id,
       allocated_memory_mb: server.allocated_memory_mb,
       allocated_port: server.allocated_port,
       state: server.state,
@@ -703,6 +711,7 @@ export class ServersService implements OnApplicationBootstrap {
   async updateVersion(
     id: string,
     dto: UpdateVersionDto,
+    modpackChange?: ModpackVersionChange,
   ): Promise<{ message: string; version: string; rolledBack: boolean; taskId?: string }> {
     const server = await this.serverRepo.findOne({
       where: { id },
@@ -729,6 +738,7 @@ export class ServersService implements OnApplicationBootstrap {
 
     const previousVersion = server.game_version;
     const previousModpack = server.modpack_id;
+    const previousModpackVersion = server.modpack_version_id;
     const previousType = server.server_type;
     const previousRuntime = ServersService.runtimeOf(server);
     const previousState = server.state;
@@ -770,9 +780,11 @@ export class ServersService implements OnApplicationBootstrap {
             runtime,
             previousVersion,
             previousModpack,
+            previousModpackVersion,
             previousType,
             previousRuntime,
             previousState,
+            modpackChange,
           );
           if (result.rolledBack) {
             throw new Error(result.message);
@@ -796,9 +808,11 @@ export class ServersService implements OnApplicationBootstrap {
       runtime,
       previousVersion,
       previousModpack,
+      previousModpackVersion,
       previousType,
       previousRuntime,
       previousState,
+      modpackChange,
     );
   }
 
@@ -808,9 +822,11 @@ export class ServersService implements OnApplicationBootstrap {
     runtime: ServerRuntime,
     previousVersion: string,
     previousModpack: string | null,
+    previousModpackVersion: string | null,
     previousType: string,
     previousRuntime: ServerRuntime,
     previousState: ServerState,
+    modpackChange?: ModpackVersionChange,
   ): Promise<{ message: string; version: string; rolledBack: boolean }> {
     // 1. Transição de estado para UPDATING e notificação ao Gateway L7
     server.state = 'UPDATING';
@@ -861,6 +877,9 @@ export class ServersService implements OnApplicationBootstrap {
           dto.content_actions,
         );
       }
+      if (modpackChange) {
+        await modpackChange.install(server);
+      }
 
       // 5. Aplicação da nova versão nos metadados
       server.game_version = dto.game_version;
@@ -869,6 +888,9 @@ export class ServersService implements OnApplicationBootstrap {
       }
       if (dto.modpack_id !== undefined) {
         server.modpack_id = dto.modpack_id;
+      }
+      if (modpackChange) {
+        server.modpack_version_id = modpackChange.versionId;
       }
       Object.assign(server, runtime);
       await this.serverRepo.save(server);
@@ -906,6 +928,7 @@ export class ServersService implements OnApplicationBootstrap {
         backupPath,
         previousVersion,
         previousModpack,
+        previousModpackVersion,
         previousType,
         previousRuntime,
       );
@@ -918,6 +941,7 @@ export class ServersService implements OnApplicationBootstrap {
         backupPath,
         previousVersion,
         previousModpack,
+        previousModpackVersion,
         previousType,
         previousRuntime,
       );
@@ -995,6 +1019,7 @@ export class ServersService implements OnApplicationBootstrap {
     backupPath: string,
     previousVersion: string,
     previousModpack: string | null,
+    previousModpackVersion: string | null,
     previousType: string,
     previousRuntime: ServerRuntime,
   ): Promise<{ message: string; version: string; rolledBack: boolean }> {
@@ -1010,6 +1035,7 @@ export class ServersService implements OnApplicationBootstrap {
       // 3. Reverte atributos de banco
       server.game_version = previousVersion;
       server.modpack_id = previousModpack;
+      server.modpack_version_id = previousModpackVersion;
       server.server_type = previousType;
       Object.assign(server, previousRuntime);
       server.state = 'STARTING';

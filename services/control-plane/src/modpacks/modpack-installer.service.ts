@@ -1,7 +1,14 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Injectable, Logger, NotFoundException, ConflictException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppConfigService } from '@config/app-config.service';
@@ -11,12 +18,22 @@ import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack
 import { resolveSafePath } from '@servers/security/path-traversal.validator';
 import { ServerRuntimeResolver } from '../servers/runtime/server-runtime.resolver';
 import { ServersContentService } from '../servers/servers-content.service';
+import { ServersService } from '../servers/servers.service';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
 import { CurseForgeResolverService } from './resolvers/curseforge-resolver.service';
 import { ModpackConfigInjectorService } from './config/modpack-config-injector.service';
 import { TasksGateway } from '../tasks/tasks.gateway';
 import { InstallModpackDto } from './dto/install-modpack.dto';
+import { UpdateModpackDto } from './dto/update-modpack.dto';
+
+const MODRINTH_USER_AGENT = 'BGLuis/mineK8s (control-plane modpack installer)';
+
+interface PackContents {
+  gameVersion: string;
+  loaderType?: string;
+  paths: string[];
+}
 
 @Injectable()
 export class ModpackInstallerService {
@@ -39,6 +56,8 @@ export class ModpackInstallerService {
     private readonly runtimeResolver?: ServerRuntimeResolver,
     @Optional()
     private readonly serversContentService?: ServersContentService,
+    @Optional()
+    private readonly serversService?: ServersService,
   ) {}
 
   public getServerDataDir(server: Server): string {
@@ -79,6 +98,157 @@ export class ModpackInstallerService {
       );
     }
 
+    const task = await this.createTask(server, dto);
+
+    // Despacha pipeline assíncrono em background
+    void this.runPipeline(server, task, dto);
+
+    return {
+      taskId: task.id,
+      status: task.status,
+      message: 'Modpack installation started in the background',
+    };
+  }
+
+  /**
+   * Troca a versão do modpack pelo pipeline de atualização de versão (aviso, backup pre-update e
+   * rollback); a versão do Minecraft e o loader acompanham o índice do pack novo.
+   */
+  public async updateModpack(
+    serverId: string,
+    dto: UpdateModpackDto,
+  ): Promise<{ message: string; version: string; rolledBack: boolean; taskId?: string }> {
+    if (!this.serverRepo || !this.serversService) {
+      throw new Error('Server repository not configured');
+    }
+    const server = await this.serverRepo.findOne({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException(`Server with ID "${serverId}" not found.`);
+    }
+    const projectId = server.modpack_id;
+    if (!projectId) {
+      throw new BadRequestException(`Server [${server.subdomain}] has no modpack installed.`);
+    }
+    // Same inference as the catalog: CurseForge ids are numeric. The installer only downloads .mrpack archives.
+    if (/^\d+$/.test(projectId)) {
+      throw new BadRequestException('Updating CurseForge modpacks is not supported yet.');
+    }
+
+    const previousVersionId =
+      server.modpack_version_id ?? (await this.lastInstalledVersion(server));
+    if (dto.versionId === previousVersionId) {
+      throw new ConflictException(`Modpack version [${dto.versionId}] is already installed.`);
+    }
+
+    const target = await this.downloadModrinthPack(dto.versionId);
+    if (target.projectId !== projectId) {
+      throw new BadRequestException(
+        `Version [${dto.versionId}] does not belong to modpack [${projectId}].`,
+      );
+    }
+    const contents = await this.readPackContents(target.archive);
+
+    const request: InstallModpackDto = {
+      source: 'MODRINTH',
+      projectId,
+      versionId: dto.versionId,
+    };
+    return this.serversService.updateVersion(
+      serverId,
+      {
+        game_version: contents.gameVersion,
+        server_type: contents.loaderType?.toUpperCase(),
+        confirm_downgrade: dto.confirm_downgrade,
+        warning_minutes: dto.warning_minutes,
+      },
+      {
+        versionId: dto.versionId,
+        install: (updating) => this.installVersion(updating, request, previousVersionId),
+      },
+    );
+  }
+
+  private async installVersion(
+    server: Server,
+    dto: InstallModpackDto,
+    previousVersionId: string | null,
+  ): Promise<void> {
+    const { archive } = await this.downloadModrinthPack(dto.versionId);
+    let previousPackPaths: string[] = [];
+    if (previousVersionId) {
+      try {
+        const previous = await this.downloadModrinthPack(previousVersionId);
+        previousPackPaths = (await this.readPackContents(previous.archive)).paths;
+      } catch (err: any) {
+        this.logger.warn(
+          `Could not read previous modpack version [${previousVersionId}]; only tracked pack files will be removed: ${err.message}`,
+        );
+      }
+    }
+
+    const task = await this.createTask(server, dto);
+    const installed = await this.runPipeline(server, task, dto, archive, previousPackPaths);
+    if (!installed) {
+      throw new Error(task.errorMessage || 'Modpack installation failed');
+    }
+  }
+
+  /** Servers installed before `modpack_version_id` existed only have the version on their install task. */
+  private async lastInstalledVersion(server: Server): Promise<string | null> {
+    const task = await this.taskRepo?.findOne({
+      where: {
+        serverId: server.id,
+        projectId: server.modpack_id ?? undefined,
+        status: ModpackTaskStatus.COMPLETED,
+      },
+      order: { startedAt: 'DESC' },
+    });
+    return task?.versionId ?? null;
+  }
+
+  private async downloadModrinthPack(
+    versionId: string,
+  ): Promise<{ projectId: string; archive: Buffer }> {
+    const versionUrl = `https://api.modrinth.com/v2/version/${encodeURIComponent(versionId)}`;
+    const res = await fetch(versionUrl, {
+      headers: { 'User-Agent': MODRINTH_USER_AGENT },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.status === 404) {
+      throw new NotFoundException(`Modpack version [${versionId}] not found on Modrinth.`);
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to read modpack version [${versionId}]: HTTP ${res.status}`);
+    }
+    const versionData = await res.json();
+    const mrpackFile =
+      versionData.files?.find((f: any) => f.filename?.endsWith('.mrpack')) ||
+      versionData.files?.find((f: any) => f.primary) ||
+      versionData.files?.[0];
+    if (!mrpackFile?.url) {
+      throw new Error(`Modpack version [${versionId}] has no downloadable archive.`);
+    }
+    const dlRes = await fetch(mrpackFile.url, { signal: AbortSignal.timeout(60_000) });
+    if (!dlRes.ok) {
+      throw new Error(`Failed to download modpack archive: HTTP ${dlRes.status}`);
+    }
+    return {
+      projectId: versionData.project_id,
+      archive: Buffer.from(await dlRes.arrayBuffer()),
+    };
+  }
+
+  private async readPackContents(archive: Buffer): Promise<PackContents> {
+    const index = await this.modrinthResolver.extractIndexFromMrpack(archive);
+    const resolution = this.modrinthResolver.resolveServerFiles(index);
+    return {
+      gameVersion: resolution.gameVersion,
+      loaderType: resolution.loaderType,
+      paths: resolution.acceptedFiles.map((f) => f.path),
+    };
+  }
+
+  private async createTask(server: Server, dto: InstallModpackDto): Promise<ModpackTaskEntity> {
     // Cria registro inicial de rastreamento no banco TypeORM
     let task = new ModpackTaskEntity();
     task.serverId = server.id;
@@ -108,14 +278,7 @@ export class ModpackInstallerService {
       currentStep: task.currentStep,
     });
 
-    // Despacha pipeline assíncrono em background
-    void this.runPipeline(server, task, dto);
-
-    return {
-      taskId: task.id,
-      status: task.status,
-      message: 'Modpack installation started in the background',
-    };
+    return task;
   }
 
   private async updateTaskProgress(
@@ -147,7 +310,8 @@ export class ModpackInstallerService {
     mockFilesOverride?:
       | Buffer
       | Array<{ name?: string; path?: string; url?: string; hashes?: any; buffer?: Buffer }>,
-  ): Promise<void> {
+    previousPackPaths: string[] = [],
+  ): Promise<boolean> {
     try {
       const serverDir = this.getServerDataDir(server);
       const modsDir = path.join(serverDir, 'mods');
@@ -192,7 +356,7 @@ export class ModpackInstallerService {
       } else if (dto.source === 'MODRINTH') {
         const versionUrl = `https://api.modrinth.com/v2/version/${encodeURIComponent(dto.versionId)}`;
         const res = await fetch(versionUrl, {
-          headers: { 'User-Agent': 'BGLuis/mineK8s (control-plane modpack installer)' },
+          headers: { 'User-Agent': MODRINTH_USER_AGENT },
           signal: AbortSignal.timeout(15_000),
         });
         if (res.ok) {
@@ -257,7 +421,12 @@ export class ModpackInstallerService {
       });
 
       if (this.serversContentService) {
-        await this.serversContentService.syncModpackFiles(server, serverDir, resolvedFiles);
+        await this.serversContentService.syncModpackFiles(
+          server,
+          serverDir,
+          resolvedFiles,
+          previousPackPaths,
+        );
       }
 
       const isDummyHash = (h?: string) =>
@@ -367,6 +536,7 @@ export class ModpackInstallerService {
 
       // Atualiza metadados do servidor
       server.modpack_id = dto.projectId;
+      server.modpack_version_id = dto.versionId;
       if (this.runtimeResolver) {
         try {
           const runtime = await this.runtimeResolver.resolve(
@@ -391,6 +561,7 @@ export class ModpackInstallerService {
       this.logger.log(
         `[RF-STO-11, RF-STO-12] Modpack [${dto.projectId}] instalado em [${server.subdomain}].`,
       );
+      return true;
     } catch (err: any) {
       this.logger.error(`Falha no pipeline de instalação do modpack: ${err.message}`);
       await this.updateTaskProgress(task, {
@@ -398,6 +569,7 @@ export class ModpackInstallerService {
         errorMessage: err.message,
         currentStep: `Installation error: ${err.message}`,
       });
+      return false;
     }
   }
 }

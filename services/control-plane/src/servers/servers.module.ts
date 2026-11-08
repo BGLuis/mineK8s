@@ -77,6 +77,7 @@ import { ServersBackupSchedulerService } from './servers-backup-scheduler.servic
     MinecraftVersionsService,
     ServerShutdownWarningService,
     ServersBackupSchedulerService,
+    ServerRuntimeResolver,
   ],
 })
 export class ServersModule {}

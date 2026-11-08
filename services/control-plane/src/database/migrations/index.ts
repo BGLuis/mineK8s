@@ -13,6 +13,7 @@ import { AddUserGithubUsername1710000000011 } from './1710000000011-AddUserGithu
 import { AddServerStopWarningMinutes1710000000012 } from './1710000000012-AddServerStopWarningMinutes';
 import { AddServerBackupSchedule1710000000013 } from './1710000000013-AddServerBackupSchedule';
 import { AddServerContentTable1710000000014 } from './1710000000014-AddServerContentTable';
+import { AddServerModpackVersion1710000000015 } from './1710000000015-AddServerModpackVersion';
 
 export const migrations = [
   InitialSchema1710000000000,
@@ -30,4 +31,5 @@ export const migrations = [
   AddServerStopWarningMinutes1710000000012,
   AddServerBackupSchedule1710000000013,
   AddServerContentTable1710000000014,
+  AddServerModpackVersion1710000000015,
 ];

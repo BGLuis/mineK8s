@@ -594,25 +594,27 @@ export class ServersContentService {
       name?: string;
       hashes?: { sha1?: string; sha512?: string };
     }>,
+    previousPackPaths: string[] = [],
   ): Promise<void> {
+    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/^\/+/, '');
     const existing = await this.contentRepo.find({ where: { serverId: server.id } });
-    const oldPackItems = existing.filter((e) => e.origin === 'MODPACK');
     const newPaths = new Set(
-      newPackFiles.map((f) => {
-        const p = f.path || (f.name ? `mods/${f.name}` : '');
-        return p.replace(/\\/g, '/').replace(/^\/+/, '');
-      }),
+      newPackFiles.map((f) => normalize(f.path || (f.name ? `mods/${f.name}` : ''))),
     );
+    // The previous pack's own index also counts: its files may have been recorded as MANUAL (identified by hash) or not at all.
+    const oldPackPaths = new Set([
+      ...existing.filter((e) => e.origin === 'MODPACK').map((e) => e.path),
+      ...previousPackPaths.map(normalize),
+    ]);
 
-    for (const oldItem of oldPackItems) {
-      if (!newPaths.has(oldItem.path)) {
-        const targetPath = resolveSafePath(serverDir, oldItem.path);
-        if (fs.existsSync(targetPath)) {
-          await fs.promises.unlink(targetPath);
-        }
-        await this.contentRepo.delete(oldItem.id);
-        this.logger.log(`Arquivo do modpack anterior removido na troca de versão: ${oldItem.path}`);
+    for (const oldPath of oldPackPaths) {
+      if (newPaths.has(oldPath)) continue;
+      const targetPath = resolveSafePath(serverDir, oldPath);
+      if (fs.existsSync(targetPath)) {
+        await fs.promises.unlink(targetPath);
       }
+      await this.contentRepo.delete({ serverId: server.id, path: oldPath });
+      this.logger.log(`Arquivo do modpack anterior removido na troca de versão: ${oldPath}`);
     }
   }
 }
