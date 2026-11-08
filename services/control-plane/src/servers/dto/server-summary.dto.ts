@@ -57,6 +57,9 @@ export class ServerDetailDto extends ServerSummaryDto {
   /** Build of the installed jar (Paper, Purpur) and its release channel (Paper only). */
   server_build: string | null;
   server_build_channel: string | null;
+  /** Catalog project and version of the installed pack; null when the server has no modpack. */
+  modpack_id: string | null;
+  modpack_version_id: string | null;
   settings?: ServerSettingsDto;
 }
 

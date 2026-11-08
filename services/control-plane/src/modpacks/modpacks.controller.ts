@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@ne
 import { Roles } from '@auth/roles.decorator';
 import { ModpackInstallerService } from './modpack-installer.service';
 import { InstallModpackDto } from './dto/install-modpack.dto';
+import { UpdateModpackDto } from './dto/update-modpack.dto';
 import { ModpackSearchResponseDto, ModpackVersionDto } from './dto/universal-modpack.dto';
 import {
   CATALOG_LOADERS,
@@ -104,6 +105,25 @@ export class ModpacksController {
   @ApiResponse({ status: 409, description: 'Servidor em execução (requer estado STOPPED)' })
   async installModpack(@Param('id') id: string, @Body() dto: InstallModpackDto) {
     return this.installerService.installModpack(id, dto);
+  }
+
+  @Post('servers/:id/modpack/update')
+  @ApiOperation({
+    summary:
+      'Trocar a versão do modpack com aviso, backup pre-update e rollback automático (RF-STO-13, #207)',
+  })
+  @ApiResponse({ status: 201, description: 'Resultado da atualização ou taskId da contagem' })
+  @ApiResponse({
+    status: 400,
+    description: 'Servidor sem modpack, versão de outro pack ou CurseForge',
+  })
+  @ApiResponse({ status: 404, description: 'Servidor ou versão não encontrados' })
+  @ApiResponse({
+    status: 409,
+    description: 'Versão já instalada, update em curso ou downgrade sem confirmação',
+  })
+  async updateModpack(@Param('id') id: string, @Body() dto: UpdateModpackDto) {
+    return this.installerService.updateModpack(id, dto);
   }
 
   private parseSource(source?: string): CatalogSource | undefined {

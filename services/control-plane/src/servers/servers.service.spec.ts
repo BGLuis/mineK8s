@@ -1013,6 +1013,65 @@ describe('ServersService', () => {
       expect(result.version).toBe('1.20.4');
     });
 
+    it('troca de versão do modpack instala o pack depois do backup e antes do boot, e grava a versão do pack (#207)', async () => {
+      serversDb.get('srv-update-1')!.modpack_version_id = 'pack-v1';
+      const order: string[] = [];
+      mockBackupService.createPreUpdateBackup.mockImplementation(async () => {
+        order.push('backup');
+        return '/tmp/backup-modpack';
+      });
+      mockK8sService.startServer.mockImplementation(async () => {
+        order.push('start');
+      });
+      const install = jest.fn(async () => {
+        order.push('install');
+      });
+
+      const result = await service.updateVersion(
+        'srv-update-1',
+        { game_version: '1.20.5' },
+        { versionId: 'pack-v2', install },
+      );
+
+      expect(result.rolledBack).toBe(false);
+      expect(order).toEqual(['backup', 'install', 'start']);
+      expect(serversDb.get('srv-update-1')!.modpack_version_id).toBe('pack-v2');
+    });
+
+    it('falha ao instalar a nova versão do modpack dispara rollback sem subir o servidor no pack novo (#207)', async () => {
+      serversDb.get('srv-update-1')!.modpack_version_id = 'pack-v1';
+      const install = jest.fn().mockRejectedValue(new Error('Hash mismatch for x.jar'));
+
+      const result = await service.updateVersion(
+        'srv-update-1',
+        { game_version: '1.20.5' },
+        { versionId: 'pack-v2', install },
+      );
+
+      expect(result.rolledBack).toBe(true);
+      expect(mockBackupService.restorePreUpdateBackup).toHaveBeenCalled();
+      expect(mockK8sService.startServer).toHaveBeenCalledTimes(1);
+      expect(serversDb.get('srv-update-1')!.game_version).toBe('1.20.4');
+    });
+
+    it('boot do pack novo falhando restaura a versão anterior do pack no rollback (#207)', async () => {
+      serversDb.get('srv-update-1')!.modpack_version_id = 'pack-v1';
+      mockSlpProbeService.probe.mockResolvedValue({ ready: false });
+      const install = jest.fn().mockResolvedValue(undefined);
+
+      const result = await service.updateVersion(
+        'srv-update-1',
+        { game_version: '1.20.5' },
+        { versionId: 'pack-v2', install },
+      );
+
+      expect(result.rolledBack).toBe(true);
+      expect(mockBackupService.restorePreUpdateBackup).toHaveBeenCalled();
+      const server = serversDb.get('srv-update-1')!;
+      expect(server.modpack_version_id).toBe('pack-v1');
+      expect(server.game_version).toBe('1.20.4');
+    });
+
     it('should trigger automated rollback when probe returns synthetic gateway status during window (#198)', async () => {
       // Gateway synthetic status has version 'mineK8s' or status text instead of target MC version
       mockSlpProbeService.probe.mockResolvedValue({

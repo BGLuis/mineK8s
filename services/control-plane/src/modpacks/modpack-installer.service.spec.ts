@@ -3,11 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ModpackInstallerService } from './modpack-installer.service';
 import { Server } from '@database/entities/server.entity';
 import { ModpackTaskEntity, ModpackTaskStatus } from '@database/entities/modpack-task.entity';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
+import { ServersContentService } from '../servers/servers-content.service';
 
 function createZipBuffer(
   files: Array<{ name: string; content?: string | Buffer; isSymlink?: boolean }>,
@@ -237,7 +238,7 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
   it('deve criar tarefa QUEUED, emitir evento no WebSocket e iniciar pipeline', async () => {
     sampleServer.state = 'STOPPED';
     // O pipeline tem teste próprio; rodá-lo solto escreve no diretório temporário enquanto o afterEach o apaga.
-    const runPipeline = jest.spyOn(service, 'runPipeline').mockResolvedValue(undefined);
+    const runPipeline = jest.spyOn(service, 'runPipeline').mockResolvedValue(true);
 
     const res = await service.installModpack(sampleServer.id, {
       source: 'MODRINTH',
@@ -496,5 +497,203 @@ describe('ModpackInstallerService (RF-STO-11, RF-STO-12, RF-STO-18)', () => {
     } finally {
       global.fetch = originalFetch;
     }
+  });
+
+  describe('updateModpack (#207)', () => {
+    const sha1 = (buf: Buffer) => crypto.createHash('sha1').update(buf).digest('hex');
+    const sharedJar = Buffer.from('shared-mod-v1');
+    const newJar = Buffer.from('new-mod-v2');
+
+    const packIndex = (
+      versionId: string,
+      mc: string,
+      files: Array<{ path: string; content: Buffer }>,
+    ) =>
+      createZipBuffer([
+        {
+          name: 'modrinth.index.json',
+          content: JSON.stringify({
+            formatVersion: 1,
+            game: 'minecraft',
+            versionId,
+            name: 'Test Pack',
+            dependencies: { minecraft: mc, neoforge: '21.1.0' },
+            files: files.map((f) => ({
+              path: f.path,
+              hashes: { sha1: sha1(f.content) },
+              env: { client: 'required', server: 'required' },
+              downloads: [`https://cdn.test/${f.path}`],
+            })),
+          }),
+        },
+      ]);
+
+    const packs: Record<string, { projectId: string; archive: Buffer }> = {
+      'pack-v1': {
+        projectId: 'test-pack',
+        archive: packIndex('1.0.0', '1.21.1', [
+          { path: 'mods/shared.jar', content: sharedJar },
+          { path: 'mods/old-only.jar', content: Buffer.from('old-only') },
+        ]),
+      },
+      'pack-v2': {
+        projectId: 'test-pack',
+        archive: packIndex('2.0.0', '1.21.4', [
+          { path: 'mods/shared.jar', content: sharedJar },
+          { path: 'mods/new-only.jar', content: newJar },
+        ]),
+      },
+      'other-v1': { projectId: 'other-pack', archive: Buffer.alloc(0) },
+    };
+    const jars: Record<string, Buffer> = {
+      'https://cdn.test/mods/shared.jar': sharedJar,
+      'https://cdn.test/mods/new-only.jar': newJar,
+    };
+
+    let originalFetch: typeof global.fetch;
+    let mockServersService: { updateVersion: jest.Mock };
+    let updateService: ModpackInstallerService;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+      global.fetch = jest.fn(async (url: string) => {
+        const version = url.match(/\/v2\/version\/([^/]+)$/)?.[1];
+        if (version) {
+          const pack = packs[version];
+          if (!pack) return new Response('not found', { status: 404 });
+          return Response.json({
+            project_id: pack.projectId,
+            files: [{ filename: `${version}.mrpack`, url: `https://cdn.test/${version}.mrpack` }],
+          });
+        }
+        const archive = url.match(/\/([^/]+)\.mrpack$/)?.[1];
+        if (archive) return new Response(new Uint8Array(packs[archive].archive), { status: 200 });
+        if (jars[url]) return new Response(new Uint8Array(jars[url]), { status: 200 });
+        return new Response('not found', { status: 404 });
+      }) as any;
+
+      Object.assign(sampleServer, {
+        modpack_id: 'test-pack',
+        modpack_version_id: 'pack-v1',
+        server_type: 'NEOFORGE',
+        game_version: '1.21.1',
+      });
+
+      const contentRows: any[] = [];
+      const contentRepo = {
+        find: jest.fn(async ({ where }) =>
+          contentRows.filter((r) => r.serverId === where.serverId),
+        ),
+        findOne: jest.fn(
+          async ({ where }) =>
+            contentRows.find((r) => r.serverId === where.serverId && r.path === where.path) ?? null,
+        ),
+        save: jest.fn(async (row) => {
+          if (!contentRows.includes(row)) contentRows.push(row);
+          return row;
+        }),
+        delete: jest.fn(async ({ serverId, path: p }) => {
+          const i = contentRows.findIndex((r) => r.serverId === serverId && r.path === p);
+          if (i >= 0) contentRows.splice(i, 1);
+        }),
+      };
+      const contentService = new ServersContentService(
+        { storage: { serversDataRoot: tempStorageRoot } } as any,
+        contentRepo as any,
+        mockServerRepo,
+      );
+
+      mockServersService = {
+        updateVersion: jest.fn(async (_id, dto, change) => {
+          await change.install(sampleServer);
+          return { message: 'ok', version: dto.game_version, rolledBack: false };
+        }),
+      };
+
+      updateService = new ModpackInstallerService(
+        { storage: { serversDataRoot: tempStorageRoot } } as any,
+        mockCasStorage,
+        mockModrinthResolver,
+        mockCurseforgeResolver,
+        mockConfigInjector,
+        mockTasksGateway,
+        mockTaskRepo,
+        mockServerRepo,
+        undefined,
+        contentService,
+        mockServersService as any,
+      );
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('CRITÉRIO DE ACEITE: troca a versão do pack pelo pipeline de update, remove o arquivo só da versão anterior e mantém o manual', async () => {
+      const modsDir = path.join(updateService.getServerDataDir(sampleServer), 'mods');
+      await fs.promises.mkdir(modsDir, { recursive: true });
+      await fs.promises.writeFile(path.join(modsDir, 'shared.jar'), sharedJar);
+      await fs.promises.writeFile(path.join(modsDir, 'old-only.jar'), 'old-only');
+      await fs.promises.writeFile(path.join(modsDir, 'manual.jar'), 'added-by-admin');
+
+      const result = await updateService.updateModpack(sampleServer.id, { versionId: 'pack-v2' });
+
+      expect(result.rolledBack).toBe(false);
+      expect(mockServersService.updateVersion).toHaveBeenCalledWith(
+        sampleServer.id,
+        expect.objectContaining({ game_version: '1.21.4', server_type: 'NEOFORGE' }),
+        expect.objectContaining({ versionId: 'pack-v2' }),
+      );
+      expect(fs.existsSync(path.join(modsDir, 'old-only.jar'))).toBe(false);
+      expect(fs.existsSync(path.join(modsDir, 'manual.jar'))).toBe(true);
+      expect(sha1(await fs.promises.readFile(path.join(modsDir, 'new-only.jar')))).toBe(
+        sha1(newJar),
+      );
+      expect(sampleServer.modpack_version_id).toBe('pack-v2');
+    });
+
+    it('falha na instalação do pack novo propaga o erro para o pipeline fazer rollback', async () => {
+      delete jars['https://cdn.test/mods/new-only.jar'];
+      mockServersService.updateVersion.mockImplementation(async (_id, _dto, change) => {
+        await expect(change.install(sampleServer)).rejects.toThrow(/new-only\.jar/);
+        return { message: 'rolled back', version: '1.21.1', rolledBack: true };
+      });
+
+      const result = await updateService.updateModpack(sampleServer.id, { versionId: 'pack-v2' });
+
+      expect(result.rolledBack).toBe(true);
+      jars['https://cdn.test/mods/new-only.jar'] = newJar;
+    });
+
+    it('recusa a versão já instalada, versão de outro pack e pack do CurseForge sem parar o servidor', async () => {
+      await expect(
+        updateService.updateModpack(sampleServer.id, { versionId: 'pack-v1' }),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        updateService.updateModpack(sampleServer.id, { versionId: 'other-v1' }),
+      ).rejects.toThrow(BadRequestException);
+      sampleServer.modpack_id = '123456';
+      await expect(
+        updateService.updateModpack(sampleServer.id, { versionId: 'pack-v2' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockServersService.updateVersion).not.toHaveBeenCalled();
+    });
+
+    it('servidor instalado antes da coluna usa a versão da última task concluída', async () => {
+      sampleServer.modpack_version_id = null;
+      mockTaskRepo.findOne = jest.fn().mockResolvedValue({ versionId: 'pack-v1' });
+
+      await expect(
+        updateService.updateModpack(sampleServer.id, { versionId: 'pack-v1' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockTaskRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            projectId: 'test-pack',
+            status: ModpackTaskStatus.COMPLETED,
+          }),
+        }),
+      );
+    });
   });
 });

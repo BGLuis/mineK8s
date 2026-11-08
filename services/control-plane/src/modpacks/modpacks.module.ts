@@ -4,6 +4,7 @@ import { CasObjectEntity } from '@database/entities/cas-object.entity';
 import { ModpackTaskEntity } from '@database/entities/modpack-task.entity';
 import { Server } from '@database/entities/server.entity';
 import { AppConfigModule } from '@config/app-config.module';
+import { ServersModule } from '../servers/servers.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { CasStorageService } from './cas/cas-storage.service';
 import { ModrinthResolverService } from './resolvers/modrinth-resolver.service';
@@ -18,6 +19,7 @@ import { ModpacksController } from './modpacks.controller';
   imports: [
     TypeOrmModule.forFeature([CasObjectEntity, ModpackTaskEntity, Server]),
     AppConfigModule,
+    ServersModule,
     TasksModule,
   ],
   controllers: [ModpacksController],

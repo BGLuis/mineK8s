@@ -75,6 +75,9 @@ export interface ServerDetail extends ServerSummary {
   java_version: number | null;
   server_build: string | null;
   server_build_channel: string | null;
+  /** Catalog project and version of the installed pack; null when the server has no modpack. */
+  modpack_id?: string | null;
+  modpack_version_id?: string | null;
   settings?: MinecraftServerSettings;
 }
 
@@ -333,6 +336,13 @@ export interface ModpackVersion {
   releaseType: string;
   datePublished: string;
   downloadUrl?: string;
+}
+
+/** UpdateModpackDto (modpacks/dto/update-modpack.dto.ts). */
+export interface UpdateModpackRequest {
+  versionId: string;
+  confirm_downgrade?: boolean;
+  warning_minutes?: number;
 }
 
 export interface InstallModpackRequest {

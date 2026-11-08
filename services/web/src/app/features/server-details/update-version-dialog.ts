@@ -1,14 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { catchError, firstValueFrom, of } from 'rxjs';
+import { Observable, catchError, firstValueFrom, of } from 'rxjs';
 
 import {
   ContentActionRequest,
   ContentPreviewItem,
   MinecraftVersionItem,
+  ModpackVersion,
   UpdateVersionResponse,
 } from '../../core/api/models';
+import { ModpacksApi } from '../../core/api/modpacks.api';
 import { ServersApi } from '../../core/api/servers.api';
-import { McDialog, McVersionSelector, ToastService } from '../../ui';
+import { McDialog, McSelect, McVersionSelector, ToastService } from '../../ui';
 import { ServerLifecycle, errorReason } from '../dashboard/server-lifecycle';
 import { ServerDetailStore } from './server-detail.store';
 
@@ -42,13 +44,13 @@ function compareVersions(from: string, to: string): number {
 @Component({
   selector: 'mc-update-version-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [McDialog, McVersionSelector],
+  imports: [McDialog, McSelect, McVersionSelector],
   template: `
     @if (step() === 'confirm') {
       <mc-dialog
         [open]="true"
         [title]="'Atualizar versão de &quot;' + serverName() + '&quot;'"
-        [confirmLabel]="isDowngrade() ? 'Fazer downgrade' : 'Atualizar versão'"
+        [confirmLabel]="isDowngrade() ? 'Fazer downgrade' : modpackId() ? 'Atualizar modpack' : 'Atualizar versão'"
         [confirmVariant]="isDowngrade() ? 'danger' : 'warning'"
         [confirmDisabled]="!canConfirm()"
         cancelLabel="Cancelar"
@@ -56,17 +58,39 @@ function compareVersions(from: string, to: string): number {
         (cancelled)="close()"
       >
         <div class="space-y-4">
-          <p class="t-caption text-text-muted">
-            Versão atual: <strong class="text-text-primary">{{ currentVersion() }}</strong> ({{ serverType() }})
-          </p>
+          @if (modpackId()) {
+            <p class="t-caption text-text-muted">
+              Modpack atual:
+              <strong class="text-text-primary">{{ currentPackVersion()?.name ?? currentPackVersionId() ?? 'versão desconhecida' }}</strong>
+              (Minecraft {{ currentVersion() }}, {{ serverType() }})
+            </p>
 
-          <mc-version-selector
-            label="Nova versão do Minecraft"
-            [serverType]="serverType()"
-            [versions]="versionsList().length > 0 ? versionsList() : null"
-            [value]="targetVersion()"
-            (valueChange)="setTargetVersion($event)"
-          />
+            <div>
+              <mc-select
+                label="Nova versão do modpack"
+                [options]="packVersionOptions()"
+                [placeholder]="packVersionsLoading() ? 'Carregando versões…' : 'Selecione uma versão'"
+                [disabled]="packVersionsLoading() || packVersions().length === 0"
+                [value]="targetPackVersionId()"
+                (valueChange)="targetPackVersionId.set($event)"
+              />
+              <p class="t-caption mt-1 text-text-muted">
+                A versão do Minecraft e o loader acompanham o pack. Os arquivos da versão anterior do pack são trocados; mods adicionados à mão são mantidos.
+              </p>
+            </div>
+          } @else {
+            <p class="t-caption text-text-muted">
+              Versão atual: <strong class="text-text-primary">{{ currentVersion() }}</strong> ({{ serverType() }})
+            </p>
+
+            <mc-version-selector
+              label="Nova versão do Minecraft"
+              [serverType]="serverType()"
+              [versions]="versionsList().length > 0 ? versionsList() : null"
+              [value]="targetVersion()"
+              (valueChange)="setTargetVersion($event)"
+            />
+          }
 
           @if (isDowngrade()) {
             <div class="border-2 border-status-danger bg-status-danger/10 p-3 space-y-3" role="alert">
@@ -176,6 +200,7 @@ function compareVersions(from: string, to: string): number {
 })
 export class McUpdateVersionDialog {
   private readonly api = inject(ServersApi);
+  private readonly modpacksApi = inject(ModpacksApi);
   protected readonly store = inject(ServerDetailStore);
   private readonly toast = inject(ToastService);
   private readonly lifecycle = inject(ServerLifecycle);
@@ -197,7 +222,30 @@ export class McUpdateVersionDialog {
   protected readonly serverType = computed(() => this.store.server()?.server_type ?? 'VANILLA');
   protected readonly serverName = computed(() => this.store.server()?.name ?? '');
 
+  protected readonly modpackId = computed(() => this.store.server()?.modpack_id ?? null);
+  protected readonly currentPackVersionId = computed(
+    () => this.store.server()?.modpack_version_id ?? null,
+  );
+  protected readonly packVersions = signal<ModpackVersion[]>([]);
+  protected readonly packVersionsLoading = signal(false);
+  protected readonly targetPackVersionId = signal('');
+  protected readonly currentPackVersion = computed(() =>
+    this.findPackVersion(this.currentPackVersionId()),
+  );
+  protected readonly targetPackVersion = computed(() =>
+    this.findPackVersion(this.targetPackVersionId()),
+  );
+  protected readonly packVersionOptions = computed(() =>
+    this.packVersions().map((v) => ({
+      value: v.id,
+      label: `${v.name} · Minecraft ${v.gameVersion} · ${v.loader}`,
+    })),
+  );
+
   protected readonly isDowngrade = computed<boolean>(() => {
+    if (this.modpackId()) {
+      return this.isPackDowngrade();
+    }
     const from = this.currentVersion();
     const to = this.targetVersion();
     if (!from || !to || from === to) return false;
@@ -220,7 +268,12 @@ export class McUpdateVersionDialog {
     this.updateResult.set(null);
     this.previewItems.set([]);
     this.selectedActions.set({});
-    this.loadVersions();
+    this.targetPackVersionId.set('');
+    if (this.modpackId()) {
+      this.loadPackVersions();
+    } else {
+      this.loadVersions();
+    }
     this.step.set('confirm');
   }
 
@@ -292,6 +345,12 @@ export class McUpdateVersionDialog {
   }
 
   protected canConfirm(): boolean {
+    if (this.modpackId()) {
+      const target = this.targetPackVersionId();
+      if (!target || target === this.currentPackVersionId()) return false;
+      if (this.isDowngrade() && !this.confirmDowngrade()) return false;
+      return !this.busy() && !this.packVersionsLoading();
+    }
     const to = this.targetVersion();
     if (!to || to === this.currentVersion()) return false;
     if (this.isDowngrade() && !this.confirmDowngrade()) return false;
@@ -300,29 +359,12 @@ export class McUpdateVersionDialog {
 
   protected async submit(): Promise<void> {
     const serverId = this.store.serverId();
-    const to = this.targetVersion();
-    if (!serverId || !to) return;
+    const request = serverId ? this.updateRequest(serverId) : null;
+    if (!serverId || !request) return;
 
     this.busy.set(true);
     try {
-      const items = this.previewItems();
-      const content_actions: ContentActionRequest[] = items.map((item) => ({
-        path: item.path,
-        action: this.getItemAction(item.path),
-        projectId: item.projectId ?? undefined,
-        targetVersionId: item.targetVersionId,
-        targetDownloadUrl: item.targetDownloadUrl,
-        targetFileName: item.targetFileName,
-        targetHashes: item.targetHashes,
-      }));
-
-      const response = await firstValueFrom(
-        this.api.updateVersion(serverId, {
-          game_version: to,
-          confirm_downgrade: this.confirmDowngrade(),
-          ...(content_actions.length > 0 ? { content_actions } : {}),
-        }),
-      );
+      const response = await firstValueFrom(request);
       this.updateResult.set(response);
       this.store.refresh();
       if (response.taskId) {
@@ -344,6 +386,66 @@ export class McUpdateVersionDialog {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private updateRequest(serverId: string): Observable<UpdateVersionResponse> | null {
+    if (this.modpackId()) {
+      const versionId = this.targetPackVersionId();
+      return versionId
+        ? this.modpacksApi.update(serverId, {
+            versionId,
+            confirm_downgrade: this.confirmDowngrade(),
+          })
+        : null;
+    }
+
+    const to = this.targetVersion();
+    if (!to) return null;
+    const content_actions: ContentActionRequest[] = this.previewItems().map((item) => ({
+      path: item.path,
+      action: this.getItemAction(item.path),
+      projectId: item.projectId ?? undefined,
+      targetVersionId: item.targetVersionId,
+      targetDownloadUrl: item.targetDownloadUrl,
+      targetFileName: item.targetFileName,
+      targetHashes: item.targetHashes,
+    }));
+    return this.api.updateVersion(serverId, {
+      game_version: to,
+      confirm_downgrade: this.confirmDowngrade(),
+      ...(content_actions.length > 0 ? { content_actions } : {}),
+    });
+  }
+
+  private findPackVersion(id: string | null): ModpackVersion | null {
+    return id ? (this.packVersions().find((v) => v.id === id) ?? null) : null;
+  }
+
+  /** Older pack release, or one that moves Minecraft back: both can leave the world unreadable. */
+  private isPackDowngrade(): boolean {
+    const target = this.targetPackVersion();
+    if (!target) return false;
+    if (compareVersions(this.currentVersion(), target.gameVersion) > 0) return true;
+    const current = this.currentPackVersion();
+    return !!current && Date.parse(target.datePublished) < Date.parse(current.datePublished);
+  }
+
+  private loadPackVersions(): void {
+    const modpackId = this.modpackId();
+    if (!modpackId) return;
+    this.packVersions.set([]);
+    this.packVersionsLoading.set(true);
+    this.modpacksApi
+      .versions(modpackId)
+      .pipe(catchError(() => of<ModpackVersion[]>([])))
+      .subscribe((versions) => {
+        const sorted = [...versions].sort(
+          (a, b) => Date.parse(b.datePublished) - Date.parse(a.datePublished),
+        );
+        this.packVersions.set(sorted);
+        this.packVersionsLoading.set(false);
+        this.targetPackVersionId.set(sorted[0]?.id ?? '');
+      });
   }
 
   private loadVersions(): void {

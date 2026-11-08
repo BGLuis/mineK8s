@@ -3,7 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MinecraftVersionItem, ServerDetail } from '../../core/api/models';
+import { MinecraftVersionItem, ModpackVersion, ServerDetail } from '../../core/api/models';
+import { ModpacksApi } from '../../core/api/modpacks.api';
 import { ServersApi } from '../../core/api/servers.api';
 import { ServerLifecycle } from '../dashboard/server-lifecycle';
 import { ServerDetailStore } from './server-detail.store';
@@ -61,6 +62,30 @@ describe('McUpdateVersionDialog (#203)', () => {
     refresh: vi.fn(),
   };
 
+  const packVersions: ModpackVersion[] = [
+    {
+      id: 'pack-v1',
+      name: '1.0.0',
+      gameVersion: '1.21.1',
+      loader: 'neoforge',
+      releaseType: 'release',
+      datePublished: '2026-08-01T00:00:00Z',
+    },
+    {
+      id: 'pack-v2',
+      name: '2.0.0',
+      gameVersion: '1.21.1',
+      loader: 'neoforge',
+      releaseType: 'release',
+      datePublished: '2026-10-01T00:00:00Z',
+    },
+  ];
+
+  const modpacksApi = {
+    versions: vi.fn().mockReturnValue(of(packVersions)),
+    update: vi.fn(),
+  };
+
   const mockLifecycle = {
     trackTask: vi.fn(),
   };
@@ -69,6 +94,7 @@ describe('McUpdateVersionDialog (#203)', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: ServersApi, useValue: api },
+        { provide: ModpacksApi, useValue: modpacksApi },
         { provide: ServerDetailStore, useValue: store },
         { provide: ServerLifecycle, useValue: mockLifecycle },
       ],
@@ -358,5 +384,47 @@ describe('McUpdateVersionDialog (#203)', () => {
         },
       ],
     });
+  });
+
+  it('em servidor de modpack lista as versões do pack e atualiza pela rota do modpack (#207)', async () => {
+    const vanilla = store.server();
+    store.server.set({
+      ...(vanilla as ServerDetail),
+      server_type: 'NEOFORGE',
+      game_version: '1.21.1',
+      modpack_id: 'test-pack',
+      modpack_version_id: 'pack-v1',
+    });
+    api.updateVersion.mockClear();
+    try {
+      const { fixture, el } = await open();
+
+      expect(modpacksApi.versions).toHaveBeenCalledWith('test-pack');
+      expect(el.textContent).toContain('Nova versão do modpack');
+      expect(el.textContent).not.toContain('Nova versão do Minecraft');
+      expect(el.textContent).toContain('Modpack atual');
+
+      const select = el.querySelector('select') as HTMLSelectElement;
+      expect(select.value).toBe('pack-v2');
+
+      modpacksApi.update.mockReturnValue(
+        of({ message: 'ok', version: '1.21.1', rolledBack: false }),
+      );
+      const confirmButton = [...el.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Atualizar modpack'),
+      ) as HTMLButtonElement;
+      expect(confirmButton.disabled).toBe(false);
+      confirmButton.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(modpacksApi.update).toHaveBeenCalledWith('srv-1', {
+        versionId: 'pack-v2',
+        confirm_downgrade: false,
+      });
+      expect(api.updateVersion).not.toHaveBeenCalled();
+    } finally {
+      store.server.set(vanilla);
+    }
   });
 });
