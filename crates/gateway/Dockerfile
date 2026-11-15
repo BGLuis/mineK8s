@@ -2,7 +2,7 @@
 
 # Build from the repository root: docker build -f crates/gateway/Dockerfile -t minekubernetes/gateway .
 
-FROM lukemathwalker/cargo-chef:0.1.78-rust-1.99-slim-trixie@sha256:bcda2cef02bedabfaf433379d82fecd02c0a428fb66fe28ab2d65c25c3db3b5e AS chef
+FROM lukemathwalker/cargo-chef:0.1.78-rust-1.99-slim-trixie@sha256:c7b109b68df2196f7a8e5f370c4dfd5e4b5b98151f56c2a728887610dc8d1632 AS chef
 WORKDIR /app
 
 FROM chef AS planner
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     cargo build --release --locked -p gateway --bin gateway
 
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2 AS runtime
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cb87acc574abe719b6e5c547384defa2f7b1f24af9605d3f618cf852495d8be2 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/BGLuis/mineK8s" \
       org.opencontainers.image.title="minekubernetes-gateway"
 COPY --link --from=build /app/target/release/gateway /usr/local/bin/gateway
